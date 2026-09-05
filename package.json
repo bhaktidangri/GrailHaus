@@ -1,0 +1,15 @@
+{
+  "name": "grailhaus",
+  "private": true,
+  "workspaces": [
+    "app",
+    "server",
+    "shared",
+    "admin-dashboard"
+  ],
+  "scripts": {
+    "server:dev": "npm run dev -w server",
+    "app:start": "npm run start -w app",
+    "admin:dev": "npm run dev -w admin-dashboard"
+  }
+}
