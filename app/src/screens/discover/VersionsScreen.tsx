@@ -6,6 +6,7 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import type { DiscoverItem } from "../../viewmodels/useDiscoverViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { versions as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
@@ -26,6 +27,7 @@ export function VersionsScreen() {
   const navigation = useNavigation<Nav>();
   const { category, group } = useRoute<Route>().params;
   const isWatch = category === "watches";
+  const tabBarClearance = useTabBarClearance();
 
   return (
     <View style={styles.fill}>
@@ -91,7 +93,7 @@ export function VersionsScreen() {
         )}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.footerHint}>{copy.tapHint}</Text>
       </View>
     </View>

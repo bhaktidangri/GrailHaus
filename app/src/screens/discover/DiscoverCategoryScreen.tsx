@@ -7,6 +7,7 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useDiscoverViewModel, type DiscoverGroup } from "../../viewmodels/useDiscoverViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { discoverCategory as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
@@ -25,6 +26,7 @@ export function DiscoverCategoryScreen() {
   const vm = useDiscoverViewModel(category);
   const [query, setQuery] = useState("");
   const isWatch = category === "watches";
+  const tabBarClearance = useTabBarClearance();
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,7 +76,7 @@ export function DiscoverCategoryScreen() {
         <FlatList
           data={results}
           keyExtractor={(g: DiscoverGroup) => g.key}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: tabBarClearance }]}
           ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
           renderItem={({ item: group }: { item: DiscoverGroup }) => {
             const primary = group.versions[0];

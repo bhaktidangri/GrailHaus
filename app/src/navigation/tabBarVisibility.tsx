@@ -1,5 +1,9 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useSharedValue, useAnimatedScrollHandler, withTiming, type SharedValue } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/** The pill's own height — shared with PillTabBar.tsx so the two can never drift apart. */
+export const TAB_BAR_HEIGHT = 62;
 
 const TabBarHiddenContext = createContext<SharedValue<number> | null>(null);
 
@@ -22,6 +26,16 @@ export function useTabBarHidden(): SharedValue<number> {
  * tiny deltas FlatList/ScrollView emit while momentum-settling flicker the
  * bar in and out. */
 const SCROLL_DELTA_THRESHOLD = 6;
+
+/**
+ * The pill nav floats over screen content (`position: "absolute"` in
+ * PillTabBar) rather than reserving its own row, so any screen with content
+ * that can reach the bottom of the viewport needs this much extra bottom
+ * padding/margin to keep that content from sitting underneath the pill. */
+export function useTabBarClearance(extraGap = 24) {
+  const insets = useSafeAreaInsets();
+  return TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + extraGap;
+}
 
 /**
  * Attach to any scrollable screen's `onScroll` (via `Animated.ScrollView` /

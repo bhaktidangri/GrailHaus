@@ -14,7 +14,7 @@ import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/Pac
 import { PackFace } from "../components/PackFace";
 import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
 import { CategorySwitch } from "../components/CategorySwitch";
-import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
+import { useHideTabBarOnScroll, useTabBarClearance } from "../navigation/tabBarVisibility";
 import { fonts, ink, typography } from "../theme/tokens";
 import { brand, shelf as shelfCopy, packTile as packTileCopy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
@@ -55,6 +55,7 @@ export function ShelfScreen() {
   const flow = usePackFlowViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
+  const tabBarClearance = useTabBarClearance();
   // A ref, not state: a rapid double-tap must be blocked before React's next render, or both
   // taps mint their own idempotency key and become two real, separately-charged purchases —
   // the key only protects a retry of the *same* attempt, not two distinct ones.
@@ -144,7 +145,7 @@ export function ShelfScreen() {
 
       <Animated.ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarClearance }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}

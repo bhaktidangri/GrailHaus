@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { ink, typography } from "../../theme/tokens";
@@ -18,6 +19,7 @@ type Nav = NativeStackNavigationProp<CollectionStackParamList, "Vault">;
 export function VaultScreen() {
   const navigation = useNavigation<Nav>();
   const vm = useCollectionViewModel();
+  const tabBarClearance = useTabBarClearance();
 
   return (
     <View style={styles.fill}>
@@ -45,7 +47,7 @@ export function VaultScreen() {
       <FlatList
         data={vm.watches}
         keyExtractor={(o: OwnedItem) => o.ownedItemId}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarClearance }]}
         ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
         renderItem={({ item: owned }: { item: OwnedItem }) => (
           <Pressable style={styles.row} onPress={() => navigation.navigate("WatchDetail", { owned })}>

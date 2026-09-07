@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CardFace } from "../../components/CardFace";
 import { itemArtGradient } from "../../content/cardArt";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { itemDetail as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
@@ -29,6 +30,7 @@ export function CardDetailScreen() {
   const { owned } = useRoute<Route>().params;
   const vm = useCollectionViewModel();
   const item = owned.item;
+  const tabBarClearance = useTabBarClearance();
 
   const copiesOwned = useMemo(
     () => vm.cards.filter((o) => o.item.id === item.id).length,
@@ -46,7 +48,10 @@ export function CardDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 200 + tabBarClearance }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
             would stay pinned to the viewport as the header/hero scroll away, bleeding into
             whatever section (traits, value, acquired) scrolls into that same screen region. */}
@@ -105,7 +110,7 @@ export function CardDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { bottom: tabBarClearance }]}>
         <View style={styles.actionRow}>
           <Pressable style={styles.keepButton} onPress={() => navigation.goBack()}>
             <Text style={styles.keepLabel}>{copy.keep}</Text>
