@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { Category, ItemDetail } from "@grailhaus/shared";
 import { packsService } from "../services/packsService";
 import { itemsService } from "../services/itemsService";
 import { marketplaceService } from "../services/marketplaceService";
 import { portfolioService } from "../services/portfolioService";
+import { useAuthStore } from "../state/authStore";
 
 export interface DiscoverItem {
   detail: ItemDetail;
@@ -29,39 +30,34 @@ export interface DiscoverGroup {
 /**
  * Discover's whole premise — "Pikachu is not one object, it's nine printings" — needs the full
  * catalog roster grouped by real Pokémon/brand identity, which no single endpoint returns.
- * Built entirely from three endpoints that do exist: `/packs` (the roster + which pack/price
- * can drop each item), `/items/:id` (full detail incl. live drift value, fetched per item —
- * the catalog is ~30-50 items/category per the PRD, so this is a bounded fan-out, not an
- * unbounded one), `/listings` and `/me/portfolio` (ownership + market availability). Nothing
- * here is simulated data standing in for a search index that doesn't exist.
+ * Built from four endpoints: `/packs` (which pack/price can drop each item), `/items` (full
+ * catalog detail incl. live drift value, one bulk call per category — replaces the old
+ * per-item `/items/:id` fan-out), `/listings` and `/me/portfolio` (ownership + market
+ * availability). Nothing here is simulated data standing in for a search index that doesn't
+ * exist.
  */
 export function useDiscoverViewModel(category: Category) {
+  const isSignedIn = useAuthStore((s) => s.token != null);
   const packsQuery = useQuery({ queryKey: ["packs", category], queryFn: () => packsService.list(category) });
+  const itemsQuery = useQuery({ queryKey: ["items", category], queryFn: () => itemsService.list(category) });
   const listingsQuery = useQuery({ queryKey: ["listings", category], queryFn: () => marketplaceService.browse(category) });
-  const portfolioQuery = useQuery({ queryKey: ["portfolio", "me"], queryFn: portfolioService.list });
+  // `/me/portfolio` requires an app session — matches useSessionViewModel's gating on
+  // `/me`, otherwise every signed-out mount fires a guaranteed 401.
+  const portfolioQuery = useQuery({ queryKey: ["portfolio", "me"], queryFn: portfolioService.list, enabled: isSignedIn });
 
-  const roster = useMemo(() => {
-    const packs = packsQuery.data ?? [];
-    const out: { itemId: string; packId: string; packName: string; packPriceCents: number }[] = [];
-    for (const pack of packs) {
-      for (const items of Object.values(pack.itemsByTier)) {
-        for (const item of items) {
-          out.push({ itemId: item.id, packId: pack.id, packName: pack.name, packPriceCents: pack.priceCents });
+  const packByItemId = useMemo(() => {
+    const map = new Map<string, { packId: string; packName: string; packPriceCents: number }>();
+    for (const pack of packsQuery.data ?? []) {
+      for (const packItems of Object.values(pack.itemsByTier)) {
+        for (const item of packItems) {
+          map.set(item.id, { packId: pack.id, packName: pack.name, packPriceCents: pack.priceCents });
         }
       }
     }
-    return out;
+    return map;
   }, [packsQuery.data]);
 
-  const detailQueries = useQueries({
-    queries: roster.map((r) => ({
-      queryKey: ["items", r.itemId],
-      queryFn: () => itemsService.get(r.itemId),
-      staleTime: 60_000,
-    })),
-  });
-
-  const isLoading = packsQuery.isLoading || listingsQuery.isLoading || portfolioQuery.isLoading || detailQueries.some((q) => q.isLoading);
+  const isLoading = packsQuery.isLoading || itemsQuery.isLoading || listingsQuery.isLoading || portfolioQuery.isLoading;
 
   const items = useMemo<DiscoverItem[]>(() => {
     const listings = listingsQuery.data ?? [];
@@ -82,22 +78,22 @@ export function useDiscoverViewModel(category: Category) {
     }
 
     const out: DiscoverItem[] = [];
-    roster.forEach((r, i) => {
-      const detail = detailQueries[i]?.data;
-      if (!detail) return;
-      const listed = listedByItem.get(r.itemId);
+    for (const detail of itemsQuery.data ?? []) {
+      const pack = packByItemId.get(detail.id);
+      if (!pack) continue;
+      const listed = listedByItem.get(detail.id);
       out.push({
         detail,
-        packId: r.packId,
-        packName: r.packName,
-        packPriceCents: r.packPriceCents,
-        ownedCount: ownedByItem.get(r.itemId) ?? 0,
+        packId: pack.packId,
+        packName: pack.packName,
+        packPriceCents: pack.packPriceCents,
+        ownedCount: ownedByItem.get(detail.id) ?? 0,
         listedCount: listed?.count ?? 0,
         lowestListingCents: listed?.lowestCents ?? null,
       });
-    });
+    }
     return out;
-  }, [roster, detailQueries, listingsQuery.data, portfolioQuery.data]);
+  }, [itemsQuery.data, packByItemId, listingsQuery.data, portfolioQuery.data]);
 
   // Cards group by the Pokémon they depict — "Pikachu" is nine printings, not one card.
   // Watches group by brand — nobody types a reference number, they think "Rolex" first.

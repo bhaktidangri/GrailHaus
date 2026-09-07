@@ -12,9 +12,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BACK_TARGET: Partial<Record<AuthStep, AuthStep>> = {
   register: "welcome",
   signin: "welcome",
-  forgot: "signin",
-  "forgot-sent": "signin",
-  "confirm-email": "signin",
 };
 
 export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; initialStep?: AuthStep }) {
@@ -116,14 +113,6 @@ export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; ini
           </>
         )}
 
-        {auth.step === "confirm-email" && (
-          <View style={styles.centerFill}>
-            <Text style={styles.title}>{authCopy.confirmEmailTitle}</Text>
-            <Text style={[styles.subtitle, styles.centerText]}>{authCopy.confirmEmailBody(auth.pendingEmail)}</Text>
-            <GlossyButton label={authCopy.confirmEmailCta} onPress={() => auth.goTo("signin")} variant="violet" />
-          </View>
-        )}
-
         {auth.step === "signin" && (
           <>
             <Text style={styles.title}>{authCopy.signInTitle}</Text>
@@ -145,9 +134,6 @@ export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; ini
               secureTextEntry
               autoComplete="password"
             />
-            <Pressable onPress={() => auth.goTo("forgot")}>
-              <Text style={[styles.link, styles.forgotLink]}>{authCopy.forgotPassword}</Text>
-            </Pressable>
             {shownError && <Text style={styles.error}>{shownError}</Text>}
 
             <GlossyButton
@@ -165,44 +151,6 @@ export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; ini
               </Text>
             </Pressable>
           </>
-        )}
-
-        {auth.step === "forgot" && (
-          <>
-            <Text style={styles.title}>{authCopy.forgotTitle}</Text>
-            <Text style={styles.subtitle}>{authCopy.forgotSubtitle}</Text>
-
-            <Field
-              label={authCopy.emailLabel}
-              value={email}
-              onChangeText={setEmail}
-              placeholder={authCopy.emailPlaceholder}
-              keyboardType="email-address"
-              autoComplete="email"
-            />
-            {shownError && <Text style={styles.error}>{shownError}</Text>}
-
-            <GlossyButton
-              label={authCopy.sendResetCta}
-              onPress={() => {
-                if (validEmail(email)) auth.sendReset(email);
-              }}
-              disabled={!email}
-              loading={auth.isSubmitting}
-              variant="violet"
-            />
-            <Pressable style={styles.linkRow} onPress={() => auth.goTo("signin")}>
-              <Text style={styles.link}>{authCopy.backToSignIn}</Text>
-            </Pressable>
-          </>
-        )}
-
-        {auth.step === "forgot-sent" && (
-          <View style={styles.centerFill}>
-            <Text style={styles.title}>{authCopy.forgotSentTitle}</Text>
-            <Text style={[styles.subtitle, styles.centerText]}>{authCopy.forgotSentBody(auth.pendingEmail)}</Text>
-            <GlossyButton label={authCopy.backToSignIn} onPress={() => auth.goTo("signin")} variant="violet" />
-          </View>
         )}
 
         {auth.step === "claim-username" && (
@@ -319,7 +267,6 @@ const styles = StyleSheet.create({
   link: { color: colors.violetTop },
   linkMuted: { color: colors.textMuted, ...typography.body },
   linkRow: { marginTop: spacing.xl, alignSelf: "center" },
-  forgotLink: { alignSelf: "flex-end", marginBottom: spacing.lg, marginTop: -spacing.sm },
 
   handleRow: {
     flexDirection: "row",

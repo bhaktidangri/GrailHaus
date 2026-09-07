@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -10,8 +10,13 @@ import { useDiscoverViewModel, type DiscoverGroup } from "../../viewmodels/useDi
 import { colors, ink, typography } from "../../theme/tokens";
 import { discoverCategory as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
+import type { AppStackParamList } from "../../navigation/AppNavigator";
 
-type Nav = NativeStackNavigationProp<DiscoverStackParamList, "DiscoverCategory">;
+// ItemFork lives on the root stack now (see AppNavigator), not DiscoverStack.
+type Nav = CompositeNavigationProp<
+  NativeStackNavigationProp<AppStackParamList>,
+  NativeStackNavigationProp<DiscoverStackParamList, "DiscoverCategory">
+>;
 type Route = RouteProp<DiscoverStackParamList, "DiscoverCategory">;
 
 export function DiscoverCategoryScreen() {

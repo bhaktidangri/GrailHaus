@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import type { Session } from "@supabase/supabase-js";
 
 interface AuthState {
-  session: Session | null;
+  /** GrailHaus's own app JWT (see server/modules/auth) — not a Supabase session. */
+  token: string | null;
   isReady: boolean;
   isSheetOpen: boolean;
   pendingAction: (() => void) | null;
-  setSession: (session: Session | null) => void;
+  setToken: (token: string | null) => void;
   setReady: (ready: boolean) => void;
   /** Runs `action` immediately if signed in; otherwise opens the auth sheet and
    * stashes `action` to run once sign-in completes. This is how the app stays
@@ -17,14 +17,14 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  session: null,
+  token: null,
   isReady: false,
   isSheetOpen: false,
   pendingAction: null,
-  setSession: (session) => set({ session }),
+  setToken: (token) => set({ token }),
   setReady: (isReady) => set({ isReady }),
   requireAuth: (action) => {
-    if (get().session) {
+    if (get().token) {
       action();
       return;
     }

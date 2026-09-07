@@ -1,8 +1,25 @@
 import type { FastifyInstance } from "fastify";
-import { getItemDetail } from "./items.service.js";
+import type { Category } from "@grailhaus/shared";
+import { getItemDetail, listItemDetails } from "./items.service.js";
 import { itemDetailSchema } from "./items.schema.js";
 
 export async function itemsRoutes(app: FastifyInstance) {
+  app.get<{ Querystring: { category?: Category } }>(
+    "/items",
+    {
+      schema: {
+        tags: ["items"],
+        summary: "Full catalog detail for every item — public, same as /packs",
+        querystring: {
+          type: "object",
+          properties: { category: { type: "string", enum: ["cards", "watches"] } },
+        },
+        response: { 200: { type: "array", items: itemDetailSchema } },
+      },
+    },
+    async (req) => listItemDetails(req.query.category)
+  );
+
   app.get(
     "/items/:id",
     {

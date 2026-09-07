@@ -5,15 +5,7 @@ import { profileService } from "../services/profileService";
 import { useAuthStore } from "../state/authStore";
 import { auth as authCopy } from "../content/copy";
 
-export type AuthStep =
-  | "welcome"
-  | "register"
-  | "confirm-email"
-  | "signin"
-  | "forgot"
-  | "forgot-sent"
-  | "claim-username"
-  | "welcome-back";
+export type AuthStep = "welcome" | "register" | "signin" | "claim-username" | "welcome-back";
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -25,19 +17,18 @@ function messageFor(err: unknown, fallback: string): string {
 }
 
 /**
- * Drives the whole account sheet — welcome, register/sign-in, forgot
- * password, and (for a brand-new account) the mandatory Collector ID claim
- * that follows it. `initialStep` lets AuthProvider drop a signed-in-but-
- * unclaimed user straight into "claim-username" (e.g. the app was killed
- * between registering and claiming) instead of replaying the welcome
- * screen. Nothing here closes the sheet on its own — `finish()` is the only
- * exit, called once the account is genuinely usable.
+ * Drives the whole account sheet — welcome, register/sign-in, and (for a
+ * brand-new account) the mandatory Collector ID claim that follows it.
+ * `initialStep` lets AuthProvider drop a signed-in-but-unclaimed user
+ * straight into "claim-username" (e.g. the app was killed between
+ * registering and claiming) instead of replaying the welcome screen.
+ * Nothing here closes the sheet on its own — `finish()` is the only exit,
+ * called once the account is genuinely usable.
  */
 export function useAuthViewModel(initialStep: AuthStep = "welcome") {
   const [step, setStep] = useState<AuthStep>(initialStep);
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingEmail, setPendingEmail] = useState("");
   const [claimedUsername, setClaimedUsername] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,14 +70,8 @@ export function useAuthViewModel(initialStep: AuthStep = "welcome") {
     }
     setSubmitting(true);
     try {
-      const trimmed = email.trim();
-      const { hasSession } = await authService.signUp(trimmed, password);
-      if (hasSession) {
-        await afterAuthenticated();
-      } else {
-        setPendingEmail(trimmed);
-        setStep("confirm-email");
-      }
+      await authService.signUp(email.trim(), password);
+      await afterAuthenticated();
     } catch (err) {
       setError(messageFor(err, "Couldn't create your account — try again."));
     } finally {
@@ -102,21 +87,6 @@ export function useAuthViewModel(initialStep: AuthStep = "welcome") {
       await afterAuthenticated();
     } catch (err) {
       setError(messageFor(err, "That email and password don't match."));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function sendReset(email: string) {
-    setError(null);
-    setSubmitting(true);
-    try {
-      const trimmed = email.trim();
-      await authService.sendPasswordReset(trimmed);
-      setPendingEmail(trimmed);
-      setStep("forgot-sent");
-    } catch (err) {
-      setError(messageFor(err, "Couldn't send that reset email — try again."));
     } finally {
       setSubmitting(false);
     }
@@ -173,13 +143,11 @@ export function useAuthViewModel(initialStep: AuthStep = "welcome") {
     step,
     isSubmitting,
     error,
-    pendingEmail,
     claimedUsername,
     usernameStatus,
     goTo,
     register,
     signIn,
-    sendReset,
     checkUsername,
     claimUsername,
     finish,

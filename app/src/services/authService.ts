@@ -1,36 +1,44 @@
-import { supabase } from "../lib/supabaseClient";
+import type { Profile } from "@grailhaus/shared";
+import { authToken } from "../lib/authToken";
+import { useAuthStore } from "../state/authStore";
 import { apiGet, apiPost } from "./apiClient";
 
+interface AuthResponse {
+  token: string;
+  profile: Profile;
+}
+
+/** Establishes a session both ways — persisted (SecureStore, survives app restarts,
+ * read by apiClient) and reactive (the Zustand store, read by every isSignedIn check).
+ * There's no live "auth state changed" event source now that this isn't Supabase, so
+ * the service that mints/clears a session is what keeps both in sync, not a listener. */
+async function establishSession(token: string): Promise<void> {
+  await authToken.set(token);
+  useAuthStore.getState().setToken(token);
+}
+
 export const authService = {
-  /** Returns whether a session came back immediately. If the Supabase project has "Confirm
-   * email" turned on, signUp succeeds but returns no session until the user clicks the
-   * confirmation link in their inbox — the caller shows a "check your email" step for that case
-   * instead of a magic-link/deep-link flow. */
-  async signUp(email: string, password: string): Promise<{ hasSession: boolean }> {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-    return { hasSession: data.session != null };
+  /** Creates the account and returns a session immediately — no email confirmation step,
+   * since there's no email sender in this app's own auth (see server/modules/auth). */
+  async signUp(email: string, password: string): Promise<Profile> {
+    const { token, profile } = await apiPost<AuthResponse>("/auth/signup", { email, password });
+    await establishSession(token);
+    return profile;
   },
 
-  async signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+  async signIn(email: string, password: string): Promise<Profile> {
+    const { token, profile } = await apiPost<AuthResponse>("/auth/signin", { email, password });
+    await establishSession(token);
+    return profile;
   },
 
-  async sendPasswordReset(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) throw error;
+  async signOut(): Promise<void> {
+    await authToken.clear();
+    useAuthStore.getState().setToken(null);
   },
 
-  async signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  },
-
-  async getSession() {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    return data.session;
+  getToken(): Promise<string | null> {
+    return authToken.get();
   },
 
   checkUsernameAvailability(username: string) {

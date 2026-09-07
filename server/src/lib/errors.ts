@@ -22,3 +22,9 @@ export class BadRequestError extends AppError {
     super(message, 400);
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message: string) {
+    super(message, 401);
+  }
+}

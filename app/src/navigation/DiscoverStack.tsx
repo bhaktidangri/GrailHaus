@@ -3,14 +3,14 @@ import type { Category } from "@grailhaus/shared";
 import { DiscoverScreen } from "../screens/discover/DiscoverScreen";
 import { DiscoverCategoryScreen } from "../screens/discover/DiscoverCategoryScreen";
 import { VersionsScreen } from "../screens/discover/VersionsScreen";
-import { ItemForkScreen } from "../screens/discover/ItemForkScreen";
-import type { DiscoverGroup, DiscoverItem } from "../viewmodels/useDiscoverViewModel";
+import type { DiscoverGroup } from "../viewmodels/useDiscoverViewModel";
 
+/** ItemFork now lives on the root stack (see AppNavigator) since Explore
+ * also links into it, not just Discover's own drill-down. */
 export type DiscoverStackParamList = {
   Discover: undefined;
   DiscoverCategory: { category: Category };
   Versions: { category: Category; group: DiscoverGroup };
-  ItemFork: { category: Category; item: DiscoverItem };
 };
 
 const Stack = createNativeStackNavigator<DiscoverStackParamList>();
@@ -21,7 +21,6 @@ export function DiscoverStack() {
       <Stack.Screen name="Discover" component={DiscoverScreen} />
       <Stack.Screen name="DiscoverCategory" component={DiscoverCategoryScreen} />
       <Stack.Screen name="Versions" component={VersionsScreen} />
-      <Stack.Screen name="ItemFork" component={ItemForkScreen} />
     </Stack.Navigator>
   );
 }

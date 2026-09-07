@@ -19,6 +19,7 @@ import { fonts, ink, typography } from "../theme/tokens";
 import { brand, shelf as shelfCopy, packTile as packTileCopy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
 import type { HomeStackParamList } from "../navigation/HomeStack";
+import type { AppStackParamList } from "../navigation/AppNavigator";
 
 const REGISTER: Record<Category, { label: string; wash: [string, string] }> = {
   cards: { label: shelfCopy.categoryLabel.cards, wash: ["rgba(177,75,255,0.24)", "transparent"] },
@@ -26,8 +27,11 @@ const REGISTER: Record<Category, { label: string; wash: [string, string] }> = {
 };
 
 type Nav = CompositeNavigationProp<
-  NativeStackNavigationProp<HomeStackParamList, "World">,
-  BottomTabNavigationProp<RootTabParamList>
+  NativeStackNavigationProp<AppStackParamList>,
+  CompositeNavigationProp<
+    NativeStackNavigationProp<HomeStackParamList, "World">,
+    BottomTabNavigationProp<RootTabParamList>
+  >
 >;
 
 /**

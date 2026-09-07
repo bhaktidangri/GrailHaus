@@ -1,6 +1,6 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -9,8 +9,13 @@ import type { DiscoverItem } from "../../viewmodels/useDiscoverViewModel";
 import { colors, ink, typography } from "../../theme/tokens";
 import { versions as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
+import type { AppStackParamList } from "../../navigation/AppNavigator";
 
-type Nav = NativeStackNavigationProp<DiscoverStackParamList, "Versions">;
+// ItemFork lives on the root stack now (see AppNavigator), not DiscoverStack.
+type Nav = CompositeNavigationProp<
+  NativeStackNavigationProp<AppStackParamList>,
+  NativeStackNavigationProp<DiscoverStackParamList, "Versions">
+>;
 type Route = RouteProp<DiscoverStackParamList, "Versions">;
 
 const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Core / Heritage", 2: "Prime / Icon", 3: "Grail / Apex" };

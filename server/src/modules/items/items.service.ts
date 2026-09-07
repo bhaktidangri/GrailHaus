@@ -1,7 +1,7 @@
 import { computePriceDrift } from "@grailhaus/shared";
 import type { Category, ItemDetail, RarityTierLevel } from "@grailhaus/shared";
 import { NotFoundError } from "../../lib/errors.js";
-import { findItemDetailById } from "./items.repository.js";
+import { findAllItemDetails, findItemDetailById } from "./items.repository.js";
 import type { ItemDetailRow } from "./items.types.js";
 
 export function toItemDetail(row: ItemDetailRow): ItemDetail {
@@ -42,4 +42,9 @@ export async function getItemDetail(itemId: string): Promise<ItemDetail> {
   const row = await findItemDetailById(itemId);
   if (!row) throw new NotFoundError("Item not found");
   return toItemDetail(row);
+}
+
+export async function listItemDetails(category?: Category): Promise<ItemDetail[]> {
+  const rows = await findAllItemDetails(category);
+  return rows.map(toItemDetail);
 }

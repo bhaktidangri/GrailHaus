@@ -97,6 +97,19 @@ export const packTile = {
   buyTen: "×10",
 } as const;
 
+export const explore = {
+  eyebrow: "EXPLORE",
+  heading: "The whole catalog.",
+  sub: "Every evergreen tier, cards and watches, in one place.",
+  signIn: "Sign in",
+  sectionCards: "Trading Cards",
+  sectionWatches: "Watches",
+  allCards: (count: number) => `All Cards (${count})`,
+  allWatches: (count: number) => `All Watches (${count})`,
+  emptySection: (label: string) => `No ${label.toLowerCase()} available right now.`,
+  serverUnreachable: (message: string) => `Server unreachable: ${message}`,
+} as const;
+
 export const confirmPurchase = {
   eyebrowCards: "CONFIRM PURCHASE",
   eyebrowWatches: "CONFIRM UNLOCK",
@@ -219,21 +232,9 @@ export const auth = {
   createAccountCta: "Create Account",
   noAccount: "Don't have an account?",
 
-  confirmEmailTitle: "Check your email",
-  confirmEmailBody: (email: string) => `We sent a confirmation link to ${email}. Confirm it, then sign in below.`,
-  confirmEmailCta: "Back to Sign In",
-
   signInTitle: "Sign In",
   signInSubtitle: "Welcome back.",
-  forgotPassword: "Forgot password?",
   signInCta: "Sign In",
-
-  forgotTitle: "Reset your password",
-  forgotSubtitle: "We'll email you a link to set a new one.",
-  sendResetCta: "Send Reset Email",
-  backToSignIn: "Back to sign in",
-  forgotSentTitle: "Check your email",
-  forgotSentBody: (email: string) => `We sent a password reset link to ${email}.`,
 
   claimTitle: "Claim Your Collector ID",
   claimSubtitle: "This is how you'll be known across GrailHaus — public, permanent, yours.",

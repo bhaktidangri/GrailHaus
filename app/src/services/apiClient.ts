@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
+import { authToken } from "../lib/authToken";
 import { getDeviceId } from "../lib/deviceId";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -10,10 +10,10 @@ export class ApiError extends Error {
 }
 
 async function authHeaders(): Promise<HeadersInit> {
-  const { data } = await supabase.auth.getSession();
+  const token = await authToken.get();
   const deviceId = await getDeviceId();
   const headers: Record<string, string> = { "X-Device-Id": deviceId };
-  if (data.session) headers.Authorization = `Bearer ${data.session.access_token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 

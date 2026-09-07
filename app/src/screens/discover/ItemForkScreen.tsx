@@ -10,10 +10,10 @@ import { itemArtGradient } from "../../content/cardArt";
 import { marketplaceService } from "../../services/marketplaceService";
 import { colors, ink, typography } from "../../theme/tokens";
 import { itemFork as copy } from "../../content/copy";
-import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
+import type { AppStackParamList } from "../../navigation/AppNavigator";
 
-type Nav = NativeStackNavigationProp<DiscoverStackParamList, "ItemFork">;
-type Route = RouteProp<DiscoverStackParamList, "ItemFork">;
+type Nav = NativeStackNavigationProp<AppStackParamList, "ItemFork">;
+type Route = RouteProp<AppStackParamList, "ItemFork">;
 
 const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Core", 2: "Prime", 3: "Grail" };
 const RARITY_NAME_WATCH: Record<1 | 2 | 3, string> = { 1: "Heritage", 2: "Icon", 3: "Apex" };
@@ -39,23 +39,26 @@ export function ItemForkScreen() {
 
   const rarityName = isWatch ? RARITY_NAME_WATCH[detail.rarityTierLevel] : RARITY_NAME[detail.rarityTierLevel];
 
-  // Crossing from Discover's stack into a sibling tab's own nested stack (Marketplace's
-  // ListingDetail, Home's World) isn't expressible in RootTabParamList's types — each tab
-  // only declares its own top-level screen — so this jump is deliberately loosely typed.
-  const parentNavigate = navigation.getParent()?.navigate as
-    | ((name: string, params?: object) => void)
-    | undefined;
+  // ItemFork lives on the root stack (see AppNavigator) so both Discover and Explore can reach
+  // it, but "buy exact"/"try your luck" land inside a *tab's own* nested stack (Marketplace's
+  // ListingDetail, Home's World) — two levels down through "Tabs", which isn't expressible in
+  // AppStackParamList's types (it only declares "Tabs" itself, not each tab's nested screens),
+  // so this jump is deliberately loosely typed.
+  const rootNavigate = navigation.navigate as (name: string, params?: object) => void;
 
   function handleBuyExact() {
     if (matchingListing) {
-      parentNavigate?.("Marketplace", { screen: "ListingDetail", params: { listing: matchingListing } });
+      rootNavigate("Tabs", {
+        screen: "Marketplace",
+        params: { screen: "ListingDetail", params: { listing: matchingListing } },
+      });
     } else {
-      parentNavigate?.("Marketplace");
+      rootNavigate("Tabs", { screen: "Marketplace" });
     }
   }
 
   function handleTryLuck() {
-    parentNavigate?.("Home", { screen: "World", params: { category } });
+    rootNavigate("Tabs", { screen: "Home", params: { screen: "World", params: { category } } });
   }
 
   return (

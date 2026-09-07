@@ -18,10 +18,10 @@ import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
 import { accents, fonts, ink, spacing } from "../theme/tokens";
 import { packDetail as copy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
-import type { HomeStackParamList } from "../navigation/HomeStack";
+import type { AppStackParamList } from "../navigation/AppNavigator";
 
 type Nav = CompositeNavigationProp<
-  NativeStackNavigationProp<HomeStackParamList, "PackDetail">,
+  NativeStackNavigationProp<AppStackParamList, "PackDetail">,
   BottomTabNavigationProp<RootTabParamList>
 >;
 
@@ -29,13 +29,13 @@ type Nav = CompositeNavigationProp<
  * Everything the Cards journey mockup says a buyer needs before tapping RIP
  * NOW: price/count/value-range, the published odds, a real collection
  * preview (owned vs. unknown, from the portfolio — not invented), and the
- * expected-value math. Reached by tapping a tier row on the cards Shelf;
- * "RIP NOW" opens the same `ConfirmPurchaseSheet` every purchase in the app
- * uses, then hands off to the Reveal tab exactly like Shelf/Drops already do.
+ * expected-value math. Reached by tapping a tier row on the cards Shelf or
+ * Explore; "RIP NOW" opens the same `ConfirmPurchaseSheet` every purchase in
+ * the app uses, then pushes Reveal exactly like Shelf/Drops already do.
  */
 export function PackDetailScreen() {
   const navigation = useNavigation<Nav>();
-  const { skuId } = useRoute<RouteProp<HomeStackParamList, "PackDetail">>().params;
+  const { skuId } = useRoute<RouteProp<AppStackParamList, "PackDetail">>().params;
   const { sku } = usePackDetailViewModel(skuId);
   const session = useSessionViewModel();
   const flow = usePackFlowViewModel();

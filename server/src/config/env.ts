@@ -11,4 +11,7 @@ export const env = {
   databaseUrl: required("DATABASE_URL"),
   supabaseUrl: required("SUPABASE_URL"),
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+  /** Signs/verifies the app's own access tokens (email/password auth) — unrelated to
+   * Supabase, which the admin dashboard's separate magic-link login still uses. */
+  appJwtSecret: required("APP_JWT_SECRET"),
 };

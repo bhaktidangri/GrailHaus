@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { OwnedItem } from "@grailhaus/shared";
 import { portfolioService } from "../services/portfolioService";
+import { useAuthStore } from "../state/authStore";
 
 export interface CollectionGroup {
   key: string;
@@ -16,9 +17,13 @@ export interface CollectionGroup {
  * derived client-side from it, nothing here is invented data.
  */
 export function useCollectionViewModel() {
+  const isSignedIn = useAuthStore((s) => s.token != null);
+  // `/me/portfolio` requires an app session — matches useSessionViewModel's gating on
+  // `/me`, otherwise every signed-out mount fires a guaranteed 401.
   const query = useQuery({
     queryKey: ["portfolio", "me"],
     queryFn: portfolioService.list,
+    enabled: isSignedIn,
   });
 
   const owned = query.data ?? [];

@@ -7,12 +7,12 @@ import { useAuthStore } from "../state/authStore";
 /**
  * ViewModel for session/balance. Views read this hook only — they never call
  * profileService or the session store directly. The underlying query only
- * runs once signed in — `/me` requires a Supabase session now.
+ * runs once signed in — `/me` requires an app session now (see modules/auth).
  */
 export function useSessionViewModel() {
   const setProfile = useSessionStore((s) => s.setProfile);
   const profile = useSessionStore((s) => s.profile);
-  const isSignedIn = useAuthStore((s) => s.session != null);
+  const isSignedIn = useAuthStore((s) => s.token != null);
 
   const query = useQuery({
     queryKey: ["profile", "me"],
