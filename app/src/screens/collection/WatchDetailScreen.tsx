@@ -34,29 +34,35 @@ export function WatchDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-            <View style={styles.backChevron} />
-          </Pressable>
-          <Text style={styles.headerLabel}>IN YOUR VAULT</Text>
-          <View style={{ width: 38 }} />
-        </View>
+        {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
+            would stay pinned to the viewport as the header/hero scroll away, bleeding into
+            whatever section (specs, value) scrolls into that same screen region. */}
+        <View style={styles.washWrap}>
+          <LinearGradient colors={["rgba(242,196,107,0.2)", "transparent"]} style={StyleSheet.absoluteFill} />
 
-        <View style={styles.heroWrap}>
-          <WatchDial art={itemArtGradient(item)} size={150} />
-        </View>
-
-        <View style={styles.heroText}>
-          <Text style={styles.brand}>{(item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
-          <Text style={styles.name}>{item.watchName ?? item.name}</Text>
-          <View style={styles.pillRow}>
-            <Text style={styles.pillRarity}>{RARITY_NAME[item.rarityTierLevel].toUpperCase()}</Text>
-            <View style={styles.pillDivider} />
-            <Text style={styles.pillMeta}>HELD {heldDays}D</Text>
+          <View style={styles.header}>
+            <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
+              <View style={styles.backChevron} />
+            </Pressable>
+            <Text style={styles.headerLabel}>IN YOUR VAULT</Text>
+            <View style={{ width: 38 }} />
           </View>
-          {item.tagline ? <Text style={styles.tagline}>{item.tagline}</Text> : null}
+
+          <View style={styles.heroWrap}>
+            <WatchDial art={itemArtGradient(item)} size={150} />
+          </View>
+
+          <View style={styles.heroText}>
+            <Text style={styles.brand}>{(item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
+            <Text style={styles.name}>{item.watchName ?? item.name}</Text>
+            <View style={styles.pillRow}>
+              <Text style={styles.pillRarity}>{RARITY_NAME[item.rarityTierLevel].toUpperCase()}</Text>
+              <View style={styles.pillDivider} />
+              <Text style={styles.pillMeta}>HELD {heldDays}D</Text>
+            </View>
+            {item.tagline ? <Text style={styles.tagline}>{item.tagline}</Text> : null}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -126,9 +132,9 @@ export function WatchDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#050403" },
+  fill: { flex: 1, backgroundColor: "#020101" },
   scroll: { paddingBottom: 220 },
+  washWrap: { position: "relative" },
   header: {
     paddingTop: 56,
     paddingHorizontal: 22,

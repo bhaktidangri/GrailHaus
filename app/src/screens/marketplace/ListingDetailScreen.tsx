@@ -8,7 +8,7 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useListingViewModel } from "../../viewmodels/useListingViewModel";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { listingDetail as copy } from "../../content/copy";
 import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
 
@@ -34,34 +34,44 @@ export function ListingDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={[styles.base, isWatch && styles.baseWatch]} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-            <View style={styles.backChevron} />
-          </Pressable>
-          <Text style={styles.headerLabel}>LISTING</Text>
-          <View style={{ width: 38 }} />
-        </View>
+        {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
+            would stay pinned to the viewport as the header/hero scroll away, bleeding into
+            whatever section (seller card, actions) scrolls into that same screen region. */}
+        <View style={styles.washWrap}>
+          <LinearGradient
+            colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+            style={StyleSheet.absoluteFill}
+          />
 
-        <View style={styles.heroWrap}>
-          {isWatch ? (
-            <WatchDial art={itemArtGradient(item)} size={150} />
-          ) : (
-            <CardFace
-              gradient={itemArtGradient(item)}
-              width={174}
-              height={243}
-              borderColor="rgba(255,215,94,0.75)"
-              badge={RARITY_NAME[item.rarityTierLevel].toUpperCase()}
-              style={styles.rotatedFace}
-            />
-          )}
+          <View style={styles.header}>
+            <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
+              <View style={styles.backChevron} />
+            </Pressable>
+            <Text style={styles.headerLabel}>LISTING</Text>
+            <View style={{ width: 38 }} />
+          </View>
+
+          <View style={styles.heroWrap}>
+            {isWatch ? (
+              <WatchDial art={itemArtGradient(item)} size={150} />
+            ) : (
+              <CardFace
+                gradient={itemArtGradient(item)}
+                width={174}
+                height={243}
+                borderColor="rgba(255,215,94,0.75)"
+                badge={RARITY_NAME[item.rarityTierLevel].toUpperCase()}
+                style={styles.rotatedFace}
+              />
+            )}
+          </View>
+
+          <Text style={styles.name}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>
+          <Text style={styles.sub}>{[item.collection ?? item.brand, item.style].filter(Boolean).join(" · ")}</Text>
         </View>
 
         <View style={styles.info}>
-          <Text style={styles.name}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>
-          <Text style={styles.sub}>{[item.collection ?? item.brand, item.style].filter(Boolean).join(" · ")}</Text>
 
           <View style={styles.askRow}>
             <View>
@@ -102,10 +112,9 @@ export function ListingDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
-  baseWatch: { backgroundColor: "#050403" },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
   scroll: { paddingBottom: 160 },
+  washWrap: { position: "relative" },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,
@@ -135,8 +144,8 @@ const styles = StyleSheet.create({
   heroWrap: { alignItems: "center", paddingTop: 16 },
   rotatedFace: { transform: [{ rotate: "-3deg" }] },
   info: { paddingHorizontal: 22, paddingTop: 18 },
-  name: { ...typography.pageHeading, fontSize: 30, textAlign: "center" },
-  sub: { ...typography.sectionSub, marginTop: 5, textAlign: "center" },
+  name: { ...typography.pageHeading, fontSize: 30, textAlign: "center", paddingHorizontal: 22 },
+  sub: { ...typography.sectionSub, marginTop: 5, textAlign: "center", paddingHorizontal: 22 },
   askRow: { alignItems: "center", marginTop: 18 },
   askLabel: typography.eyebrow,
   askValue: { ...typography.heroWordmark, fontSize: 34, marginTop: 3 },

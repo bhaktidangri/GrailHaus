@@ -1,11 +1,12 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import type { DiscoverItem } from "../../viewmodels/useDiscoverViewModel";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { versions as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
 
@@ -23,7 +24,12 @@ export function VersionsScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={[styles.base, isWatch && styles.baseWatch]} />
+      {/* Bounded to the fixed header+title row (never scrolls) rather than the whole screen —
+          a full-screen wash here would stay pinned behind the list's scrolled rows too. */}
+      <LinearGradient
+        colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+        style={styles.base}
+      />
       <View style={styles.header}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <View style={styles.backChevron} />
@@ -88,9 +94,8 @@ export function VersionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
-  baseWatch: { backgroundColor: "#0A0705" },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 260 },
   header: {
     paddingTop: 52,
     paddingHorizontal: 20,

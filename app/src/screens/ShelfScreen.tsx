@@ -11,17 +11,16 @@ import { useShelfViewModel } from "../viewmodels/useShelfViewModel";
 import { useRevealViewModel } from "../viewmodels/useRevealViewModel";
 import { useAuthStore } from "../state/authStore";
 import { PackTile } from "../components/PackTile";
-import { RadialGlow } from "../components/RadialGlow";
 import { BuySheet } from "../components/BuySheet";
 import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
-import { colors, typography } from "../theme/tokens";
+import { ink, typography } from "../theme/tokens";
 import { shelf as shelfCopy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
 import type { HomeStackParamList } from "../navigation/HomeStack";
 
-const REGISTER: Record<Category, { label: string; glow: string }> = {
-  cards: { label: shelfCopy.categoryLabel.cards, glow: "177,75,255" },
-  watches: { label: shelfCopy.categoryLabel.watches, glow: "242,196,107" },
+const REGISTER: Record<Category, { label: string; wash: [string, string] }> = {
+  cards: { label: shelfCopy.categoryLabel.cards, wash: ["rgba(177,75,255,0.24)", "transparent"] },
+  watches: { label: shelfCopy.categoryLabel.watches, wash: ["rgba(242,196,107,0.2)", "transparent"] },
 };
 
 type Nav = CompositeNavigationProp<
@@ -80,8 +79,9 @@ export function ShelfScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
-      <RadialGlow rgb={register.glow} peakOpacity={0.26} top="-6%" size={520} />
+      {/* Bounded to the fixed header+heading area (never scrolls) rather than the whole screen
+          — a full-screen wash here would stay pinned behind the FlatList's scrolled rows too. */}
+      <LinearGradient colors={register.wash} style={styles.base} />
 
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
@@ -141,8 +141,8 @@ export function ShelfScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 240 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

@@ -9,7 +9,7 @@ import { useMarketplaceViewModel } from "../../viewmodels/useMarketplaceViewMode
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { marketplace as copy } from "../../content/copy";
 import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
 
@@ -48,7 +48,9 @@ export function MarketplaceScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      {/* Bounded to the fixed header+toggle+filter rows (never scrolls) rather than the whole
+          screen — a full-screen wash here would stay pinned behind the grid's scrolled rows too. */}
+      <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={styles.base} />
       <View style={styles.header}>
         <Text style={styles.title}>{copy.title}</Text>
         {session.balanceCents != null && (
@@ -144,8 +146,8 @@ function Badge({ n }: { n: number }) {
 const cellWidth = 160;
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 320 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

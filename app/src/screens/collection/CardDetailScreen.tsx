@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CardFace } from "../../components/CardFace";
 import { itemArtGradient } from "../../content/cardArt";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { itemDetail as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
@@ -46,29 +46,35 @@ export function CardDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-            <View style={styles.backChevron} />
-          </Pressable>
-          <Text style={styles.headerLabel}>
-            {copy.owned}
-            {copiesOwned > 1 ? ` · ${copiesOwned}×` : ""}
-          </Text>
-          <View style={{ width: 38 }} />
-        </View>
+        {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
+            would stay pinned to the viewport as the header/hero scroll away, bleeding into
+            whatever section (traits, value, acquired) scrolls into that same screen region. */}
+        <View style={styles.heroWrap}>
+          <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={StyleSheet.absoluteFill} />
 
-        <View style={styles.heroRow}>
-          <CardFace gradient={itemArtGradient(item)} width={132} height={184} borderColor="rgba(255,215,94,0.78)" />
-          <View style={styles.heroInfo}>
-            <Text style={styles.name}>{(item.cardTitle ?? item.name).toUpperCase()}</Text>
-            {item.pokemonName ? <Text style={styles.subName}>{item.pokemonName}</Text> : null}
+          <View style={styles.header}>
+            <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
+              <View style={styles.backChevron} />
+            </Pressable>
+            <Text style={styles.headerLabel}>
+              {copy.owned}
+              {copiesOwned > 1 ? ` · ${copiesOwned}×` : ""}
+            </Text>
+            <View style={{ width: 38 }} />
+          </View>
 
-            <View style={styles.specRows}>
-              <SpecRow label={copy.rarity} value={rarityName(item.rarityTierLevel)} valueColor={colors.goldTop} />
-              <SpecRow label={copy.collectionLabel} value={collectionName} />
-              <SpecRow label={copy.ownedCopies(copiesOwned)} value="" hideValue />
+          <View style={styles.heroRow}>
+            <CardFace gradient={itemArtGradient(item)} width={132} height={184} borderColor="rgba(255,215,94,0.78)" />
+            <View style={styles.heroInfo}>
+              <Text style={styles.name}>{(item.cardTitle ?? item.name).toUpperCase()}</Text>
+              {item.pokemonName ? <Text style={styles.subName}>{item.pokemonName}</Text> : null}
+
+              <View style={styles.specRows}>
+                <SpecRow label={copy.rarity} value={rarityName(item.rarityTierLevel)} valueColor={colors.goldTop} />
+                <SpecRow label={copy.collectionLabel} value={collectionName} />
+                <SpecRow label={copy.ownedCopies(copiesOwned)} value="" hideValue />
+              </View>
             </View>
           </View>
         </View>
@@ -145,9 +151,9 @@ function SpecRow({
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
   scroll: { paddingBottom: 200 },
+  heroWrap: { position: "relative" },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

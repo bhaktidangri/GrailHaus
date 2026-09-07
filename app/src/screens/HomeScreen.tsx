@@ -27,12 +27,6 @@ type Nav = CompositeNavigationProp<
   CompositeNavigationProp<BottomTabNavigationProp<RootTabParamList>, NativeStackNavigationProp<AppStackParamList>>
 >;
 
-/** Home's top wash always carries the "something's live" red — the mockup's
- * own choice regardless of which category the featured drop belongs to.
- * With nothing live, it falls back to a quieter neutral violet. */
-const WASH_LIVE = "rgba(255,92,122,0.22)";
-const WASH_NEUTRAL = "rgba(177,75,255,0.14)";
-
 /**
  * The dashboard — the mockup's "seven engagements, then the three doors"
  * screen (turn 14a). Two sections (Featured Drop, Upcoming Drops) are real,
@@ -57,13 +51,7 @@ export function HomeScreen() {
 
   return (
     <View style={styles.fill}>
-      <LinearGradient
-        colors={[home.featuredDrop ? WASH_LIVE : WASH_NEUTRAL, ink.ground, ink.groundDeep]}
-        locations={[0, 0.38, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
-      <View style={styles.header}>
+      <View style={[styles.header, home.featuredDrop && styles.headerLive]}>
         <Pressable style={styles.brand} onLongPress={handleReplayOnboarding} disabled={!__DEV__}>
           <View style={styles.brandChip}>
             <Image source={require("../../assets/icon.png")} style={styles.brandIcon} />
@@ -96,66 +84,75 @@ export function HomeScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        {home.featuredDrop && (
-          <FeaturedDropCard
-            drop={home.featuredDrop}
-            onPress={() => navigation.navigate("DropDetail", { packId: home.featuredDrop!.sku.id })}
-          />
-        )}
+        {/* A gentle, low-opacity ambient wash behind the *whole* scroll content — not the
+            page's raw near-black token on its own, which reads as flat blue-black once nothing
+            else is layered on top of it. Kept subtle and content-relative (scrolls with
+            everything, sized generously rather than to any one section) so it can't bleed into
+            or fight with the richer, self-contained gradients on the cards sitting above it. */}
+        <View style={styles.scrollInner}>
+          <LinearGradient colors={["rgba(177,75,255,0.12)", "transparent"]} style={styles.ambientWash} />
 
-        <View style={styles.doors}>
-          <DoorCard
-            category="cards"
-            summary={home.evergreenByCategory.cards}
-            onPress={() => navigation.navigate("World", { category: "cards" })}
-          />
-          <DoorCard
-            category="watches"
-            summary={home.evergreenByCategory.watches}
-            onPress={() => navigation.navigate("World", { category: "watches" })}
-          />
-        </View>
+          {home.featuredDrop && (
+            <FeaturedDropCard
+              drop={home.featuredDrop}
+              onPress={() => navigation.navigate("DropDetail", { packId: home.featuredDrop!.sku.id })}
+            />
+          )}
 
-        {home.upcomingDrops.length > 0 && (
-          <Section title={copy.upcomingDrops.title}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.upcomingRow}>
-              {home.upcomingDrops.map((d) => (
-                <UpcomingDropCard key={d.sku.id} drop={d} />
+          <View style={styles.doors}>
+            <DoorCard
+              category="cards"
+              summary={home.evergreenByCategory.cards}
+              onPress={() => navigation.navigate("World", { category: "cards" })}
+            />
+            <DoorCard
+              category="watches"
+              summary={home.evergreenByCategory.watches}
+              onPress={() => navigation.navigate("World", { category: "watches" })}
+            />
+          </View>
+
+          {home.upcomingDrops.length > 0 && (
+            <Section title={copy.upcomingDrops.title}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.upcomingRow}>
+                {home.upcomingDrops.map((d) => (
+                  <UpcomingDropCard key={d.sku.id} drop={d} />
+                ))}
+              </ScrollView>
+            </Section>
+          )}
+
+          <Section title={copy.recentlyRevealed.title} sub={copy.recentlyRevealed.sub} actionLabel={copy.recentlyRevealed.action}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.revealedRow}>
+              {SAMPLE_RECENT_PULLS.map((pull) => (
+                <RecentPullCard key={pull.handle} pull={pull} />
               ))}
+              <View style={styles.revealedMore}>
+                <Text style={styles.revealedMoreText}>+41</Text>
+              </View>
             </ScrollView>
           </Section>
-        )}
 
-        <Section title={copy.recentlyRevealed.title} sub={copy.recentlyRevealed.sub} actionLabel={copy.recentlyRevealed.action}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.revealedRow}>
-            {SAMPLE_RECENT_PULLS.map((pull) => (
-              <RecentPullCard key={pull.handle} pull={pull} />
-            ))}
-            <View style={styles.revealedMore}>
-              <Text style={styles.revealedMoreText}>+41</Text>
+          <Section
+            title={copy.collectionProgress.title}
+            actionLabel={copy.collectionProgress.action}
+            onAction={() => navigation.navigate("Portfolio")}
+          >
+            <CollectionProgressCard />
+          </Section>
+
+          <Section
+            title={copy.marketplaceHighlights.title}
+            actionLabel={copy.marketplaceHighlights.action}
+            onAction={() => navigation.navigate("Marketplace")}
+          >
+            <View style={{ gap: spacing.sm }}>
+              {SAMPLE_LISTINGS.map((listing) => (
+                <ListingRow key={listing.name} listing={listing} />
+              ))}
             </View>
-          </ScrollView>
-        </Section>
-
-        <Section
-          title={copy.collectionProgress.title}
-          actionLabel={copy.collectionProgress.action}
-          onAction={() => navigation.navigate("Portfolio")}
-        >
-          <CollectionProgressCard />
-        </Section>
-
-        <Section
-          title={copy.marketplaceHighlights.title}
-          actionLabel={copy.marketplaceHighlights.action}
-          onAction={() => navigation.navigate("Marketplace")}
-        >
-          <View style={{ gap: spacing.sm }}>
-            {SAMPLE_LISTINGS.map((listing) => (
-              <ListingRow key={listing.name} listing={listing} />
-            ))}
-          </View>
-        </Section>
+          </Section>
+        </View>
       </Animated.ScrollView>
     </View>
   );
@@ -177,6 +174,13 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
       </View>
 
       <View style={styles.featured}>
+        <LinearGradient
+          colors={["rgba(255,92,122,0.3)", "rgba(90,12,32,0.5)", "rgba(10,6,20,0.85)"]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.featuredArt} pointerEvents="none">
           <View style={[styles.featuredArtCard, { transform: [{ rotate: "6deg" }] }]}>
             <PackFace art={art} width={74} height={104} radius={11} />
@@ -449,14 +453,18 @@ function ListingRow({ listing }: { listing: (typeof SAMPLE_LISTINGS)[number] }) 
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  // A flat tint, not a gradient — the header never scrolls, so it can't fall prey to the same
+  // screen-vs-content-coordinate bug the hero wash below had to be fixed for.
+  headerLive: { backgroundColor: "rgba(255,92,122,0.1)" },
   brand: { flexDirection: "row", alignItems: "center", gap: 9 },
   brandChip: { width: 26, height: 26, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.14)" },
   brandIcon: { width: "100%", height: "100%" },
@@ -507,7 +515,9 @@ const styles = StyleSheet.create({
   },
   signInText: typography.chipLabel,
 
-  scroll: { padding: 20, paddingTop: 20, paddingBottom: 40, gap: spacing.xl },
+  scroll: { padding: 20, paddingTop: 20, paddingBottom: 40 },
+  scrollInner: { position: "relative", gap: spacing.xl },
+  ambientWash: { position: "absolute", top: -20, left: -20, right: -20, height: 900 },
 
   featuredEyebrowRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.md },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.danger },
@@ -516,7 +526,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderColor: "rgba(255,92,122,0.45)",
-    backgroundColor: "rgba(90,12,32,0.2)",
     padding: 18,
     overflow: "hidden",
   },

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -7,7 +8,7 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { marketplaceService } from "../../services/marketplaceService";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { itemFork as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
 
@@ -59,32 +60,41 @@ export function ItemForkScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={[styles.base, isWatch && styles.baseWatch]} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-            <View style={styles.backChevron} />
-          </Pressable>
-          <Text style={styles.headerLabel}>{rarityName.toUpperCase()} VERSION</Text>
-          <View style={{ width: 36 }} />
-        </View>
+        {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
+            would stay pinned to the viewport as the header/hero scroll away, bleeding into
+            whatever section (value, fork options) scrolls into that same screen region. */}
+        <View style={styles.washWrap}>
+          <LinearGradient
+            colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+            style={StyleSheet.absoluteFill}
+          />
 
-        <View style={styles.heroRow}>
-          {isWatch ? (
-            <WatchDial art={itemArtGradient(detail)} size={124} />
-          ) : (
-            <CardFace gradient={itemArtGradient(detail)} width={124} height={173} borderColor="rgba(255,215,94,0.78)" />
-          )}
-          <View style={styles.heroInfo}>
-            <Text style={styles.name}>{(detail.cardTitle ?? detail.watchName ?? detail.name).toUpperCase()}</Text>
-            <Text style={styles.subName}>
-              {[detail.pokemonName ?? detail.brand, rarityName].filter(Boolean).join(" · ")}
-            </Text>
+          <View style={styles.header}>
+            <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
+              <View style={styles.backChevron} />
+            </Pressable>
+            <Text style={styles.headerLabel}>{rarityName.toUpperCase()} VERSION</Text>
+            <View style={{ width: 36 }} />
+          </View>
 
-            <View style={styles.specRows}>
-              <SpecRow label={copy.rarity} value={rarityName} valueColor={colors.goldTop} />
-              <SpecRow label={copy.collectionLabel} value={detail.collection ?? detail.brand ?? "—"} />
-              <SpecRow label={copy.youOwn} value={item.ownedCount > 0 ? String(item.ownedCount) : copy.none} />
+          <View style={styles.heroRow}>
+            {isWatch ? (
+              <WatchDial art={itemArtGradient(detail)} size={124} />
+            ) : (
+              <CardFace gradient={itemArtGradient(detail)} width={124} height={173} borderColor="rgba(255,215,94,0.78)" />
+            )}
+            <View style={styles.heroInfo}>
+              <Text style={styles.name}>{(detail.cardTitle ?? detail.watchName ?? detail.name).toUpperCase()}</Text>
+              <Text style={styles.subName}>
+                {[detail.pokemonName ?? detail.brand, rarityName].filter(Boolean).join(" · ")}
+              </Text>
+
+              <View style={styles.specRows}>
+                <SpecRow label={copy.rarity} value={rarityName} valueColor={colors.goldTop} />
+                <SpecRow label={copy.collectionLabel} value={detail.collection ?? detail.brand ?? "—"} />
+                <SpecRow label={copy.youOwn} value={item.ownedCount > 0 ? String(item.ownedCount) : copy.none} />
+              </View>
             </View>
           </View>
         </View>
@@ -140,10 +150,9 @@ function SpecRow({ label, value, valueColor }: { label: string; value: string; v
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
-  baseWatch: { backgroundColor: "#0A0705" },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
   scroll: { paddingBottom: 20 },
+  washWrap: { position: "relative" },
   header: {
     paddingTop: 52,
     paddingHorizontal: 20,

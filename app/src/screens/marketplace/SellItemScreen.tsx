@@ -15,6 +15,11 @@ import type { CollectionStackParamList } from "../../navigation/CollectionStack"
 type Nav = NativeStackNavigationProp<CollectionStackParamList, "SellItem">;
 type Route = RouteProp<CollectionStackParamList, "SellItem">;
 
+// Setting a price is its own blue-lavender register (mockup 12c) — distinct from both the item's
+// own category color and the gold "paying" tone; the live/done state switches to green.
+const BLUE_WASH: [string, string, string] = ["rgba(143,169,255,0.18)", colors.bg, "#04010A"];
+const GREEN_WASH: [string, string, string] = ["rgba(99,232,92,0.16)", colors.bg, "#04010A"];
+
 /**
  * "Set price → fee → confirm → live" (mockup 12c), collapsed to what's actually one real
  * network call: creating the listing. The fee/net figures update live off the real
@@ -65,7 +70,7 @@ export function SellItemScreen() {
   if (listedPriceCents != null) {
     return (
       <View style={styles.fill}>
-        <View style={styles.base} />
+        <LinearGradient colors={GREEN_WASH} locations={[0, 0.4, 1]} style={styles.base} />
         <View style={styles.doneWrap}>
           <View style={styles.doneBadge}>
             <View style={styles.checkmark} />
@@ -85,7 +90,7 @@ export function SellItemScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      <LinearGradient colors={BLUE_WASH} locations={[0, 0.4, 1]} style={styles.base} />
       <View style={styles.header}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <View style={styles.backChevron} />
@@ -168,7 +173,7 @@ function Row({ label, value, danger, success, big }: { label: string; value: str
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   header: {
     paddingTop: 24,
     paddingHorizontal: 22,

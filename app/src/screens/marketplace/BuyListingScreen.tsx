@@ -17,6 +17,11 @@ type Route = RouteProp<MarketplaceStackParamList, "BuyListing">;
 
 type Step = "confirm" | "processing" | "done" | "failed";
 
+// Paying is always a gold/money-colored beat regardless of item category; the done state
+// switches to green, matching the success badge/eyebrow already used there.
+const GOLD_WASH: [string, string, string] = ["rgba(255,215,94,0.16)", colors.bg, "#04010A"];
+const GREEN_WASH: [string, string, string] = ["rgba(99,232,92,0.16)", colors.bg, "#04010A"];
+
 /**
  * "Confirm → payment → atomic transaction → success" (mockup 12b), collapsed to the one real
  * call that actually is atomic — POST /listings/:id/buy — with the confirm step merged into
@@ -50,7 +55,7 @@ export function BuyListingScreen() {
   if (step === "processing") {
     return (
       <View style={styles.fill}>
-        <View style={styles.base} />
+        <LinearGradient colors={GOLD_WASH} locations={[0, 0.4, 1]} style={styles.base} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.goldTop} />
           <Text style={styles.processingTitle}>Atomic transaction</Text>
@@ -65,7 +70,7 @@ export function BuyListingScreen() {
   if (step === "done") {
     return (
       <View style={styles.fill}>
-        <View style={[styles.base, styles.baseSuccess]} />
+        <LinearGradient colors={GREEN_WASH} locations={[0, 0.4, 1]} style={styles.base} />
         <View style={styles.centered}>
           <View style={styles.doneBadge}>
             <View style={styles.checkmark} />
@@ -96,7 +101,7 @@ export function BuyListingScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      <LinearGradient colors={GOLD_WASH} locations={[0, 0.4, 1]} style={styles.base} />
       <View style={styles.header}>
         <Text style={styles.headerLabel}>{copy.header.toUpperCase()}</Text>
       </View>
@@ -156,8 +161,7 @@ function Row({ label, value, big }: { label: string; value: string; big?: boolea
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
-  baseSuccess: { backgroundColor: "#0A0614" },
+  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   header: { paddingTop: 24, paddingHorizontal: 22, alignItems: "center" },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   itemRow: { flexDirection: "row", gap: 14, alignItems: "center", paddingHorizontal: 22, paddingTop: 18 },

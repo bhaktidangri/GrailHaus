@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   useNavigation,
   useRoute,
@@ -57,11 +58,7 @@ export function DropDetailScreen() {
   }
 
   if (!drop) {
-    return (
-      <View style={styles.fill}>
-        <View style={styles.base} />
-      </View>
-    );
+    return <View style={styles.fill} />;
   }
 
   const { sku, phase } = drop;
@@ -77,11 +74,13 @@ export function DropDetailScreen() {
   const filledPips =
     pips != null && sku.stockRemaining != null ? Math.round((sku.stockRemaining / sku.maxStock!) * pips) : 0;
 
+  const isWatch = sku.category === "watches";
+  const washColor = isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)";
+  const headerTint = isWatch ? "rgba(242,196,107,0.1)" : "rgba(177,75,255,0.12)";
+
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
-
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: headerTint }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <View style={styles.backChevron} />
         </Pressable>
@@ -93,23 +92,30 @@ export function DropDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={[styles.heroCard, styles.heroCardSide, { transform: [{ rotate: "-8deg" }] }]}>
-            <PackFace art={art} width={108} height={150} radius={12} />
-          </View>
-          <View style={[styles.heroCard, styles.heroCardCenter]}>
-            <PackFace art={art} width={128} height={178} radius={14} />
-          </View>
-          <View style={[styles.heroCard, styles.heroCardSide, { transform: [{ rotate: "8deg" }] }]}>
-            <PackFace art={art} width={108} height={150} radius={12} />
-          </View>
-        </View>
+        {/* Wash lives here, in content coordinates, not as a screen-fixed sibling — otherwise
+            it stays pinned to the viewport as you scroll and bleeds into whatever section
+            (odds, footer) happens to scroll into that same screen region. */}
+        <View style={styles.heroWrap}>
+          <LinearGradient colors={[washColor, "transparent"]} style={StyleSheet.absoluteFill} />
 
-        <Text style={styles.kicker}>
-          {sku.category.toUpperCase()} · {TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}
-        </Text>
-        <Text style={styles.title}>{sku.name}</Text>
-        <Text style={styles.body}>{copy.body(sku)}</Text>
+          <View style={styles.hero}>
+            <View style={[styles.heroCard, styles.heroCardSide, { transform: [{ rotate: "-8deg" }] }]}>
+              <PackFace art={art} width={108} height={150} radius={12} />
+            </View>
+            <View style={[styles.heroCard, styles.heroCardCenter]}>
+              <PackFace art={art} width={128} height={178} radius={14} />
+            </View>
+            <View style={[styles.heroCard, styles.heroCardSide, { transform: [{ rotate: "8deg" }] }]}>
+              <PackFace art={art} width={108} height={150} radius={12} />
+            </View>
+          </View>
+
+          <Text style={styles.kicker}>
+            {sku.category.toUpperCase()} · {TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}
+          </Text>
+          <Text style={styles.title}>{sku.name}</Text>
+          <Text style={styles.body}>{copy.body(sku)}</Text>
+        </View>
 
         <View style={styles.statPanel}>
           {phase === "soon" && sku.goesLiveAt ? (
@@ -197,8 +203,7 @@ const PHASE_EYEBROW: Record<"soon" | "live" | "closed", string> = {
 };
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,
@@ -229,6 +234,7 @@ const styles = StyleSheet.create({
   headerEyebrow: { ...typography.eyebrow, color: "#FF8DA1" },
 
   scroll: { padding: 20, paddingBottom: 40, gap: spacing.lg },
+  heroWrap: { position: "relative", gap: spacing.lg },
   hero: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: spacing.md },
   heroCard: { shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 10 } },
   heroCardSide: { opacity: 0.7 },

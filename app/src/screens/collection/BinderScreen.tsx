@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { CardFace } from "../../components/CardFace";
 import { itemArtGradient } from "../../content/cardArt";
-import { colors, typography } from "../../theme/tokens";
+import { colors, ink, typography } from "../../theme/tokens";
 import { binder as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
@@ -31,7 +32,9 @@ export function BinderScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      {/* Bounded to the fixed header+filter row (never scrolls) rather than the whole screen —
+          a full-screen wash here would stay pinned behind the grid's scrolled rows too. */}
+      <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={styles.base} />
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <View style={styles.backChevron} />
@@ -81,8 +84,8 @@ export function BinderScreen() {
 const cellWidth = 108;
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 280 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

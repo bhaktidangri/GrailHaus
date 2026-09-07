@@ -26,7 +26,11 @@ export function CollectionScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      <LinearGradient
+        colors={["rgba(177,75,255,0.2)", colors.bg, "#04010A"]}
+        locations={[0, 0.42, 1]}
+        style={styles.base}
+      />
 
       <View style={styles.header}>
         <View>
@@ -113,7 +117,7 @@ export function CollectionScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

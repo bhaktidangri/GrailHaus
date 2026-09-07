@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useDropsViewModel, type DropPhase, type DropView } from "../viewmodels/useDropsViewModel";
@@ -33,7 +34,9 @@ export function DropsScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      {/* Bounded to the fixed header (never scrolls) rather than the whole screen — a
+          full-screen wash here would stay pinned behind the FlatList's scrolled rows too. */}
+      <LinearGradient colors={["rgba(255,92,122,0.2)", "transparent"]} style={styles.base} />
       <View style={styles.header}>
         <Text style={styles.title}>{copy.title}</Text>
       </View>
@@ -104,8 +107,8 @@ function DropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  fill: { flex: 1, backgroundColor: ink.groundDeep },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 180 },
   header: { paddingTop: 56, paddingHorizontal: 20 },
   title: typography.pageHeading,
   list: { padding: 20, paddingTop: 16, gap: 14 },

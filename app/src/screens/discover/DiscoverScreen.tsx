@@ -22,7 +22,11 @@ export function DiscoverScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      <LinearGradient
+        colors={["rgba(255,255,255,0.06)", "#08040F", "#020101"]}
+        locations={[0, 0.36, 1]}
+        style={styles.base}
+      />
       <View style={styles.header}>
         <View style={styles.brandRow}>
           <Image source={require("../../../assets/logo.png")} style={styles.logo} resizeMode="contain" />
@@ -71,7 +75,7 @@ export function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#08040F" },
+  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 20,

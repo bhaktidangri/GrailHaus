@@ -1,4 +1,5 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
@@ -20,7 +21,9 @@ export function VaultScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.base} />
+      {/* Bounded to the fixed header+summary (never scrolls) rather than the whole screen —
+          a full-screen wash here would stay pinned behind the list's scrolled rows too. */}
+      <LinearGradient colors={["rgba(242,196,107,0.22)", "transparent"]} style={styles.base} />
       <View style={styles.header}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <View style={styles.backChevron} />
@@ -67,8 +70,8 @@ function rarityName(level: 1 | 2 | 3): string {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#050403" },
+  fill: { flex: 1, backgroundColor: "#020101" },
+  base: { position: "absolute", top: 0, left: 0, right: 0, height: 260 },
   header: {
     paddingTop: 56,
     paddingHorizontal: 22,
