@@ -27,7 +27,11 @@ export function WatchDetailScreen() {
 
   const specs: [string, string][] = [
     ["Brand", item.brand ?? "—"],
-    ["Model", item.watchName ?? item.modelName ?? item.name],
+    // `watchName` ("Royal Oak") and `modelName` ("Perpetual Calendar") are two distinct real
+    // catalog fields, not a fallback chain — collapsing them into one "Model" row was losing
+    // the specific edition within the base line.
+    item.watchName ? (["Model", item.watchName] as [string, string]) : ["Model", item.name],
+    item.modelName ? (["Edition", item.modelName] as [string, string]) : null,
     item.style ? (["Style", item.style] as [string, string]) : null,
     item.caseMaterial ? (["Case material", item.caseMaterial] as [string, string]) : null,
     item.dialColor ? (["Dial color", item.dialColor] as [string, string]) : null,

@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { Listing } from "@grailhaus/shared";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
@@ -10,8 +11,9 @@ import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useListingViewModel } from "../../viewmodels/useListingViewModel";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
+import { marketplaceService, type FeePreview } from "../../services/marketplaceService";
 import { colors, ink, typography } from "../../theme/tokens";
-import { listingDetail as copy } from "../../content/copy";
+import { listingDetail as copy, editPriceSheet as editCopy } from "../../content/copy";
 import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
 
 type Nav = NativeStackNavigationProp<MarketplaceStackParamList, "ListingDetail">;
@@ -19,7 +21,12 @@ type Route = RouteProp<MarketplaceStackParamList, "ListingDetail">;
 
 export function ListingDetailScreen() {
   const navigation = useNavigation<Nav>();
-  const { listing } = useRoute<Route>().params;
+  const { listing: initialListing } = useRoute<Route>().params;
+  // Local copy, not the route param directly — a successful price edit updates this in place
+  // (plus invalidates the shared ["listings"] query for Browse) rather than needing a
+  // navigation.setParams round-trip just to reflect the new ask on this same screen.
+  const [listing, setListing] = useState(initialListing);
+  const [editOpen, setEditOpen] = useState(false);
   const item = listing.item;
   const isWatch = item.category === "watches";
   // Admin-configurable (rarity_tiers table) — this used to be a hardcoded "Common"/"Rare"/
@@ -99,9 +106,14 @@ export function ListingDetailScreen() {
 
       <View style={[styles.footer, { bottom: tabBarClearance }]}>
         {isMine ? (
-          <Pressable style={styles.delistButton} onPress={handleDelist} disabled={isWorking}>
-            {isWorking ? <ActivityIndicator color="#FF8DA1" /> : <Text style={styles.delistLabel}>CANCEL LISTING</Text>}
-          </Pressable>
+          <>
+            <Pressable style={styles.editPriceButton} onPress={() => setEditOpen(true)} disabled={isWorking}>
+              <Text style={styles.editPriceLabel}>{copy.editPrice}</Text>
+            </Pressable>
+            <Pressable style={styles.delistButton} onPress={handleDelist} disabled={isWorking}>
+              {isWorking ? <ActivityIndicator color="#FF8DA1" /> : <Text style={styles.delistLabel}>{copy.cancelListing}</Text>}
+            </Pressable>
+          </>
         ) : (
           <Pressable style={styles.buyButton} onPress={() => navigation.navigate("BuyListing", { listing })}>
             <LinearGradient colors={isWatch ? ["#FFD75E", "#E08A16"] : ["#B14BFF", "#5B1FD6"]} style={StyleSheet.absoluteFill} />
@@ -114,7 +126,125 @@ export function ListingDetailScreen() {
           </Pressable>
         )}
       </View>
+
+      {isMine && (
+        <EditPriceModal
+          visible={editOpen}
+          listing={listing}
+          onClose={() => setEditOpen(false)}
+          onSaved={(updated) => {
+            setListing(updated);
+            setEditOpen(false);
+          }}
+        />
+      )}
     </View>
+  );
+}
+
+function EditPriceModal({
+  visible,
+  listing,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  listing: Listing;
+  onClose: () => void;
+  onSaved: (listing: Listing) => void;
+}) {
+  const item = listing.item;
+  const { isWorking, updatePrice } = useListingViewModel();
+  const [priceText, setPriceText] = useState(String(Math.round(listing.priceCents / 100)));
+  const [preview, setPreview] = useState<FeePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const priceCents = Math.round((Number(priceText.replace(/[^0-9.]/g, "")) || 0) * 100);
+
+  useEffect(() => {
+    if (!visible) return;
+    setPriceText(String(Math.round(listing.priceCents / 100)));
+    setError(null);
+  }, [visible, listing.priceCents]);
+
+  useEffect(() => {
+    if (!visible || priceCents <= 0) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      marketplaceService
+        .previewFee(item.category, item.rarityTierLevel, priceCents)
+        .then((p) => !cancelled && setPreview(p))
+        .catch(() => !cancelled && setPreview(null));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [visible, priceCents, item.category, item.rarityTierLevel]);
+
+  async function handleSave() {
+    setError(null);
+    const result = await updatePrice(listing.id, priceCents);
+    if (result.ok) onSaved(result.listing);
+    else setError(result.error);
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetOverlay} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>{editCopy.title}</Text>
+
+          <Text style={styles.editAskLabel}>{editCopy.yourAsk}</Text>
+          <View style={styles.editAskBox}>
+            <Text style={styles.editAskDollar}>$</Text>
+            <TextInput
+              style={styles.editAskInput}
+              value={priceText}
+              onChangeText={setPriceText}
+              keyboardType="decimal-pad"
+              selectionColor={colors.violetTop}
+              autoFocus
+            />
+          </View>
+
+          {preview && (
+            <View style={styles.editSplitCard}>
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabel}>{editCopy.platformFee(preview.feePercent)}</Text>
+                <Text style={[styles.editRowValue, { color: colors.danger }]}>
+                  −${(preview.feeCents / 100).toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.editHairline} />
+              <View style={styles.editRow}>
+                <Text style={styles.editRowLabelBig}>{editCopy.youReceive}</Text>
+                <Text style={[styles.editRowValueBig, { color: "#8BF285" }]}>
+                  ${(preview.sellerProceedsCents / 100).toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {error && <Text style={styles.error}>{error}</Text>}
+
+          <Pressable
+            style={[styles.editSaveButton, (isWorking || priceCents <= 0) && styles.disabled]}
+            onPress={handleSave}
+            disabled={isWorking || priceCents <= 0}
+          >
+            {isWorking ? <ActivityIndicator color="#fff" /> : <Text style={styles.editSaveLabel}>{editCopy.save}</Text>}
+          </Pressable>
+          <Pressable style={styles.editCancelLink} onPress={onClose}>
+            <Text style={styles.editCancelLabel}>{editCopy.cancel}</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -171,7 +301,17 @@ const styles = StyleSheet.create({
   sellerInfo: { flex: 1, minWidth: 0 },
   sellerName: { ...typography.body, fontSize: 13 },
   sellerMeta: { ...typography.footNote, marginTop: 1 },
-  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 22 },
+  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 22, gap: 10 },
+  editPriceButton: {
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: "rgba(143,169,255,0.14)",
+    borderWidth: 1.5,
+    borderColor: "rgba(143,169,255,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editPriceLabel: { ...typography.chipLabel, fontSize: 14, color: "#B8C6FF" },
   buyButton: {
     height: 60,
     borderRadius: 18,
@@ -196,4 +336,73 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   delistLabel: { ...typography.chipLabel, fontSize: 14, color: "#FF8DA1" },
+
+  sheetOverlay: { flex: 1, backgroundColor: "rgba(6,3,14,0.72)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: "#171029",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderTopColor: "rgba(255,255,255,0.16)",
+    padding: 22,
+    paddingBottom: 36,
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.24)",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  sheetTitle: { ...typography.pageHeading, fontSize: 20, textAlign: "center" },
+  editAskLabel: { ...typography.eyebrow, marginTop: 22 },
+  editAskBox: {
+    marginTop: 10,
+    height: 84,
+    borderRadius: 18,
+    backgroundColor: "rgba(143,169,255,0.12)",
+    borderWidth: 2,
+    borderColor: "rgba(143,169,255,0.6)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editAskDollar: { fontFamily: "Outfit_600SemiBold", fontSize: 22, color: "rgba(255,255,255,0.5)" },
+  editAskInput: {
+    fontFamily: "Outfit_900Black",
+    fontSize: 40,
+    letterSpacing: -0.5,
+    color: "#fff",
+    minWidth: 80,
+    textAlign: "center",
+    padding: 0,
+  },
+  editSplitCard: {
+    marginTop: 18,
+    padding: 15,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  editRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  editRowLabel: { ...typography.sectionSub },
+  editRowLabelBig: { ...typography.body, color: colors.textPrimary },
+  editRowValue: { ...typography.body },
+  editRowValueBig: { ...typography.heroWordmark, fontSize: 24 },
+  editHairline: { height: 1, backgroundColor: "rgba(255,255,255,0.14)", marginVertical: 12 },
+  error: { ...typography.errorText, marginTop: 12, textAlign: "center" },
+  editSaveButton: {
+    marginTop: 20,
+    height: 58,
+    borderRadius: 16,
+    backgroundColor: colors.violetTop,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disabled: { opacity: 0.5 },
+  editSaveLabel: { ...typography.buttonLabel, color: "#fff" },
+  editCancelLink: { marginTop: 14, alignItems: "center" },
+  editCancelLabel: { ...typography.body, color: colors.textSecondary },
 });

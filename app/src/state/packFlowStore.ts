@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ItemDetail, PackSku } from "@grailhaus/shared";
+import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
 
 /**
  * Where a purchase is in the post-payment flow — `RevealScreen` branches its
@@ -14,9 +14,9 @@ export type FlowPhase = "processing" | "ready" | "revealing" | "summary";
 
 interface PackFlowState {
   sku: PackSku | null;
-  /** Full catalog detail, not just the reward engine's minimal PulledItem shape — POST
-   * /purchase enriches its response before this store ever sees it. */
-  items: ItemDetail[] | null;
+  /** Full catalog detail plus each item's real `ownedItemId` — POST /purchase enriches its
+   * response before this store ever sees it, see server's purchase.service.ts. */
+  items: PulledOwnedItem[] | null;
   /** The real purchase record's id — lets the engine be `key`-ed per purchase, so tapping
    * "Rip Another" (a genuinely new POST /purchase, not a client-side re-roll) remounts the
    * flow engine at "processing" instead of leaving stale per-card `useState` behind from the
@@ -26,7 +26,7 @@ interface PackFlowState {
   /** Begins a flow right after a successful purchase — payment, stock decrement and item
    * assignment are already committed server-side by this point, so `"processing"` here is
    * pure pacing, not a wait for anything to actually finish. */
-  start: (sku: PackSku, items: ItemDetail[], purchaseId: string) => void;
+  start: (sku: PackSku, items: PulledOwnedItem[], purchaseId: string) => void;
   setPhase: (phase: FlowPhase) => void;
   clear: () => void;
 }

@@ -1,20 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Canvas } from "@react-three/fiber/native";
-import type { PulledItem, RarityTier } from "@grailhaus/shared";
+import type { OwnedItem, PulledOwnedItem, RarityTier } from "@grailhaus/shared";
 import type { CategoryRevealConfig, RevealPhase } from "./types";
 import { GestureLayer } from "./GestureLayer";
 import { playHapticTrack } from "./HapticsTrack";
 import { radii, spacing, typography } from "../../theme/tokens";
 import { RarityBadge } from "../../components/RarityBadge";
 import { Price } from "../../components/Price";
+import { vaultFlow as copy } from "../../content/copy";
 
 interface RevealEngineProps {
   config: CategoryRevealConfig;
-  items: PulledItem[];
+  items: PulledOwnedItem[];
   rarityTiers: RarityTier[];
+  packId: string;
+  purchaseId: string | null;
   packPriceCents?: number;
-  onFinished?: () => void;
+  onViewDetails: (owned: OwnedItem) => void;
+  onKeep: () => void;
+  onListForSale: (owned: OwnedItem) => void;
 }
 
 /**
@@ -53,10 +58,21 @@ function resolveTier(rarityTiers: RarityTier[], level: number): RarityTier {
  * new CategoryRevealConfig, not touching this file. Rarity names/colors
  * come from `rarityTiers` (admin-configurable data), never hardcoded here.
  */
-export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFinished }: RevealEngineProps) {
+export function RevealEngine({
+  config,
+  items,
+  rarityTiers,
+  packId,
+  purchaseId,
+  packPriceCents,
+  onViewDetails,
+  onKeep,
+  onListForSale,
+}: RevealEngineProps) {
   const orderedItems = useMemo(() => config.revealOrder(items), [items, config]);
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<RevealPhase>("idle");
+  const [beatLabel, setBeatLabel] = useState<string | null>(null);
 
   const maxTierLevel = useMemo(() => Math.max(...rarityTiers.map((t) => t.level), 1), [rarityTiers]);
 
@@ -68,9 +84,15 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
     if (phase !== "opening" || !current) return;
     const cancel = playHapticTrack(config.hapticTrack(phase, isRare));
     const holdMs = isRare ? config.timing.rareHoldMs : config.timing.commonBeatMs;
+    // A slower, narrated version of the same gesture/hold — not a new phase, just labels laid
+    // over the existing duration (see CategoryRevealConfig.openingBeats).
+    const beats = config.openingBeats?.(isRare) ?? [];
+    setBeatLabel(beats[0]?.label ?? null);
+    const beatTimers = beats.slice(1).map((beat) => setTimeout(() => setBeatLabel(beat.label), beat.atMs));
     const timer = setTimeout(() => setPhase("settled"), holdMs);
     return () => {
       cancel();
+      beatTimers.forEach(clearTimeout);
       clearTimeout(timer);
     };
   }, [phase, current, isRare, config]);
@@ -93,8 +115,12 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
       <SummaryView
         items={orderedItems}
         rarityTiers={rarityTiers}
+        packId={packId}
+        purchaseId={purchaseId}
         packPriceCents={packPriceCents}
-        onDone={onFinished}
+        onViewDetails={onViewDetails}
+        onKeep={onKeep}
+        onListForSale={onListForSale}
       />
     );
   }
@@ -116,6 +142,11 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
               ))}
             </View>
           </>
+        ) : phase === "opening" ? (
+          // Rarity intentionally withheld here — the RarityBadge only appears once "settled",
+          // so the narrated beats ("SILHOUETTE VISIBLE", "RARITY LOCKING IN", ...) actually
+          // lead somewhere instead of the badge spoiling it from the first frame.
+          <Text style={styles.hudEyebrow}>{beatLabel ?? `${config.label.toUpperCase()} OPENING…`}</Text>
         ) : (
           <>
             <Text style={styles.hudText}>
@@ -156,24 +187,49 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
   );
 }
 
+/**
+ * Watches always pull exactly one item (PRD §21 — no bulk mode for watches), so "the revealed
+ * watch" below is unambiguous even though this stays written for the general N-item case. The
+ * three terminal actions act on that one real `owned_items` row — `ownedItemId` comes straight
+ * off the purchase response (see server's purchase.service.ts), not a separate portfolio
+ * lookup, so "List for Sale" can hand off directly into SellItemScreen.
+ */
 function SummaryView({
   items,
   rarityTiers,
+  packId,
+  purchaseId,
   packPriceCents,
-  onDone,
+  onViewDetails,
+  onKeep,
+  onListForSale,
 }: {
-  items: PulledItem[];
+  items: PulledOwnedItem[];
   rarityTiers: RarityTier[];
+  packId: string;
+  purchaseId: string | null;
   packPriceCents?: number;
-  onDone?: () => void;
+  onViewDetails: (owned: OwnedItem) => void;
+  onKeep: () => void;
+  onListForSale: (owned: OwnedItem) => void;
 }) {
   const totalValueCents = items.reduce((sum, item) => sum + item.baseValueCents, 0);
   const best = items.reduce((a, b) => (b.baseValueCents > a.baseValueCents ? b : a), items[0]);
   const bestTier = best ? resolveTier(rarityTiers, best.rarityTierLevel) : null;
 
+  const bestOwned: OwnedItem | null = best
+    ? {
+        ownedItemId: best.ownedItemId,
+        item: best,
+        packId,
+        purchaseId,
+        acquiredAt: new Date().toISOString(),
+      }
+    : null;
+
   return (
     <View style={styles.summary}>
-      <Text style={styles.summaryTitle}>Pull Summary</Text>
+      <Text style={styles.summaryTitle}>{copy.summaryTitle}</Text>
       {best && bestTier && (
         <View style={styles.heroCard}>
           <RarityBadge tier={bestTier} />
@@ -199,10 +255,20 @@ function SummaryView({
           </Text>
         </View>
       )}
-      {onDone && (
-        <Text style={styles.doneLink} onPress={onDone}>
-          Done
-        </Text>
+      {bestOwned && (
+        <View style={styles.terminalActions}>
+          <Pressable style={styles.terminalPrimary} onPress={() => onViewDetails(bestOwned)}>
+            <Text style={styles.terminalPrimaryLabel}>{copy.viewDetails}</Text>
+          </Pressable>
+          <View style={styles.terminalRow}>
+            <Pressable style={styles.terminalSecondary} onPress={onKeep}>
+              <Text style={styles.terminalSecondaryLabel}>{copy.keep}</Text>
+            </Pressable>
+            <Pressable style={styles.terminalSecondary} onPress={() => onListForSale(bestOwned)}>
+              <Text style={styles.terminalSecondaryLabel}>{copy.listForSale}</Text>
+            </Pressable>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -264,10 +330,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   summaryLabel: { color: reveal.textSecondary, ...typography.body },
-  doneLink: {
-    color: reveal.accent,
-    ...typography.body,
-    textAlign: "center",
-    marginTop: spacing.lg,
+  terminalActions: { marginTop: spacing.lg, gap: spacing.sm },
+  terminalPrimary: {
+    height: 56,
+    borderRadius: radii.lg,
+    backgroundColor: reveal.accent,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  terminalPrimaryLabel: { ...typography.body, fontWeight: "700" as const, color: reveal.background },
+  terminalRow: { flexDirection: "row", gap: spacing.sm },
+  terminalSecondary: {
+    flex: 1,
+    height: 50,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: reveal.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  terminalSecondaryLabel: { ...typography.body, color: reveal.textPrimary },
 });

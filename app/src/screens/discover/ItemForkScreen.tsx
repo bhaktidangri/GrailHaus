@@ -58,7 +58,10 @@ export function ItemForkScreen() {
     () =>
       isWatch
         ? ([
-            ["Model", detail.watchName ?? detail.modelName ?? detail.name],
+            // `watchName` ("Royal Oak") and `modelName` ("Perpetual Calendar") are two distinct
+            // real catalog fields, not a fallback chain — see WatchDetailScreen for the same fix.
+            detail.watchName ? ["Model", detail.watchName] : ["Model", detail.name],
+            detail.modelName ? ["Edition", detail.modelName] : null,
             detail.style ? ["Style", detail.style] : null,
             detail.caseMaterial ? ["Case material", detail.caseMaterial] : null,
             detail.dialColor ? ["Dial color", detail.dialColor] : null,

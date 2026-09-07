@@ -53,6 +53,17 @@ export interface CategoryRevealConfig {
   };
   timing: { commonBeatMs: number; rareHoldMs: number };
   hapticTrack: (phase: RevealPhase, isRare: boolean) => HapticStep[];
-  /** Commons first, rare last — but each category can weight this differently. */
-  revealOrder: (items: PulledItem[]) => PulledItem[];
+  /**
+   * Optional labeled sub-beats shown in sequence during the `"opening"` phase — e.g. watches'
+   * "VAULT DOOR OPENING" → "BUILDING PRESSURE" → "SILHOUETTE VISIBLE" → "RARITY LOCKING IN".
+   * Purely a slower, narrated version of the *same* gesture/hold `RevealEngine` already runs —
+   * not a new phase state machine, just labels + pacing layered onto the existing `opening`
+   * duration (`timing.rareHoldMs`/`commonBeatMs`). Omit for a category with no such narration
+   * (e.g. cards, which has its own dedicated `CardFlowEngine` instead of using this at all).
+   */
+  openingBeats?: (isRare: boolean) => { atMs: number; label: string }[];
+  /** Commons first, rare last — but each category can weight this differently. Generic so a
+   * caller passing the richer `PulledOwnedItem[]` (real pulls, with `ownedItemId`) gets that
+   * same richer type back, not narrowed down to the reward engine's minimal `PulledItem`. */
+  revealOrder: <T extends PulledItem>(items: T[]) => T[];
 }

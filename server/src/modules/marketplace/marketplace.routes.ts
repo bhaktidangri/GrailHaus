@@ -1,7 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import type { Category, RarityTierLevel } from "@grailhaus/shared";
 import { itemDetailSchema } from "../items/items.schema.js";
-import { browseListings, buyListing, createListing, delist, getListing, previewFeeSplit } from "./marketplace.service.js";
+import {
+  browseListings,
+  buyListing,
+  createListing,
+  delist,
+  getListing,
+  previewFeeSplit,
+  updatePrice,
+} from "./marketplace.service.js";
 
 const partySchema = {
   type: "object",
@@ -128,6 +136,30 @@ export async function marketplaceRoutes(app: FastifyInstance) {
     async (req) => {
       const { ownedItemId, priceCents } = req.body as { ownedItemId: string; priceCents: number };
       return createListing(req.userId!, ownedItemId, priceCents);
+    }
+  );
+
+  app.post(
+    "/listings/:id/price",
+    {
+      preHandler: app.authenticate,
+      schema: {
+        tags: ["marketplace"],
+        summary: "Edit the asking price on your own still-active listing",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        body: {
+          type: "object",
+          required: ["priceCents"],
+          properties: { priceCents: { type: "number", minimum: 1 } },
+        },
+        response: { 200: listingSchema },
+      },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const { priceCents } = req.body as { priceCents: number };
+      return updatePrice(req.userId!, id, priceCents);
     }
   );
 

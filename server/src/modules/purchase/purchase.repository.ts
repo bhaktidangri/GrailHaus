@@ -180,14 +180,19 @@ export async function upsertPressureState(
   );
 }
 
+/** Returns the new `owned_items.id` per input item, same order as `itemIds` — a multi-row
+ * `INSERT ... VALUES ... RETURNING` reflects rows back in the order they were listed, which is
+ * what lets the caller pair each id back up with the pulled item at that same position (an
+ * ordinary lookup by `item_id` alone can't do this: one pull can pull the same catalog item
+ * more than once). */
 export async function insertOwnedItems(
   client: PoolClient,
   purchaseId: string,
   userId: string,
   packId: string,
   itemIds: string[]
-): Promise<void> {
-  if (itemIds.length === 0) return;
+): Promise<string[]> {
+  if (itemIds.length === 0) return [];
   const values: string[] = [];
   const params: unknown[] = [];
   itemIds.forEach((itemId, i) => {
@@ -195,10 +200,11 @@ export async function insertOwnedItems(
     values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, now())`);
     params.push(userId, itemId, packId, purchaseId);
   });
-  await client.query(
-    `insert into public.owned_items (user_id, item_id, pack_id, purchase_id, acquired_at) values ${values.join(", ")}`,
+  const { rows } = await client.query<{ id: string }>(
+    `insert into public.owned_items (user_id, item_id, pack_id, purchase_id, acquired_at) values ${values.join(", ")} returning id`,
     params
   );
+  return rows.map((row) => row.id);
 }
 
 export async function decrementStock(client: PoolClient, packId: string, quantity: number): Promise<void> {

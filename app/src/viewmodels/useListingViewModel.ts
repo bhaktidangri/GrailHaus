@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { Listing } from "@grailhaus/shared";
 import { marketplaceService } from "../services/marketplaceService";
 
 export type ListResult = { ok: true } | { ok: false; error: string };
+export type UpdatePriceResult = { ok: true; listing: Listing } | { ok: false; error: string };
 
-/** ViewModel behind "Sell" on an owned item and "Delist" on an active listing. */
+/** ViewModel behind "Sell" on an owned item, and "Edit Price"/"Delist" on an active listing. */
 export function useListingViewModel() {
   const [isWorking, setWorking] = useState(false);
   const queryClient = useQueryClient();
@@ -37,5 +39,18 @@ export function useListingViewModel() {
     }
   }
 
-  return { isWorking, createListing, delist };
+  async function updatePrice(listingId: string, priceCents: number): Promise<UpdatePriceResult> {
+    setWorking(true);
+    try {
+      const listing = await marketplaceService.updatePrice(listingId, priceCents);
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      return { ok: true, listing };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Couldn't update the price." };
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return { isWorking, createListing, delist, updatePrice };
 }

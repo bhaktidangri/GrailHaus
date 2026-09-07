@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { Category, Listing } from "@grailhaus/shared";
+import type { Category, Listing, RarityTierLevel } from "@grailhaus/shared";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useMarketplaceViewModel } from "../../viewmodels/useMarketplaceViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { SignInPrompt } from "../../components/SignInPrompt";
 import { CardFace } from "../../components/CardFace";
@@ -23,6 +24,30 @@ const CATEGORY_TABS: { key: Category | null; label: string }[] = [
   { key: "watches", label: "Watches" },
 ];
 
+interface PriceBand {
+  key: string;
+  label: string;
+  min: number;
+  max: number | null;
+}
+
+/** Real quartile bands off whatever's actually listed right now — never fixed dollar amounts,
+ * since cards ($5–$1k+) and watches ($500–$50k+) sit on completely different price scales. */
+function computePriceBands(listings: Listing[]): PriceBand[] {
+  if (listings.length < 4) return [];
+  const prices = listings.map((l) => l.priceCents).sort((a, b) => a - b);
+  const at = (p: number) => prices[Math.min(prices.length - 1, Math.floor(p * (prices.length - 1)))];
+  const p25 = at(0.25);
+  const p50 = at(0.5);
+  const p75 = at(0.75);
+  const fmt = (c: number) => `$${Math.round(c / 100).toLocaleString()}`;
+  const bands: PriceBand[] = [{ key: "b0", label: `Under ${fmt(p25)}`, min: 0, max: p25 }];
+  if (p50 > p25) bands.push({ key: "b1", label: `${fmt(p25)}–${fmt(p50)}`, min: p25, max: p50 });
+  if (p75 > p50) bands.push({ key: "b2", label: `${fmt(p50)}–${fmt(p75)}`, min: p50, max: p75 });
+  bands.push({ key: "b3", label: `${fmt(p75)}+`, min: p75, max: null });
+  return bands;
+}
+
 /**
  * Browse split from My Listings at the top (mockup 12a) so a seller never has to leave the
  * marketplace to check their own book. "My Listings" is filtered client-side by username —
@@ -38,7 +63,17 @@ export function MarketplaceScreen() {
   const vm = useMarketplaceViewModel(category ?? undefined);
   const tabBarClearance = useTabBarClearance();
 
-  const listings = useMemo(() => {
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [rarityFilter, setRarityFilter] = useState<RarityTierLevel | null>(null);
+  const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
+  const [identityFilter, setIdentityFilter] = useState<string | null>(null);
+  const [priceBandKey, setPriceBandKey] = useState<string | null>(null);
+  // Rarity/Collection/Brand-Pokémon tier names and groupings differ per category, so those three
+  // facets only make sense once a specific category is picked — Price alone works across both
+  // since it's just real dollar quartiles, category-agnostic.
+  const rarityTiers = useRarityTiers(category ?? "cards");
+
+  const scopedListings = useMemo(() => {
     if (tab === "browse") return vm.listings;
     if (!session.profile?.username) return [];
     return vm.listings.filter((l) => l.seller.username === session.profile!.username);
@@ -48,6 +83,72 @@ export function MarketplaceScreen() {
     () => (session.profile?.username ? vm.listings.filter((l) => l.seller.username === session.profile!.username).length : 0),
     [vm.listings, session.profile]
   );
+
+  const collectionOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of scopedListings) {
+      const key = l.item.collection ?? "Uncategorized";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+  }, [scopedListings]);
+
+  const identityOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of scopedListings) {
+      const key = l.item.category === "watches" ? l.item.brand : l.item.pokemonName;
+      if (!key) continue;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+  }, [scopedListings]);
+
+  const rarityOptions = useMemo(() => {
+    const levels: RarityTierLevel[] = [1, 2, 3];
+    return levels
+      .map((level) => ({
+        level,
+        label: rarityTiers[level]?.name ?? "",
+        count: scopedListings.filter((l) => l.item.rarityTierLevel === level).length,
+      }))
+      .filter((r) => r.count > 0);
+  }, [scopedListings, rarityTiers]);
+
+  const priceBands = useMemo(() => computePriceBands(scopedListings), [scopedListings]);
+  const activePriceBand = priceBands.find((b) => b.key === priceBandKey) ?? null;
+
+  const activeFilterCount =
+    (rarityFilter != null ? 1 : 0) + (collectionFilter != null ? 1 : 0) + (identityFilter != null ? 1 : 0) + (activePriceBand ? 1 : 0);
+
+  const listings = useMemo(() => {
+    return scopedListings.filter((l) => {
+      if (rarityFilter != null && l.item.rarityTierLevel !== rarityFilter) return false;
+      if (collectionFilter != null && (l.item.collection ?? "Uncategorized") !== collectionFilter) return false;
+      if (identityFilter != null) {
+        const identity = l.item.category === "watches" ? l.item.brand : l.item.pokemonName;
+        if (identity !== identityFilter) return false;
+      }
+      if (activePriceBand) {
+        if (l.priceCents < activePriceBand.min) return false;
+        if (activePriceBand.max != null && l.priceCents > activePriceBand.max) return false;
+      }
+      return true;
+    });
+  }, [scopedListings, rarityFilter, collectionFilter, identityFilter, activePriceBand]);
+
+  function handleCategoryChange(next: Category | null) {
+    setCategory(next);
+    setRarityFilter(null);
+    setCollectionFilter(null);
+    setIdentityFilter(null);
+  }
+
+  function handleClearFilters() {
+    setRarityFilter(null);
+    setCollectionFilter(null);
+    setIdentityFilter(null);
+    setPriceBandKey(null);
+  }
 
   return (
     <View style={styles.fill}>
@@ -93,10 +194,23 @@ export function MarketplaceScreen() {
 
       <View style={styles.chipRow}>
         {CATEGORY_TABS.map((c) => (
-          <Pressable key={c.label} style={[styles.chip, category === c.key && styles.chipActive]} onPress={() => setCategory(c.key)}>
+          <Pressable
+            key={c.label}
+            style={[styles.chip, category === c.key && styles.chipActive]}
+            onPress={() => handleCategoryChange(c.key)}
+          >
             <Text style={[styles.chipText, category === c.key && styles.chipTextActive]}>{c.label}</Text>
           </Pressable>
         ))}
+        <Pressable
+          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
+          onPress={() => setFilterSheetOpen(true)}
+        >
+          <Text style={[styles.filterButtonText, activeFilterCount > 0 && styles.filterButtonTextActive]}>
+            {copy.filters}
+            {activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+          </Text>
+        </Pressable>
       </View>
 
       {tab === "mine" && !session.isSignedIn ? (
@@ -136,7 +250,178 @@ export function MarketplaceScreen() {
           )}
         />
       )}
+
+      <FilterSheet
+        visible={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        category={category}
+        rarityOptions={rarityOptions}
+        collectionOptions={collectionOptions}
+        identityOptions={identityOptions}
+        priceBands={priceBands}
+        rarityFilter={rarityFilter}
+        collectionFilter={collectionFilter}
+        identityFilter={identityFilter}
+        priceBandKey={priceBandKey}
+        onRarityChange={setRarityFilter}
+        onCollectionChange={setCollectionFilter}
+        onIdentityChange={setIdentityFilter}
+        onPriceBandChange={setPriceBandKey}
+        onClearAll={handleClearFilters}
+      />
     </View>
+  );
+}
+
+interface FilterSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  category: Category | null;
+  rarityOptions: { level: RarityTierLevel; label: string; count: number }[];
+  collectionOptions: { label: string; count: number }[];
+  identityOptions: { label: string; count: number }[];
+  priceBands: PriceBand[];
+  rarityFilter: RarityTierLevel | null;
+  collectionFilter: string | null;
+  identityFilter: string | null;
+  priceBandKey: string | null;
+  onRarityChange: (level: RarityTierLevel | null) => void;
+  onCollectionChange: (label: string | null) => void;
+  onIdentityChange: (label: string | null) => void;
+  onPriceBandChange: (key: string | null) => void;
+  onClearAll: () => void;
+}
+
+/**
+ * Real facets only — every chip's count comes off whatever's actually listed right now
+ * (`scopedListings` in the parent), never an invented total. Rarity/Collection/Brand-Pokémon
+ * need a specific category picked first since their vocabulary (tier names, identity field)
+ * differs between cards and watches; Price alone works across "All" too since it's just dollar
+ * quartiles of whatever's currently in view.
+ */
+function FilterSheet({
+  visible,
+  onClose,
+  category,
+  rarityOptions,
+  collectionOptions,
+  identityOptions,
+  priceBands,
+  rarityFilter,
+  collectionFilter,
+  identityFilter,
+  priceBandKey,
+  onRarityChange,
+  onCollectionChange,
+  onIdentityChange,
+  onPriceBandChange,
+  onClearAll,
+}: FilterSheetProps) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose}>
+        <Pressable style={sheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={sheetStyles.handle} />
+          <View style={sheetStyles.titleRow}>
+            <Text style={sheetStyles.title}>{copy.filtersTitle}</Text>
+            <Pressable onPress={onClearAll}>
+              <Text style={sheetStyles.clearAll}>{copy.clearFilters}</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={sheetStyles.scroll}>
+            <FacetSection title={copy.facetPrice}>
+              {priceBands.length === 0 ? (
+                <Text style={sheetStyles.emptyNote}>{copy.pickCategoryFirst}</Text>
+              ) : (
+                <View style={sheetStyles.chipWrap}>
+                  {priceBands.map((band) => (
+                    <FilterChip
+                      key={band.key}
+                      label={band.label}
+                      active={priceBandKey === band.key}
+                      onPress={() => onPriceBandChange(priceBandKey === band.key ? null : band.key)}
+                    />
+                  ))}
+                </View>
+              )}
+            </FacetSection>
+
+            <FacetSection title={copy.facetRarity}>
+              {!category || rarityOptions.length === 0 ? (
+                <Text style={sheetStyles.emptyNote}>{copy.pickCategoryFirst}</Text>
+              ) : (
+                <View style={sheetStyles.chipWrap}>
+                  {rarityOptions.map((r) => (
+                    <FilterChip
+                      key={r.level}
+                      label={`${r.label} · ${r.count}`}
+                      active={rarityFilter === r.level}
+                      onPress={() => onRarityChange(rarityFilter === r.level ? null : r.level)}
+                    />
+                  ))}
+                </View>
+              )}
+            </FacetSection>
+
+            <FacetSection title={copy.facetCollection}>
+              {!category || collectionOptions.length === 0 ? (
+                <Text style={sheetStyles.emptyNote}>{copy.pickCategoryFirst}</Text>
+              ) : (
+                <View style={sheetStyles.chipWrap}>
+                  {collectionOptions.map((c) => (
+                    <FilterChip
+                      key={c.label}
+                      label={`${c.label} · ${c.count}`}
+                      active={collectionFilter === c.label}
+                      onPress={() => onCollectionChange(collectionFilter === c.label ? null : c.label)}
+                    />
+                  ))}
+                </View>
+              )}
+            </FacetSection>
+
+            <FacetSection title={category ? copy.facetIdentity[category] : "Pokémon / Brand"}>
+              {!category || identityOptions.length === 0 ? (
+                <Text style={sheetStyles.emptyNote}>{copy.pickCategoryFirst}</Text>
+              ) : (
+                <View style={sheetStyles.chipWrap}>
+                  {identityOptions.map((o) => (
+                    <FilterChip
+                      key={o.label}
+                      label={`${o.label} · ${o.count}`}
+                      active={identityFilter === o.label}
+                      onPress={() => onIdentityChange(identityFilter === o.label ? null : o.label)}
+                    />
+                  ))}
+                </View>
+              )}
+            </FacetSection>
+          </ScrollView>
+
+          <Pressable style={sheetStyles.applyButton} onPress={onClose}>
+            <Text style={sheetStyles.applyLabel}>{copy.applyFilters}</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function FacetSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={sheetStyles.section}>
+      <Text style={sheetStyles.sectionLabel}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable style={[sheetStyles.chip, active && sheetStyles.chipActive]} onPress={onPress}>
+      <Text style={[sheetStyles.chipText, active && sheetStyles.chipTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -213,6 +498,19 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: "rgba(177,75,255,0.24)", borderColor: "rgba(177,75,255,0.6)" },
   chipText: { ...typography.metaLine, fontSize: 11.5, color: "rgba(255,255,255,0.55)" },
   chipTextActive: { color: "#E0C4FF" },
+  filterButton: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.14)",
+    justifyContent: "center",
+    marginLeft: "auto",
+  },
+  filterButtonActive: { backgroundColor: "rgba(255,215,94,0.16)", borderColor: "rgba(255,215,94,0.5)" },
+  filterButtonText: { ...typography.metaLine, fontSize: 11.5, color: "rgba(255,255,255,0.55)" },
+  filterButtonTextActive: { color: "#FFD75E" },
   loading: { marginTop: 60 },
   grid: { padding: 20, gap: 12 },
   gridRow: { gap: 12 },
@@ -230,4 +528,55 @@ const styles = StyleSheet.create({
   cardSub: { ...typography.footNote, marginTop: 2, fontSize: 10 },
   cardPrice: { ...typography.title, fontSize: 16, marginTop: 7 },
   empty: { ...typography.sectionSub, textAlign: "center", marginTop: 60, width: "100%" },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(6,3,14,0.72)", justifyContent: "flex-end" },
+  sheet: {
+    maxHeight: "80%",
+    backgroundColor: "#171029",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1.5,
+    borderTopColor: "rgba(255,255,255,0.16)",
+    padding: 22,
+    paddingBottom: 30,
+  },
+  handle: {
+    width: 38,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.24)",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { ...typography.pageHeading, fontSize: 20 },
+  clearAll: { ...typography.chipLabel, fontSize: 12, color: "#C99BFF" },
+  scroll: { marginTop: 16 },
+  section: { marginBottom: 20 },
+  sectionLabel: { ...typography.eyebrow, marginBottom: 10 },
+  emptyNote: { ...typography.footNote, fontStyle: "italic" as const },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.14)",
+    justifyContent: "center",
+  },
+  chipActive: { backgroundColor: "rgba(177,75,255,0.24)", borderColor: "rgba(177,75,255,0.6)" },
+  chipText: { ...typography.metaLine, fontSize: 12, color: "rgba(255,255,255,0.6)" },
+  chipTextActive: { color: "#E0C4FF" },
+  applyButton: {
+    marginTop: 6,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.violetTop,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyLabel: { ...typography.buttonLabel, color: "#fff" },
 });

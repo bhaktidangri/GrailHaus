@@ -145,6 +145,19 @@ export const packDetail = {
   ripNow: "RIP NOW",
 } as const;
 
+export const vaultDetail = {
+  body: "One watch, sealed until you unlock it. Odds and expected value are published below — nobody unlocks without knowing the downside.",
+  price: "PRICE",
+  receive: "YOU RECEIVE",
+  oneWatch: "One watch",
+  valueRange: "VALUE RANGE",
+  rarityPossibilities: "RARITY POSSIBILITIES",
+  featuredWatches: "FEATURED WATCHES",
+  collectionPreview: "COLLECTION PREVIEW",
+  fullOdds: "Full odds ›",
+  unlockVault: "UNLOCK VAULT",
+} as const;
+
 export const home = {
   door: {
     eyebrow: "EXPLORE",
@@ -276,6 +289,8 @@ export const binder = {
   header: "Collection Binder",
   empty: "No cards in this collection yet.",
   filterBack: "Filter binder",
+  facetCollection: "Collection",
+  facetRarity: "Rarity",
 } as const;
 
 export const vault = {
@@ -301,6 +316,7 @@ export const itemDetail = {
   valueRange: (minCents: number, maxCents: number) =>
     `Ranges $${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
   acquired: (date: string) => `Acquired ${date}`,
+  ownershipHistory: "OWNERSHIP HISTORY",
   keep: "KEEP",
   sell: "SELL",
   viewCollection: (name: string) => `VIEW COLLECTION · ${name.toUpperCase()}`,
@@ -398,6 +414,15 @@ export const marketplace = {
   liveBadge: "LIVE",
   signInTitle: "Sign in to see your listings",
   signInBody: "Track what you've put up for sale — sign in to see your own book.",
+  filters: "FILTERS",
+  filtersTitle: "Filter listings",
+  facetRarity: "Rarity",
+  facetCollection: "Collection",
+  facetPrice: "Price",
+  facetIdentity: { cards: "Pokémon", watches: "Brand" } as const,
+  clearFilters: "CLEAR ALL",
+  applyFilters: "SHOW RESULTS",
+  pickCategoryFirst: "Pick Cards or Watches to filter by this.",
 } as const;
 
 export const listingDetail = {
@@ -405,6 +430,19 @@ export const listingDetail = {
   from: (username: string | null) => (username ? `from @${username}` : "from a collector"),
   buyNow: "BUY NOW",
   buying: "BUYING…",
+  editPrice: "EDIT PRICE",
+  cancelListing: "CANCEL LISTING",
+} as const;
+
+export const editPriceSheet = {
+  title: "Edit listing price",
+  yourAsk: "YOUR ASK",
+  buyerPays: "Buyer pays",
+  platformFee: (pct: number) => `Platform fee · ${pct}%`,
+  youReceive: "You receive",
+  save: "SAVE PRICE",
+  saving: "SAVING…",
+  cancel: "CANCEL",
 } as const;
 
 export const buyListing = {
@@ -427,6 +465,13 @@ export const buyListing = {
 export const reveal = {
   emptyTitle: "No pack open",
   emptyNote: "Rip a pack from the Shelf to see it here.",
+} as const;
+
+export const vaultFlow = {
+  summaryTitle: "Watch Revealed",
+  viewDetails: "VIEW DETAILS",
+  keep: "KEEP",
+  listForSale: "LIST FOR SALE",
 } as const;
 
 export const cardFlow = {

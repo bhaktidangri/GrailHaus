@@ -83,6 +83,19 @@ export async function delistListing(listingId: string, sellerId: string): Promis
   return (rowCount ?? 0) > 0;
 }
 
+/** Same shape as `delistListing` — a single conditional UPDATE, only takes effect while the
+ * listing is still active and belongs to this seller. `fee_percent`/`fee_cents`/
+ * `seller_proceeds_cents` stay untouched: those are only ever written once, at sale time (see
+ * `markListingSold`) — an active listing's fee preview is always computed live from today's
+ * rate, never stored. */
+export async function updateListingPrice(listingId: string, sellerId: string, priceCents: number): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    "update public.listings set price_cents = $3 where id = $1 and seller_id = $2 and status = 'active'",
+    [listingId, sellerId, priceCents]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 interface LockedListing {
   id: string;
   owned_item_id: string;

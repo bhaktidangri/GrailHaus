@@ -35,10 +35,14 @@ export function CardDetailScreen() {
   const item = owned.item;
   const tabBarClearance = useTabBarClearance();
 
-  const copiesOwned = useMemo(
-    () => vm.cards.filter((o) => o.item.id === item.id).length,
+  const copiesOfThisItem = useMemo(
+    () =>
+      [...vm.cards]
+        .filter((o) => o.item.id === item.id)
+        .sort((a, b) => new Date(b.acquiredAt).getTime() - new Date(a.acquiredAt).getTime()),
     [vm.cards, item.id]
   );
+  const copiesOwned = copiesOfThisItem.length;
 
   const acquiredDate = new Date(owned.acquiredAt).toLocaleDateString(undefined, {
     day: "numeric",
@@ -112,9 +116,32 @@ export function CardDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.acquiredText}>{copy.acquired(acquiredDate)}</Text>
-        </View>
+        {copiesOwned > 1 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{copy.ownershipHistory}</Text>
+            <View style={styles.historyList}>
+              {copiesOfThisItem.map((copyRow, i) => (
+                <View key={copyRow.ownedItemId} style={styles.historyRow}>
+                  <Text style={styles.historyIndex}>#{copiesOwned - i}</Text>
+                  <Text style={styles.historyDate}>
+                    {copy.acquired(
+                      new Date(copyRow.acquiredAt).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    )}
+                  </Text>
+                  {copyRow.ownedItemId === owned.ownedItemId && <Text style={styles.historyThisOne}>THIS COPY</Text>}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.acquiredText}>{copy.acquired(acquiredDate)}</Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={[styles.footer, { bottom: tabBarClearance }]}>
@@ -219,6 +246,27 @@ const styles = StyleSheet.create({
   valueBig: { ...typography.heroWordmark, fontSize: 30, marginTop: 4 },
   valueRangeText: { ...typography.footNote, marginTop: 6 },
   acquiredText: typography.footNote,
+  historyList: { marginTop: 9, gap: 8 },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  historyIndex: { ...typography.metaLine, fontSize: 10.5, color: "rgba(255,255,255,0.5)", width: 26 },
+  historyDate: { ...typography.footNote, flex: 1 },
+  historyThisOne: {
+    ...typography.metaLine,
+    fontSize: 8.5,
+    fontWeight: "800" as const,
+    color: "#8BF285",
+    letterSpacing: 0.6,
+  },
   footer: {
     position: "absolute",
     left: 0,

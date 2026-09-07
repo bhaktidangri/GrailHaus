@@ -130,6 +130,14 @@ export interface PackSku {
  * input type can evolve independently of the catalog type once real pulls exist server-side. */
 export type PulledItem = PackItem;
 
+/** One pulled item as `/purchase` actually returns it — full catalog detail plus the specific
+ * `owned_items` row id that purchase created for it, so a post-reveal screen (Cards' Pack
+ * Summary, Watches' post-reveal fork) can act on *that exact copy* — view it, sell it — without
+ * a separate portfolio lookup. */
+export interface PulledOwnedItem extends ItemDetail {
+  ownedItemId: string;
+}
+
 /** Per-user, per-pack pity counter — deliberately scoped to one SKU, never global across a user's
  * account or shared across tiers. See rewardEngine.ts for why. */
 export interface PressureState {

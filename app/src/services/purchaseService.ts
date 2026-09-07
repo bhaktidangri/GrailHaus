@@ -1,4 +1,4 @@
-import type { ItemDetail } from "@grailhaus/shared";
+import type { PulledOwnedItem } from "@grailhaus/shared";
 import { apiGet, apiPost } from "./apiClient";
 
 export interface PurchaseResult {
@@ -8,9 +8,9 @@ export interface PurchaseResult {
   quantity: number;
   totalPriceCents: number | null;
   failureReason: string | null;
-  /** Full catalog detail per pulled item — same shape as GET /items/:id, not just the
-   * minimal id/name/rarity/value the reward engine itself works with. */
-  items: ItemDetail[];
+  /** Full catalog detail per pulled item (same shape as GET /items/:id) plus the real
+   * `ownedItemId` purchase created for it — lets a post-reveal screen act on that exact copy. */
+  items: PulledOwnedItem[];
 }
 
 export const purchaseService = {

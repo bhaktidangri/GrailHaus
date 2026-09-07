@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, type RouteProp, type CompositeNavigationProp } from "@react-navigation/native";
@@ -8,11 +8,9 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, PackSku } from "@grailhaus/shared";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useShelfViewModel } from "../viewmodels/useShelfViewModel";
-import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { useAuthStore } from "../state/authStore";
 import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/PackTile";
 import { PackFace } from "../components/PackFace";
-import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
 import { CategorySwitch } from "../components/CategorySwitch";
 import { useHideTabBarOnScroll, useTabBarClearance } from "../navigation/tabBarVisibility";
 import { fonts, ink, typography } from "../theme/tokens";
@@ -41,25 +39,18 @@ type Nav = CompositeNavigationProp<
  * on Home's doors). Switching calls `setParams` rather than pushing a new
  * route, so there's still exactly one World screen on the stack. View only:
  * no fetch calls, no business logic — everything comes from the viewmodels
- * below.
+ * below. Both categories drill into their own detail screen from here now —
+ * cards into PackDetail, watches into VaultDetail — neither buys straight
+ * off this list.
  */
 export function ShelfScreen() {
   const navigation = useNavigation<Nav>();
   const { category } = useRoute<RouteProp<HomeStackParamList, "World">>().params;
-  // Interim: only the watches path still buys straight off this screen (its own
-  // "Explore the Vault" redesign — tier detail, confirm-unlock — is a later pass).
-  // Cards always drills into PackDetail now, per the Cards journey mockup.
-  const [sheetSku, setSheetSku] = useState<PackSku | null>(null);
   const session = useSessionViewModel();
   const shelf = useShelfViewModel(category);
-  const flow = usePackFlowViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
-  // A ref, not state: a rapid double-tap must be blocked before React's next render, or both
-  // taps mint their own idempotency key and become two real, separately-charged purchases —
-  // the key only protects a retry of the *same* attempt, not two distinct ones.
-  const isRippingRef = useRef(false);
 
   const register = REGISTER[category];
 
@@ -68,27 +59,6 @@ export function ShelfScreen() {
     const prices = shelf.packs.map((p) => p.priceCents).sort((a, b) => a - b);
     return { min: prices[0], max: prices[prices.length - 1] };
   }, [shelf.packs]);
-
-  function handleConfirm() {
-    const sku = sheetSku;
-    if (!sku) return;
-    // Browsing a world never requires a session — only the moment of intent does.
-    requireAuth(async () => {
-      if (isRippingRef.current) return;
-      isRippingRef.current = true;
-      try {
-        const result = await flow.startFlow(sku);
-        if (result.ok) {
-          setSheetSku(null);
-          navigation.navigate("Reveal");
-        } else {
-          Alert.alert("Couldn't unlock that vault", result.error);
-        }
-      } finally {
-        isRippingRef.current = false;
-      }
-    });
-  }
 
   return (
     <View style={styles.fill}>
@@ -155,7 +125,7 @@ export function ShelfScreen() {
               <TierRow key={sku.id} sku={sku} onPress={() => navigation.navigate("PackDetail", { skuId: sku.id })} />
             ))
           : shelf.packs.map((sku) => (
-              <PackTile key={sku.id} sku={sku} onBuy={() => setSheetSku(sku)} disabled={flow.isPurchasing} />
+              <PackTile key={sku.id} sku={sku} onBuy={() => navigation.navigate("VaultDetail", { skuId: sku.id })} />
             ))}
         {!shelf.isLoading && shelf.packs.length === 0 && <Text style={styles.empty}>{shelfCopy.emptyPacks}</Text>}
 
@@ -173,17 +143,6 @@ export function ShelfScreen() {
           </>
         )}
       </Animated.ScrollView>
-
-      {category === "watches" && (
-        <ConfirmPurchaseSheet
-          visible={sheetSku != null}
-          sku={sheetSku}
-          balanceCents={session.balanceCents}
-          isPurchasing={flow.isPurchasing}
-          onClose={() => setSheetSku(null)}
-          onConfirm={handleConfirm}
-        />
-      )}
     </View>
   );
 }

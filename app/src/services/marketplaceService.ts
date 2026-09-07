@@ -14,6 +14,8 @@ export const marketplaceService = {
   create: (ownedItemId: string, priceCents: number): Promise<Listing> =>
     apiPost<Listing>("/listings", { ownedItemId, priceCents }),
   delist: (id: string): Promise<Listing> => apiPost<Listing>(`/listings/${id}/delist`, {}),
+  updatePrice: (id: string, priceCents: number): Promise<Listing> =>
+    apiPost<Listing>(`/listings/${id}/price`, { priceCents }),
   buy: (id: string): Promise<{ status: "completed" | "failed"; failureReason: string | null; listing: Listing }> =>
     apiPost(`/listings/${id}/buy`, {}),
   /** Live preview at today's configured rate — same math the server applies at listing-create

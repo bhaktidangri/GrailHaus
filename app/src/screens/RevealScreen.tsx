@@ -1,6 +1,7 @@
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { OwnedItem } from "@grailhaus/shared";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
@@ -57,6 +58,16 @@ export function RevealScreen() {
     if (!result.ok) Alert.alert("Couldn't rip again", result.error);
   }
 
+  function handleViewWatchDetails(owned: OwnedItem) {
+    flow.finishFlow();
+    rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "WatchDetail", params: { owned } } });
+  }
+
+  function handleListForSale(owned: OwnedItem) {
+    flow.finishFlow();
+    rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "SellItem", params: { owned } } });
+  }
+
   if (!flow.isActive || !flow.config || !flow.items || !flow.sku) {
     return (
       <ScreenBackground>
@@ -85,11 +96,16 @@ export function RevealScreen() {
 
   return (
     <RevealEngine
+      key={flow.purchaseId ?? undefined}
       config={flow.config}
       items={flow.items}
       rarityTiers={flow.sku.rarityTiers}
+      packId={flow.sku.id}
+      purchaseId={flow.purchaseId}
       packPriceCents={flow.sku.priceCents}
-      onFinished={handleFinished}
+      onViewDetails={handleViewWatchDetails}
+      onKeep={handleViewCollection}
+      onListForSale={handleListForSale}
     />
   );
 }

@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, type CompositeNavigationProp } from "@react-navigation/native";
@@ -8,14 +7,12 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { PackSku } from "@grailhaus/shared";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useExploreViewModel } from "../viewmodels/useExploreViewModel";
-import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { useDiscoverViewModel, type DiscoverItem } from "../viewmodels/useDiscoverViewModel";
 import { useAuthStore } from "../state/authStore";
 import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/PackTile";
 import { PackFace } from "../components/PackFace";
 import { CardFace } from "../components/CardFace";
 import { WatchDial } from "../components/WatchDial";
-import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
 import { itemArtGradient } from "../content/cardArt";
 import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
 import { fonts, ink, typography } from "../theme/tokens";
@@ -31,11 +28,9 @@ type Nav = CompositeNavigationProp<
 /**
  * Replaces the old idle "Reveal" tab (empty unless a purchase was already
  * in flight) with a real browse entry point: both categories' evergreen
- * catalog, straight off GET /packs, in one place. Cards drill into
- * PackDetail (odds/EV) like Shelf's cards column already does; watches buy
- * straight off the row through the same ConfirmPurchaseSheet every other
- * purchase surface uses — both hand off to the pushed Reveal screen on
- * success, exactly like Shelf/Drops/PackDetail/DropDetail.
+ * catalog, straight off GET /packs, in one place. Both drill into their own
+ * detail screen before a purchase — cards into PackDetail, watches into
+ * VaultDetail — like Shelf's own tier rows already do.
  */
 export function ExploreScreen() {
   const navigation = useNavigation<Nav>();
@@ -43,33 +38,8 @@ export function ExploreScreen() {
   const catalog = useExploreViewModel();
   const cardCatalog = useDiscoverViewModel("cards");
   const watchCatalog = useDiscoverViewModel("watches");
-  const flow = usePackFlowViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
-  const [sheetSku, setSheetSku] = useState<PackSku | null>(null);
-  // Blocks a double-tap before React's next render — see ShelfScreen for why
-  // this needs a ref rather than state.
-  const isRippingRef = useRef(false);
-
-  function handleConfirm() {
-    const sku = sheetSku;
-    if (!sku) return;
-    requireAuth(async () => {
-      if (isRippingRef.current) return;
-      isRippingRef.current = true;
-      try {
-        const result = await flow.startFlow(sku);
-        if (result.ok) {
-          setSheetSku(null);
-          navigation.navigate("Reveal");
-        } else {
-          Alert.alert("Couldn't unlock that vault", result.error);
-        }
-      } finally {
-        isRippingRef.current = false;
-      }
-    });
-  }
 
   return (
     <View style={styles.fill}>
@@ -124,7 +94,7 @@ export function ExploreScreen() {
         <Section title={copy.sectionWatches}>
           {catalog.watches.length > 0 ? (
             catalog.watches.map((sku) => (
-              <PackTile key={sku.id} sku={sku} onBuy={() => setSheetSku(sku)} disabled={flow.isPurchasing} />
+              <PackTile key={sku.id} sku={sku} onBuy={() => navigation.navigate("VaultDetail", { skuId: sku.id })} />
             ))
           ) : !catalog.isLoading ? (
             <Text style={styles.empty}>{copy.emptySection(copy.sectionWatches)}</Text>
@@ -151,15 +121,6 @@ export function ExploreScreen() {
           />
         </Section>
       </Animated.ScrollView>
-
-      <ConfirmPurchaseSheet
-        visible={sheetSku != null}
-        sku={sheetSku}
-        balanceCents={session.balanceCents}
-        isPurchasing={flow.isPurchasing}
-        onClose={() => setSheetSku(null)}
-        onConfirm={handleConfirm}
-      />
     </View>
   );
 }

@@ -17,6 +17,7 @@ import {
   lockListingForBuy,
   markListingSold,
   transferOwnership,
+  updateListingPrice,
 } from "./marketplace.repository.js";
 import type { ListingWithPartiesRow } from "./marketplace.types.js";
 
@@ -120,6 +121,23 @@ export async function createListing(sellerId: string, ownedItemId: string, price
     }
     throw err;
   }
+}
+
+/** "Edit price" (PRD-adjacent flow: Listing Live → Edit Price/Cancel → Listing Active) — the
+ * listing stays the same row, same `createdAt`, same `id`; only `price_cents` moves. No new fee
+ * is locked in by this — the buyer-facing fee preview is always computed live from today's rate
+ * against whatever `price_cents` currently is. */
+export async function updatePrice(sellerId: string, listingId: string, priceCents: number): Promise<Listing> {
+  if (!Number.isInteger(priceCents) || priceCents <= 0) {
+    throw new BadRequestError("price must be a positive whole number of cents");
+  }
+  const updated = await updateListingPrice(listingId, sellerId, priceCents);
+  if (!updated) {
+    const row = await findListingWithPartiesById(listingId);
+    if (!row) throw new NotFoundError("Listing not found");
+    throw new ConflictError("Couldn't update the price — it's already sold, already delisted, or not yours.");
+  }
+  return getListing(listingId);
 }
 
 export async function delist(sellerId: string, listingId: string): Promise<Listing> {

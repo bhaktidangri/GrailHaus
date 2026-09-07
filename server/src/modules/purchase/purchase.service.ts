@@ -1,5 +1,5 @@
 import { DEFAULT_OWNERSHIP_WEIGHTS, pullPack, resolveItems } from "@grailhaus/shared";
-import type { ItemDetail, OwnershipWeightTable, PackSku, PressureState, PulledItem } from "@grailhaus/shared";
+import type { OwnershipWeightTable, PackSku, PressureState, PulledItem, PulledOwnedItem } from "@grailhaus/shared";
 import { pool } from "../../db/pool.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors.js";
 import { getPackSkuById } from "../packs/packs.service.js";
@@ -38,18 +38,25 @@ export interface PurchaseResponse {
   quantity: number;
   totalPriceCents: number | null;
   failureReason: string | null;
-  items: ItemDetail[];
+  items: PulledOwnedItem[];
 }
 
 /** `purchases.result` stores only the minimal `PulledItem` shape (what the reward engine
- * produced) — this is what turns that into the full catalog detail the reveal screen actually
- * needs, in one batched lookup, preserving the original pull order (reveal pacing depends on
- * it — the reward engine's own reordering already happened before this ever runs). */
-async function enrichItems(pulledItems: PulledItem[]): Promise<ItemDetail[]> {
+ * produced) plus the `owned_items.id` each one got — this is what turns that into the full
+ * catalog detail (+ ownership) the reveal screen actually needs, in one batched lookup,
+ * preserving the original pull order (reveal pacing depends on it — the reward engine's own
+ * reordering already happened before this ever runs). Pairs by array position, not by
+ * `item.id` alone, since one pull can pull the same catalog item more than once. */
+async function enrichItems(pulledItems: PulledItem[], ownedItemIds: string[]): Promise<PulledOwnedItem[]> {
   if (pulledItems.length === 0) return [];
   const rows = await findItemDetailsByIds(pulledItems.map((item) => item.id));
   const byId = new Map(rows.map((row) => [row.id, toItemDetail(row)]));
-  return pulledItems.map((item) => byId.get(item.id)).filter((detail): detail is ItemDetail => detail != null);
+  const out: PulledOwnedItem[] = [];
+  pulledItems.forEach((item, i) => {
+    const detail = byId.get(item.id);
+    if (detail) out.push({ ...detail, ownedItemId: ownedItemIds[i] });
+  });
+  return out;
 }
 
 async function toResponse(row: PurchaseRow): Promise<PurchaseResponse> {
@@ -60,7 +67,7 @@ async function toResponse(row: PurchaseRow): Promise<PurchaseResponse> {
     quantity: row.quantity,
     totalPriceCents: row.total_price_cents != null ? Number(row.total_price_cents) : null,
     failureReason: row.failure_reason,
-    items: await enrichItems(row.result?.items ?? []),
+    items: await enrichItems(row.result?.items ?? [], row.result?.ownedItemIds ?? []),
   };
 }
 
@@ -181,7 +188,7 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
       consecutive = nextPressureState.consecutiveWithoutQualifying;
     }
 
-    await insertOwnedItems(
+    const ownedItemIds = await insertOwnedItems(
       client,
       claim.id,
       claim.user_id,
@@ -191,7 +198,7 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
     await decrementStock(client, claim.pack_id, claim.quantity);
     await debitBalance(client, claim.user_id, totalCost);
     await upsertPressureState(client, claim.user_id, claim.pack_id, consecutive);
-    await markPurchaseCompleted(client, claim.id, totalCost, { items: allItems });
+    await markPurchaseCompleted(client, claim.id, totalCost, { items: allItems, ownedItemIds });
 
     await client.query("COMMIT");
     return {
@@ -201,7 +208,7 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
       quantity: claim.quantity,
       totalPriceCents: totalCost,
       failureReason: null,
-      items: await enrichItems(allItems),
+      items: await enrichItems(allItems, ownedItemIds),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

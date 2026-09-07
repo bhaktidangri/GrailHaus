@@ -29,5 +29,20 @@ export const watchesConfig: CategoryRevealConfig = {
           { atMs: 400, kind: "medium" },
         ];
   },
+  // Same lift-the-lid gesture and hold duration as always — this only narrates it in
+  // labeled beats instead of one silent hold, per the cinematic reveal's slower pacing.
+  openingBeats: (isRare) =>
+    isRare
+      ? [
+          { atMs: 0, label: "VAULT DOOR OPENING" },
+          { atMs: 700, label: "BUILDING PRESSURE" },
+          { atMs: 1500, label: "SILHOUETTE VISIBLE" },
+          { atMs: 2300, label: "RARITY LOCKING IN" },
+        ]
+      : [
+          { atMs: 0, label: "VAULT DOOR OPENING" },
+          { atMs: 500, label: "LIGHT SPILLING IN" },
+          { atMs: 900, label: "SILHOUETTE VISIBLE" },
+        ],
   revealOrder: (items) => [...items].sort((a, b) => a.rarityTierLevel - b.rarityTierLevel),
 };
