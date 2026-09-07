@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, Listing } from "@grailhaus/shared";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useMarketplaceViewModel } from "../../viewmodels/useMarketplaceViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
@@ -34,6 +35,7 @@ export function MarketplaceScreen() {
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [category, setCategory] = useState<Category | null>(null);
   const vm = useMarketplaceViewModel(category ?? undefined);
+  const tabBarClearance = useTabBarClearance();
 
   const listings = useMemo(() => {
     if (tab === "browse") return vm.listings;
@@ -103,7 +105,7 @@ export function MarketplaceScreen() {
           data={listings}
           keyExtractor={(l: Listing) => l.id}
           numColumns={2}
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={[styles.grid, { paddingBottom: tabBarClearance }]}
           columnWrapperStyle={styles.gridRow}
           ListEmptyComponent={
             <Text style={styles.empty}>{tab === "browse" ? copy.empty : copy.myListingsEmpty}</Text>

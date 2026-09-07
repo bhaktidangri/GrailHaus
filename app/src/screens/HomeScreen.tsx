@@ -1,13 +1,15 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated from "react-native-reanimated";
+import { useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, type CompositeNavigationProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category } from "@grailhaus/shared";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useHomeViewModel } from "../viewmodels/useHomeViewModel";
-import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
+import { useHideTabBarOnScroll, useTabBarClearance, useTabBarHidden } from "../navigation/tabBarVisibility";
 import { useAuthStore } from "../state/authStore";
 import { useOnboardingStore } from "../state/onboardingStore";
 import { resetOnboarding } from "../lib/onboarding";
@@ -37,11 +39,27 @@ type Nav = CompositeNavigationProp<
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const home = useHomeViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const setNeedsOnboarding = useOnboardingStore((s) => s.setNeedsOnboarding);
   const scrollHandler = useHideTabBarOnScroll();
+  const tabBarClearance = useTabBarClearance();
+  const hidden = useTabBarHidden();
+  const [headerHeight, setHeaderHeight] = useState(insets.top + 58);
+
+  const headerAnimatedStyle = useAnimatedStyle(
+    () => ({
+      transform: [{ translateY: -hidden.value * headerHeight }],
+      opacity: 1 - hidden.value,
+    }),
+    [headerHeight]
+  );
+
+  function handleHeaderLayout(e: LayoutChangeEvent) {
+    setHeaderHeight(e.nativeEvent.layout.height);
+  }
 
   function handleReplayOnboarding() {
     if (!__DEV__) return;
@@ -51,7 +69,21 @@ export function HomeScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={[styles.header, home.featuredDrop && styles.headerLive]}>
+      {/* A gentle, low-opacity ambient wash behind the header *and* the top of the scroll
+          content — anchored to the screen rather than the scroll content so it never scrolls
+          away and leaves the header looking like a separate, flat-colored box sitting on top
+          of a differently-tinted page underneath it. */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={home.featuredDrop ? ["rgba(255,92,122,0.16)", "transparent"] : ["rgba(177,75,255,0.12)", "transparent"]}
+        style={styles.ambientWash}
+      />
+
+      <Animated.View
+        onLayout={handleHeaderLayout}
+        pointerEvents="box-none"
+        style={[styles.header, styles.headerOverlay, { paddingTop: insets.top + 12 }, headerAnimatedStyle]}
+      >
         <Pressable style={styles.brand} onLongPress={handleReplayOnboarding} disabled={!__DEV__}>
           <View style={styles.brandChip}>
             <Image source={require("../../assets/icon.png")} style={styles.brandIcon} />
@@ -76,25 +108,15 @@ export function HomeScreen() {
             </Pressable>
           )}
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingTop: headerHeight + 20, paddingBottom: tabBarClearance }]}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        {/* A gentle, low-opacity ambient wash behind the *whole* scroll content — not the
-            page's raw near-black token on its own, which reads as flat blue-black once nothing
-            else is layered on top of it. Kept subtle and content-relative (scrolls with
-            everything, sized generously rather than to any one section) so it can't bleed into
-            or fight with the richer, self-contained gradients on the cards sitting above it. */}
         <View style={styles.scrollInner}>
-          <LinearGradient
-            colors={home.featuredDrop ? ["rgba(255,92,122,0.16)", "transparent"] : ["rgba(177,75,255,0.12)", "transparent"]}
-            style={styles.ambientWash}
-          />
-
           {home.featuredDrop && (
             <FeaturedDropCard
               drop={home.featuredDrop}
@@ -495,16 +517,15 @@ function ListingRow({ listing }: { listing: (typeof SAMPLE_LISTINGS)[number] }) 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: ink.groundDeep },
   header: {
-    paddingTop: 56,
     paddingHorizontal: 20,
     paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  // A flat tint, not a gradient — the header never scrolls, so it can't fall prey to the same
-  // screen-vs-content-coordinate bug the hero wash below had to be fixed for.
-  headerLive: { backgroundColor: "rgba(255,92,122,0.1)" },
+  // Floats over the scroll content (like the bottom pill nav) so hiding it on scroll-down
+  // doesn't leave a reserved, mismatched-colored strip behind it — same fix, same reason.
+  headerOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
   brand: { flexDirection: "row", alignItems: "center", gap: 9 },
   brandChip: { width: 26, height: 26, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.14)" },
   brandIcon: { width: "100%", height: "100%" },
@@ -557,7 +578,7 @@ const styles = StyleSheet.create({
 
   scroll: { padding: 20, paddingTop: 20, paddingBottom: 40 },
   scrollInner: { position: "relative", gap: spacing.xl },
-  ambientWash: { position: "absolute", top: -20, left: -20, right: -20, height: 900 },
+  ambientWash: { position: "absolute", top: 0, left: 0, right: 0, height: 900 },
 
   featuredEyebrowRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.md },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.danger },

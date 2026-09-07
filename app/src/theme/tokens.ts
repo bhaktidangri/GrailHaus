@@ -83,8 +83,11 @@ export const accent = {
 export const ink = {
   ground: "#0A0614",
   groundDeep: "#04010A",
-  card: "rgba(255,255,255,0.07)",
-  cardBorder: "rgba(255,255,255,0.14)",
+  // Opaque enough to stay legible as a floating surface over arbitrary photo/gradient content
+  // behind it (the pill tab bar) — a translucent white tint here used to read as "invisible"
+  // once it started overlaying busy card art instead of a flat page background.
+  card: "rgba(18,12,30,0.94)",
+  cardBorder: "rgba(255,255,255,0.18)",
   text: "#FFFFFF",
   textBright: "rgba(255,255,255,0.9)",
   textSoft: "rgba(255,255,255,0.66)",

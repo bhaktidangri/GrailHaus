@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useDropsViewModel, type DropPhase, type DropView } from "../viewmodels/useDropsViewModel";
-import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
+import { useHideTabBarOnScroll, useTabBarClearance } from "../navigation/tabBarVisibility";
 import { PackFace } from "../components/PackFace";
 import { WatchDial } from "../components/WatchDial";
 import { StockBar } from "../components/StockBar";
@@ -31,6 +31,7 @@ export function DropsScreen() {
   const navigation = useNavigation<Nav>();
   const { drops, isLoading, error } = useDropsViewModel();
   const scrollHandler = useHideTabBarOnScroll();
+  const tabBarClearance = useTabBarClearance();
 
   return (
     <View style={styles.fill}>
@@ -46,7 +47,7 @@ export function DropsScreen() {
       <Animated.FlatList
         data={drops}
         keyExtractor={(d: DropView) => d.sku.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarClearance }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         renderItem={({ item }: { item: DropView }) => (

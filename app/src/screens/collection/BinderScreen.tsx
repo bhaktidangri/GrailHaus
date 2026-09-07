@@ -5,6 +5,7 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { CardFace } from "../../components/CardFace";
 import { itemArtGradient } from "../../content/cardArt";
 import { colors, ink, typography } from "../../theme/tokens";
@@ -24,6 +25,7 @@ export function BinderScreen() {
   const route = useRoute<Route>();
   const vm = useCollectionViewModel();
   const [filter, setFilter] = useState<string | null>(route.params?.collectionFilter ?? null);
+  const tabBarClearance = useTabBarClearance();
 
   const visible = useMemo(
     () => (filter ? vm.cards.filter((o) => (o.item.collection ?? "Uncategorized") === filter) : vm.cards),
@@ -64,7 +66,7 @@ export function BinderScreen() {
         data={visible}
         keyExtractor={(o: OwnedItem) => o.ownedItemId}
         numColumns={3}
-        contentContainerStyle={styles.grid}
+        contentContainerStyle={[styles.grid, { paddingBottom: tabBarClearance }]}
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
         renderItem={({ item: owned }: { item: OwnedItem }) => (

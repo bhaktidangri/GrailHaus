@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { ink } from "../../theme/tokens";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { itemDetail as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
@@ -19,6 +20,7 @@ export function WatchDetailScreen() {
   const { owned } = useRoute<Route>().params;
   const item = owned.item;
   const [marketValueOpen, setMarketValueOpen] = useState(false);
+  const tabBarClearance = useTabBarClearance();
 
   const heldDays = Math.max(0, Math.floor((Date.now() - new Date(owned.acquiredAt).getTime()) / 86_400_000));
 
@@ -34,7 +36,10 @@ export function WatchDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 220 + tabBarClearance }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
             would stay pinned to the viewport as the header/hero scroll away, bleeding into
             whatever section (specs, value) scrolls into that same screen region. */}
@@ -88,7 +93,7 @@ export function WatchDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { bottom: tabBarClearance }]}>
         <View style={styles.actionRow}>
           <Pressable style={styles.keepButton} onPress={() => navigation.goBack()}>
             <Text style={styles.keepLabel}>{copy.keep}</Text>

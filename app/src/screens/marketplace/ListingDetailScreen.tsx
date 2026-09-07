@@ -8,6 +8,7 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useListingViewModel } from "../../viewmodels/useListingViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { listingDetail as copy } from "../../content/copy";
 import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
@@ -25,6 +26,7 @@ export function ListingDetailScreen() {
   const session = useSessionViewModel();
   const { isWorking, delist } = useListingViewModel();
   const isMine = session.profile?.username != null && session.profile.username === listing.seller.username;
+  const tabBarClearance = useTabBarClearance();
 
   async function handleDelist() {
     const result = await delist(listing.id);
@@ -34,7 +36,10 @@ export function ListingDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: 160 + tabBarClearance }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Wash lives in content coordinates, not as a screen-fixed sibling — a fixed wash
             would stay pinned to the viewport as the header/hero scroll away, bleeding into
             whatever section (seller card, actions) scrolls into that same screen region. */}
@@ -90,7 +95,7 @@ export function ListingDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { bottom: tabBarClearance }]}>
         {isMine ? (
           <Pressable style={styles.delistButton} onPress={handleDelist} disabled={isWorking}>
             {isWorking ? <ActivityIndicator color="#FF8DA1" /> : <Text style={styles.delistLabel}>CANCEL LISTING</Text>}

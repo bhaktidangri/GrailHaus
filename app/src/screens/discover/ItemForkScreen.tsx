@@ -8,6 +8,7 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { marketplaceService } from "../../services/marketplaceService";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { itemFork as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
@@ -26,6 +27,7 @@ export function ItemForkScreen() {
   const { category, item } = useRoute<Route>().params;
   const { detail } = item;
   const isWatch = category === "watches";
+  const tabBarClearance = useTabBarClearance();
 
   const listingsQuery = useQuery({
     queryKey: ["listings", category],
@@ -121,7 +123,7 @@ export function ItemForkScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
         <Text style={styles.howTitle}>{copy.howToGet}</Text>
         <View style={styles.forkRow}>
           <Pressable style={[styles.forkButton, styles.forkLuck]} onPress={handleTryLuck}>

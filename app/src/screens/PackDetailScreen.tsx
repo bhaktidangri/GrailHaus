@@ -5,6 +5,7 @@ import { useNavigation, useRoute, type RouteProp, type CompositeNavigationProp }
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { usePackDetailViewModel } from "../viewmodels/usePackDetailViewModel";
+import { useTabBarClearance } from "../navigation/tabBarVisibility";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { useAuthStore } from "../state/authStore";
@@ -42,6 +43,7 @@ export function PackDetailScreen() {
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const [sheetOpen, setSheetOpen] = useState(false);
   const isRippingRef = useRef(false);
+  const tabBarClearance = useTabBarClearance();
 
   function handleConfirm() {
     if (!sku) return;
@@ -105,7 +107,7 @@ export function PackDetailScreen() {
         <ExpectedValueNote sku={sku} linkLabel={copy.fullOdds} accentColor={accents.cards.top} />
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
         <Pressable onPress={() => setSheetOpen(true)} style={styles.ripButtonWrap}>
           <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.ripButton}>
             <Text style={styles.ripLabel}>{copy.ripNow}</Text>

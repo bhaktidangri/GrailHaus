@@ -8,6 +8,7 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useBuyListingViewModel } from "../../viewmodels/useMarketplaceViewModel";
+import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, typography } from "../../theme/tokens";
 import { buyListing as copy } from "../../content/copy";
 import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
@@ -37,6 +38,7 @@ export function BuyListingScreen() {
   const { buy } = useBuyListingViewModel();
   const [step, setStep] = useState<Step>("confirm");
   const [error, setError] = useState<string | null>(null);
+  const tabBarClearance = useTabBarClearance();
 
   const balanceNow = session.balanceCents ?? 0;
   const balanceAfter = balanceNow - listing.priceCents;
@@ -83,7 +85,7 @@ export function BuyListingScreen() {
             <Row label={copy.newBalance} value={`$${(balanceAfter / 100).toFixed(2)}`} />
           </View>
         </View>
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
           <Pressable
             style={styles.primaryButton}
             onPress={() => navigation.getParent()?.navigate("Portfolio" as never)}
