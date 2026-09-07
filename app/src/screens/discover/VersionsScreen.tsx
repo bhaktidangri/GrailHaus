@@ -6,6 +6,7 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import type { DiscoverItem } from "../../viewmodels/useDiscoverViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { versions as copy } from "../../content/copy";
@@ -19,8 +20,6 @@ type Nav = CompositeNavigationProp<
 >;
 type Route = RouteProp<DiscoverStackParamList, "Versions">;
 
-const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Core / Heritage", 2: "Prime / Icon", 3: "Grail / Apex" };
-
 /** "Same Pokémon, nine printings, three tiers of scarcity" (mockup 18a) — every version of one
  * name/brand, ordered rarest-last so the chase piece anchors the bottom of the list. */
 export function VersionsScreen() {
@@ -28,6 +27,8 @@ export function VersionsScreen() {
   const { category, group } = useRoute<Route>().params;
   const isWatch = category === "watches";
   const tabBarClearance = useTabBarClearance();
+  // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
+  const rarityTiers = useRarityTiers(category);
 
   return (
     <View style={styles.fill}>
@@ -74,7 +75,7 @@ export function VersionsScreen() {
             )}
             <View style={styles.rowInfo}>
               <View style={styles.rowBadges}>
-                <Text style={styles.tierLabel}>{RARITY_NAME[v.detail.rarityTierLevel]}</Text>
+                <Text style={styles.tierLabel}>{rarityTiers[v.detail.rarityTierLevel]?.name ?? ""}</Text>
                 {v.ownedCount > 0 && (
                   <View style={styles.ownedBadge}>
                     <Text style={styles.ownedText}>{copy.ownedBadge(v.ownedCount)}</Text>

@@ -8,6 +8,7 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useListingViewModel } from "../../viewmodels/useListingViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { listingDetail as copy } from "../../content/copy";
@@ -16,13 +17,14 @@ import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStac
 type Nav = NativeStackNavigationProp<MarketplaceStackParamList, "ListingDetail">;
 type Route = RouteProp<MarketplaceStackParamList, "ListingDetail">;
 
-const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Common", 2: "Rare", 3: "Chase" };
-
 export function ListingDetailScreen() {
   const navigation = useNavigation<Nav>();
   const { listing } = useRoute<Route>().params;
   const item = listing.item;
   const isWatch = item.category === "watches";
+  // Admin-configurable (rarity_tiers table) — this used to be a hardcoded "Common"/"Rare"/
+  // "Chase" map that didn't even match the real tier names ("Core"/"Prime"/"Grail" etc.).
+  const rarityTiers = useRarityTiers(item.category);
   const session = useSessionViewModel();
   const { isWorking, delist } = useListingViewModel();
   const isMine = session.profile?.username != null && session.profile.username === listing.seller.username;
@@ -66,7 +68,7 @@ export function ListingDetailScreen() {
                 width={174}
                 height={243}
                 borderColor="rgba(255,215,94,0.75)"
-                badge={RARITY_NAME[item.rarityTierLevel].toUpperCase()}
+                badge={(rarityTiers[item.rarityTierLevel]?.name ?? "").toUpperCase()}
                 style={styles.rotatedFace}
               />
             )}

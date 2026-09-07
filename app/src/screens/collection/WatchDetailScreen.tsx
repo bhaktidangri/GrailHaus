@@ -7,18 +7,19 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { ink } from "../../theme/tokens";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { itemDetail as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
 type Nav = NativeStackNavigationProp<CollectionStackParamList, "WatchDetail">;
 type Route = RouteProp<CollectionStackParamList, "WatchDetail">;
 
-const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Heritage", 2: "Icon", 3: "Apex" };
-
 export function WatchDetailScreen() {
   const navigation = useNavigation<Nav>();
   const { owned } = useRoute<Route>().params;
   const item = owned.item;
+  // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
+  const rarityTiers = useRarityTiers("watches");
   const [marketValueOpen, setMarketValueOpen] = useState(false);
   const tabBarClearance = useTabBarClearance();
 
@@ -62,7 +63,7 @@ export function WatchDetailScreen() {
             <Text style={styles.brand}>{(item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
             <Text style={styles.name}>{item.watchName ?? item.name}</Text>
             <View style={styles.pillRow}>
-              <Text style={styles.pillRarity}>{RARITY_NAME[item.rarityTierLevel].toUpperCase()}</Text>
+              <Text style={styles.pillRarity}>{(rarityTiers[item.rarityTierLevel]?.name ?? "").toUpperCase()}</Text>
               <View style={styles.pillDivider} />
               <Text style={styles.pillMeta}>HELD {heldDays}D</Text>
             </View>

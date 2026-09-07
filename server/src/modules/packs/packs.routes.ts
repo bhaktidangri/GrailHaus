@@ -49,6 +49,7 @@ export const packSkuSchema = {
           probabilities: {
             type: "object",
             description: "Percentage points per rarity tier level, sums to 100",
+            additionalProperties: { type: "number" },
           },
         },
       },

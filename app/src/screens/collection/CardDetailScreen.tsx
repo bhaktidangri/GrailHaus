@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { CardFace } from "../../components/CardFace";
 import { itemArtGradient } from "../../content/cardArt";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { itemDetail as copy } from "../../content/copy";
@@ -29,6 +30,8 @@ export function CardDetailScreen() {
   const navigation = useNavigation<Nav>();
   const { owned } = useRoute<Route>().params;
   const vm = useCollectionViewModel();
+  // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
+  const rarityTiers = useRarityTiers("cards");
   const item = owned.item;
   const tabBarClearance = useTabBarClearance();
 
@@ -76,7 +79,11 @@ export function CardDetailScreen() {
               {item.pokemonName ? <Text style={styles.subName}>{item.pokemonName}</Text> : null}
 
               <View style={styles.specRows}>
-                <SpecRow label={copy.rarity} value={rarityName(item.rarityTierLevel)} valueColor={colors.goldTop} />
+                <SpecRow
+                  label={copy.rarity}
+                  value={rarityTiers[item.rarityTierLevel]?.name ?? ""}
+                  valueColor={rarityTiers[item.rarityTierLevel]?.colorHex ?? colors.goldTop}
+                />
                 <SpecRow label={copy.collectionLabel} value={collectionName} />
                 <SpecRow label={copy.ownedCopies(copiesOwned)} value="" hideValue />
               </View>
@@ -130,10 +137,6 @@ export function CardDetailScreen() {
       </View>
     </View>
   );
-}
-
-function rarityName(level: 1 | 2 | 3): string {
-  return level === 3 ? "Grail" : level === 2 ? "Prime" : "Core";
 }
 
 function SpecRow({

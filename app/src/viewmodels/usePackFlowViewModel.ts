@@ -27,6 +27,7 @@ export type StartFlowResult = { ok: true } | { ok: false; error: string };
 export function usePackFlowViewModel() {
   const sku = usePackFlowStore((s) => s.sku);
   const items = usePackFlowStore((s) => s.items);
+  const purchaseId = usePackFlowStore((s) => s.purchaseId);
   const phase = usePackFlowStore((s) => s.phase);
   const start = usePackFlowStore((s) => s.start);
   const setPhase = usePackFlowStore((s) => s.setPhase);
@@ -48,7 +49,7 @@ export function usePackFlowViewModel() {
       if (result.status !== "completed") {
         return { ok: false, error: failureMessage(result.failureReason) };
       }
-      start(pack, result.items);
+      start(pack, result.items, result.purchaseId);
       return { ok: true };
     } catch (err) {
       // Left in secure storage on purpose — a network failure here means the server may or may
@@ -64,6 +65,7 @@ export function usePackFlowViewModel() {
   return {
     sku,
     items,
+    purchaseId,
     phase,
     config: sku ? categoryRegistry[sku.category] : null,
     isActive: sku != null && items != null,

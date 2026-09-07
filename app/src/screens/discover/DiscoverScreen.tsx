@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useDiscoverHubViewModel } from "../../viewmodels/useDiscoverHubViewModel";
+import { useCollectionsViewModel } from "../../viewmodels/useCollectionsViewModel";
 import { colors, typography } from "../../theme/tokens";
 import { discover as copy } from "../../content/copy";
 import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
@@ -19,6 +20,7 @@ export function DiscoverScreen() {
   const navigation = useNavigation<Nav>();
   const session = useSessionViewModel();
   const hub = useDiscoverHubViewModel();
+  const collections = useCollectionsViewModel();
 
   return (
     <View style={styles.fill}>
@@ -66,6 +68,16 @@ export function DiscoverScreen() {
           <Text style={styles.doorTitle}>{copy.watchesDoor.title}</Text>
           <Text style={styles.doorSummary}>
             {copy.doorSummary(hub.watches.itemCount, hub.watches.tierCount, hub.watches.listedNow)}
+          </Text>
+        </Pressable>
+
+        <Pressable style={styles.door} onPress={() => navigation.navigate("Collections")}>
+          <LinearGradient colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.04)"]} style={StyleSheet.absoluteFill} />
+          <View style={[styles.doorBorder, { borderColor: "rgba(255,255,255,0.28)" }]} />
+          <Text style={styles.doorEyebrow}>{copy.collectionsDoor.eyebrow}</Text>
+          <Text style={styles.doorTitle}>{copy.collectionsDoor.title}</Text>
+          <Text style={styles.doorSummary}>
+            {copy.collectionsDoorSummary(collections.groups.length, collections.totalItemCount)}
           </Text>
         </Pressable>
       </View>

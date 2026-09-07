@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
@@ -27,10 +27,34 @@ type Nav = NativeStackNavigationProp<AppStackParamList, "Reveal">;
 export function RevealScreen() {
   const navigation = useNavigation<Nav>();
   const flow = usePackFlowViewModel();
+  // "Tabs" is the root stack's own first screen (see AppNavigator) — navigating to it from a
+  // pushed screen like this one pops back to it rather than pushing a duplicate, but its nested
+  // tab/screen isn't expressible in AppStackParamList's types, so this jump is deliberately
+  // loosely typed (same pattern ItemForkScreen already uses for the same reason).
+  const rootNavigate = navigation.navigate as (name: string, params?: object) => void;
 
   function handleFinished() {
     flow.finishFlow();
     if (navigation.canGoBack()) navigation.goBack();
+  }
+
+  function handleGoHome() {
+    flow.finishFlow();
+    rootNavigate("Tabs", { screen: "Home" });
+  }
+
+  function handleViewCollection() {
+    flow.finishFlow();
+    rootNavigate("Tabs", { screen: "Portfolio" });
+  }
+
+  /** A genuinely new POST /purchase for the same SKU — not a client-side re-roll of the pack
+   * that's already on screen. Keeps the summary showing on failure (sold out, insufficient
+   * funds) rather than clearing the flow out from under the user. */
+  async function handleRipAgain() {
+    if (!flow.sku) return;
+    const result = await flow.startFlow(flow.sku);
+    if (!result.ok) Alert.alert("Couldn't rip again", result.error);
   }
 
   if (!flow.isActive || !flow.config || !flow.items || !flow.sku) {
@@ -45,7 +69,18 @@ export function RevealScreen() {
   }
 
   if (flow.sku.category === "cards") {
-    return <CardFlowEngine sku={flow.sku} items={flow.items} onFinished={handleFinished} />;
+    return (
+      <CardFlowEngine
+        key={flow.purchaseId ?? undefined}
+        sku={flow.sku}
+        items={flow.items}
+        onFinished={handleFinished}
+        onRipAgain={handleRipAgain}
+        onGoHome={handleGoHome}
+        onViewCollection={handleViewCollection}
+        isRipAgainWorking={flow.isPurchasing}
+      />
+    );
   }
 
   return (

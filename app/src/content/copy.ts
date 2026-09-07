@@ -267,6 +267,8 @@ export const collection = {
   watchesSummary: (n: number, brands: number, valueCents: number) =>
     `${n} watch${n === 1 ? "" : "es"} · ${brands} brand${brands === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
   empty: "Rip your first pack to start a collection.",
+  signInTitle: "Sign in to see your collection",
+  signInBody: "Everything you pull gets tracked here — sign in to pick up where you left off.",
 } as const;
 
 export const binder = {
@@ -329,8 +331,11 @@ export const discover = {
   searchPlaceholder: "Search cards, watches, sets, brands",
   cardsDoor: { eyebrow: "CARDS", title: "Card Discovery" },
   watchesDoor: { eyebrow: "WATCHES", title: "Watch Discovery" },
+  collectionsDoor: { eyebrow: "COLLECTIONS", title: "Browse Collections" },
   doorSummary: (items: number, tiers: number, listed: number) =>
     `${items} items · ${tiers} tier${tiers === 1 ? "" : "s"} · ${listed} listed now`,
+  collectionsDoorSummary: (collections: number, items: number) =>
+    `${collections} collection${collections === 1 ? "" : "s"} · ${items} items · spans both worlds`,
 } as const;
 
 export const discoverCategory = {
@@ -342,6 +347,18 @@ export const discoverCategory = {
       ? `$${(minCents / 100).toLocaleString()}`
       : `$${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
   empty: "Nothing matches yet.",
+  facetIdentity: { cards: "Pokémon", watches: "Brands" } as const,
+  facetCollections: "Collections",
+  facetRarities: "Rarities",
+  itemCount: (n: number) => `${n} item${n === 1 ? "" : "s"}`,
+} as const;
+
+export const collections = {
+  title: "Collections",
+  body: "Curated sets that cut across both worlds — a collection can hold cards, watches, or both.",
+  itemCount: (n: number) => `${n} item${n === 1 ? "" : "s"}`,
+  categoriesLabel: (categories: string[]) => categories.join(" + "),
+  empty: "No collections yet.",
 } as const;
 
 export const versions = {
@@ -359,6 +376,7 @@ export const itemFork = {
   youOwn: "YOU OWN",
   none: "None",
   estimatedValue: "ESTIMATED VALUE",
+  collectorStory: "COLLECTOR STORY",
   availability: "AVAILABILITY",
   listedNow: "LISTED NOW",
   packPrice: "IN PACK",
@@ -378,6 +396,8 @@ export const marketplace = {
   empty: "No listings yet — be the first to list something.",
   myListingsEmpty: "You don't have anything listed right now.",
   liveBadge: "LIVE",
+  signInTitle: "Sign in to see your listings",
+  signInBody: "Track what you've put up for sale — sign in to see your own book.",
 } as const;
 
 export const listingDetail = {
@@ -453,6 +473,11 @@ export const cardFlow = {
     newLabel: "NEW",
     duplicateLabel: "DUPLICATE",
     collectionValueLabel: "PULL VALUE",
+    addedToCollection: "✓ Added to your collection",
+    ripAgain: (tierName: string) => `RIP ANOTHER ${tierName.toUpperCase()}`,
+    ripAgainWorking: "RIPPING…",
+    viewCollection: "VIEW COLLECTION",
+    backToHome: "BACK TO HOME",
     done: "DONE",
   },
 } as const;

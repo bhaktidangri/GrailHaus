@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { SignInPrompt } from "../../components/SignInPrompt";
 import { colors, typography } from "../../theme/tokens";
 import { collection as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
@@ -45,7 +46,9 @@ export function CollectionScreen() {
         )}
       </View>
 
-      {vm.isLoading ? (
+      {!vm.isSignedIn ? (
+        <SignInPrompt title={copy.signInTitle} body={copy.signInBody} />
+      ) : vm.isLoading ? (
         <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
       ) : vm.owned.length === 0 ? (
         <Text style={styles.empty}>{copy.empty}</Text>

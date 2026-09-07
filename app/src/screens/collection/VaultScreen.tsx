@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
@@ -19,6 +20,8 @@ type Nav = NativeStackNavigationProp<CollectionStackParamList, "Vault">;
 export function VaultScreen() {
   const navigation = useNavigation<Nav>();
   const vm = useCollectionViewModel();
+  // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
+  const rarityTiers = useRarityTiers("watches");
   const tabBarClearance = useTabBarClearance();
 
   return (
@@ -55,7 +58,7 @@ export function VaultScreen() {
             <View style={styles.rowInfo}>
               <Text style={styles.brand}>{(owned.item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
               <Text style={styles.name}>{owned.item.watchName ?? owned.item.name}</Text>
-              <Text style={styles.ref}>{owned.item.modelName ?? rarityName(owned.item.rarityTierLevel)}</Text>
+              <Text style={styles.ref}>{owned.item.modelName ?? rarityTiers[owned.item.rarityTierLevel]?.name ?? ""}</Text>
             </View>
             <View style={styles.rowValue}>
               <Text style={styles.priceText}>${(owned.item.currentValueCents / 100).toLocaleString()}</Text>
@@ -65,10 +68,6 @@ export function VaultScreen() {
       />
     </View>
   );
-}
-
-function rarityName(level: 1 | 2 | 3): string {
-  return level === 3 ? "Apex" : level === 2 ? "Icon" : "Heritage";
 }
 
 const styles = StyleSheet.create({

@@ -5,10 +5,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, type CompositeNavigationProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { Category } from "@grailhaus/shared";
+import type { Category, Listing } from "@grailhaus/shared";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useHomeViewModel } from "../viewmodels/useHomeViewModel";
+import type { CollectionProgressSummary } from "../viewmodels/useHomeViewModel";
 import { useHideTabBarOnScroll, useTabBarClearance, useTabBarHidden } from "../navigation/tabBarVisibility";
 import { useAuthStore } from "../state/authStore";
 import { useOnboardingStore } from "../state/onboardingStore";
@@ -17,6 +18,7 @@ import { PackFace } from "../components/PackFace";
 import { WatchDial } from "../components/WatchDial";
 import { Countdown } from "../components/Countdown";
 import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
+import { itemArtGradient } from "../content/cardArt";
 import type { DropView } from "../viewmodels/useDropsViewModel";
 import { accents, colors, ink, spacing, typography } from "../theme/tokens";
 import { brand, shelf as shelfCopy, home as copy } from "../content/copy";
@@ -30,12 +32,31 @@ type Nav = CompositeNavigationProp<
 >;
 
 /**
- * The dashboard — the mockup's "seven engagements, then the three doors"
- * screen (turn 14a). Two sections (Featured Drop, Upcoming Drops) are real,
- * drawn from the same `PackSku` data as Shelf/Drops. The other three
- * (Recently Revealed, Collection Progress, Marketplace Highlights) have no
- * backing data yet — Portfolio and Marketplace aren't built — so they render
- * as honest empty states rather than invented numbers.
+ * The dashboard — the mockup's "seven engagements, then the three doors" screen (turn 14a).
+ *
+ * Integration status per engagement, as of this pass:
+ * - Featured Drop, Explore Cards/Watches doors, Upcoming Drops: fully real, off the same
+ *   `PackSku` data Shelf/Drops read. One exception inside Featured Drop: the "1,842 watching"
+ *   line (content/copy.ts's `featuredDrop.watching`) is a static string — there's no live
+ *   viewer-count backend, and none is planned; flagging it here since it reads as real.
+ * - Your Collection Progress: real once signed in with ≥1 owned item — total value and the
+ *   cards/watches value split both come straight off `/me/portfolio` (see useHomeViewModel's
+ *   `collectionProgress`). Two pieces the mockup wants still have no backing endpoint and stay
+ *   on `SAMPLE_COLLECTION` below until one exists: (1) a day-over-day value delta ("+1.84%") —
+ *   needs a portfolio-value-history/snapshot mechanism server-side; (2) per-set completion
+ *   counts ("7 / 9 Prism Core") — needs a full per-collection catalog census endpoint (today's
+ *   catalog is only readable one item at a time via `/items/:id`, or via `/packs`' own roster,
+ *   neither of which gives "how many total items exist in the Prism Core set").
+ * - Marketplace Highlights: real whenever `/listings` has anything — item, category, price,
+ *   seller. Falls back to `SAMPLE_LISTINGS` only while the marketplace is empty (a seeding gap,
+ *   not a missing-field gap). Two sub-fields the mockup wants have no backing at all and are
+ *   dropped from the real rows entirely rather than faked: comp-price deltas ("-12% vs comp",
+ *   needs market-average analytics per item) and "offers on yours" (this app only has fixed-
+ *   price listings, per PRD §30-32 — there's no offer/bid system for that count to come from).
+ * - Recently Revealed: fully placeholder (`SAMPLE_RECENT_PULLS`) — there's no endpoint of any
+ *   kind for this. It needs a new "recent public pulls" activity feed (e.g. a puller's public
+ *   username + item + tier + timestamp), which is also a product/privacy decision (is a pull
+ *   public by default?), not just a missing field.
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -163,7 +184,7 @@ export function HomeScreen() {
             actionLabel={copy.collectionProgress.action}
             onAction={() => navigation.navigate("Portfolio")}
           >
-            <CollectionProgressCard />
+            <CollectionProgressCard progress={home.collectionProgress} />
           </Section>
 
           <Section
@@ -172,9 +193,9 @@ export function HomeScreen() {
             onAction={() => navigation.navigate("Marketplace")}
           >
             <View style={{ gap: spacing.sm }}>
-              {SAMPLE_LISTINGS.map((listing) => (
-                <ListingRow key={listing.name} listing={listing} />
-              ))}
+              {home.recentListings.length > 0
+                ? home.recentListings.map((listing) => <RealListingRow key={listing.id} listing={listing} />)
+                : SAMPLE_LISTINGS.map((listing) => <ListingRow key={listing.name} listing={listing} />)}
             </View>
           </Section>
         </View>
@@ -349,10 +370,12 @@ function Section({
 }
 
 /**
- * SAMPLE DATA — visual placeholder only. There's no live-activity feed, no
- * portfolio endpoint wired into the app, and no marketplace listings yet;
- * these three constants exist purely to show the intended layout and get
- * swapped for real queries once Portfolio/Marketplace/an activity feed ship.
+ * SAMPLE DATA — visual placeholder only, kept as the fallback rendered when there's nothing
+ * real yet. `SAMPLE_RECENT_PULLS` is permanent until a "recent public pulls" activity feed
+ * endpoint exists (none is planned yet — see this file's top comment). `SAMPLE_COLLECTION` and
+ * `SAMPLE_LISTINGS` are shown only before there's real data to replace them with (no session /
+ * no owned items; an empty marketplace) — see `CollectionProgressCard` and `RealListingRow`
+ * above for the real branches.
  */
 const SAMPLE_RECENT_PULLS: {
   handle: string;
@@ -456,39 +479,91 @@ function RecentPullCard({ pull }: { pull: (typeof SAMPLE_RECENT_PULLS)[number] }
   );
 }
 
-function CollectionProgressCard() {
+/**
+ * Real once `progress.hasData` (signed in, ≥1 owned item) — total value and the cards/watches
+ * split both come straight off `/me/portfolio`. No day-over-day delta pill in that branch: the
+ * API has no value-history to compute one from, and this screen never invents a number (see the
+ * top-of-file comment for what a real delta and real per-set completion would each need
+ * server-side). Falls back to the fully-dummy `SAMPLE_COLLECTION` card — delta pill included —
+ * before sign-in or before a first pull, same as the rest of Home's placeholder content.
+ */
+function CollectionProgressCard({ progress }: { progress: CollectionProgressSummary }) {
+  if (!progress.hasData) {
+    return (
+      <View style={styles.collectionCard}>
+        <View style={styles.collectionHeaderRow}>
+          <View>
+            <Text style={styles.collectionEyebrow}>PORTFOLIO</Text>
+            <Text style={styles.collectionValue}>{SAMPLE_COLLECTION.totalLabel}</Text>
+          </View>
+          <View style={styles.collectionDeltaPill}>
+            <Text style={styles.collectionDeltaText}>{SAMPLE_COLLECTION.deltaLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.collectionDivider} />
+        <View style={{ gap: spacing.md }}>
+          {SAMPLE_COLLECTION.sets.map((set) => (
+            <View key={set.name}>
+              <View style={styles.setRow}>
+                <Text style={styles.setName}>{set.name}</Text>
+                <Text style={styles.setProgress}>
+                  {set.current} / {set.total}
+                </Text>
+              </View>
+              <View style={styles.setTrack}>
+                <LinearGradient
+                  colors={[set.art.top, set.art.bottom]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.setFill, { width: `${(set.current / set.total) * 100}%` }]}
+                />
+              </View>
+              {set.note && <Text style={styles.setNote}>{set.note}</Text>}
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.collectionCard}>
       <View style={styles.collectionHeaderRow}>
         <View>
           <Text style={styles.collectionEyebrow}>PORTFOLIO</Text>
-          <Text style={styles.collectionValue}>{SAMPLE_COLLECTION.totalLabel}</Text>
-        </View>
-        <View style={styles.collectionDeltaPill}>
-          <Text style={styles.collectionDeltaText}>{SAMPLE_COLLECTION.deltaLabel}</Text>
+          <Text style={styles.collectionValue}>${(progress.totalValueCents / 100).toLocaleString()}</Text>
         </View>
       </View>
       <View style={styles.collectionDivider} />
       <View style={{ gap: spacing.md }}>
-        {SAMPLE_COLLECTION.sets.map((set) => (
-          <View key={set.name}>
-            <View style={styles.setRow}>
-              <Text style={styles.setName}>{set.name}</Text>
-              <Text style={styles.setProgress}>
-                {set.current} / {set.total}
-              </Text>
-            </View>
-            <View style={styles.setTrack}>
-              <LinearGradient
-                colors={[set.art.top, set.art.bottom]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.setFill, { width: `${(set.current / set.total) * 100}%` }]}
-              />
-            </View>
-            {set.note && <Text style={styles.setNote}>{set.note}</Text>}
+        <View>
+          <View style={styles.setRow}>
+            <Text style={styles.setName}>Cards</Text>
+            <Text style={styles.setProgress}>{progress.cardsSharePercent}%</Text>
           </View>
-        ))}
+          <View style={styles.setTrack}>
+            <LinearGradient
+              colors={[accents.cards.top, accents.cards.bottom]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.setFill, { width: `${progress.cardsSharePercent}%` }]}
+            />
+          </View>
+        </View>
+        <View>
+          <View style={styles.setRow}>
+            <Text style={styles.setName}>Watches</Text>
+            <Text style={styles.setProgress}>{progress.watchesSharePercent}%</Text>
+          </View>
+          <View style={styles.setTrack}>
+            <LinearGradient
+              colors={[accents.watches.top, accents.watches.bottom]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.setFill, { width: `${progress.watchesSharePercent}%` }]}
+            />
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -509,6 +584,39 @@ function ListingRow({ listing }: { listing: (typeof SAMPLE_LISTINGS)[number] }) 
       <View style={styles.listingPriceWrap}>
         <Text style={styles.listingPrice}>{listing.priceLabel}</Text>
         <Text style={[styles.listingDelta, { color: listing.deltaColor }]}>{listing.deltaLabel}</Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A live `/listings` row — item, category, price, and seller are all real. No delta/comp line
+ * here (unlike the dummy `ListingRow` above): there's no comp-price analytics endpoint to draw
+ * one from, and this screen doesn't invent one just to fill the space the mockup left for it.
+ */
+function RealListingRow({ listing }: { listing: Listing }) {
+  const item = listing.item;
+  const art = itemArtGradient(item);
+
+  return (
+    <View style={styles.listingRow}>
+      {item.category === "watches" ? (
+        <WatchDial art={art} size={44} />
+      ) : (
+        <PackFace art={art} width={42} height={58} radius={8} />
+      )}
+      <View style={styles.listingInfo}>
+        <Text style={styles.listingName} numberOfLines={1}>
+          {(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}
+        </Text>
+        <Text style={styles.listingMeta} numberOfLines={1}>
+          {[item.collection ?? item.brand, listing.seller.username ? `@${listing.seller.username}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+      </View>
+      <View style={styles.listingPriceWrap}>
+        <Text style={styles.listingPrice}>${(listing.priceCents / 100).toLocaleString()}</Text>
       </View>
     </View>
   );

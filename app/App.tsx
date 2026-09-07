@@ -19,6 +19,7 @@ import { TitleScreen } from "./src/screens/TitleScreen";
 import { OnboardingScreen } from "./src/screens/onboarding/OnboardingScreen";
 import { queryClient } from "./src/state/queryClient";
 import { useOnboardingStore } from "./src/state/onboardingStore";
+import { useAuthStore } from "./src/state/authStore";
 import { AuthProvider } from "./src/providers/AuthProvider";
 import { colors } from "./src/theme/tokens";
 import { getOnboardingComplete, setOnboardingComplete } from "./src/lib/onboarding";
@@ -47,11 +48,16 @@ export default function App() {
     Outfit_800ExtraBold,
     Outfit_900Black,
   });
-  const needsOnboarding = useOnboardingStore((s) => s.needsOnboarding);
+  const needsOnboardingFlag = useOnboardingStore((s) => s.needsOnboarding);
   const setNeedsOnboarding = useOnboardingStore((s) => s.setNeedsOnboarding);
   // The title screen (mockup turn 10) is a game-style launch beat shown every cold start, not
   // a one-time flag — it's session-only state, unlike onboarding's persisted "seen it" flag.
   const [started, setStarted] = useState(false);
+  // AuthProvider (mounted below, unconditionally) hydrates both of these from the token
+  // persisted in SecureStore — see providers/AuthProvider.tsx. `isReady` here waits for that
+  // hydration too, so the onboarding-vs-home decision never runs against a still-unknown session.
+  const token = useAuthStore((s) => s.token);
+  const authReady = useAuthStore((s) => s.isReady);
 
   useEffect(() => {
     // Always show onboarding in dev builds — otherwise the persisted "seen it"
@@ -59,7 +65,7 @@ export default function App() {
     getOnboardingComplete().then((done) => setNeedsOnboarding(__DEV__ ? true : !done));
   }, [setNeedsOnboarding]);
 
-  const isReady = fontsLoaded && needsOnboarding !== null;
+  const isReady = fontsLoaded && needsOnboardingFlag !== null && authReady;
 
   const onLayout = useCallback(async () => {
     if (isReady) await SplashScreen.hideAsync();
@@ -69,28 +75,34 @@ export default function App() {
     onLayout();
   }, [onLayout]);
 
-  if (!isReady) return null;
+  // A restored session token means this is a returning, already-known user — send them
+  // straight to Home regardless of this device's own "seen the carousel" flag (and regardless
+  // of the dev override above). Onboarding is only ever for someone who isn't signed in yet.
+  const showOnboarding = !token && needsOnboardingFlag;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          {!started ? (
-            <TitleScreen onStart={() => setStarted(true)} />
-          ) : needsOnboarding ? (
-            <OnboardingScreen
-              onDone={() => {
-                setOnboardingComplete();
-                setNeedsOnboarding(false);
-              }}
-            />
-          ) : (
-            <AuthProvider>
+          {/* Mounted unconditionally (not just around AppNavigator) so its token hydration —
+              what `isReady`/`showOnboarding` above depend on — always runs, even while the
+              splash/onboarding gate above is still deciding what to show first. */}
+          <AuthProvider>
+            {!isReady ? null : !started ? (
+              <TitleScreen onStart={() => setStarted(true)} />
+            ) : showOnboarding ? (
+              <OnboardingScreen
+                onDone={() => {
+                  setOnboardingComplete();
+                  setNeedsOnboarding(false);
+                }}
+              />
+            ) : (
               <NavigationContainer theme={navTheme}>
                 <AppNavigator />
               </NavigationContainer>
-            </AuthProvider>
-          )}
+            )}
+          </AuthProvider>
           <StatusBar style="light" />
         </SafeAreaProvider>
       </QueryClientProvider>

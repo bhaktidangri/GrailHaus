@@ -8,16 +8,24 @@ import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { marketplaceService } from "../../services/marketplaceService";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
-import { itemFork as copy } from "../../content/copy";
+import { itemFork as copy, itemDetail as itemDetailCopy } from "../../content/copy";
 import type { AppStackParamList } from "../../navigation/AppNavigator";
 
 type Nav = NativeStackNavigationProp<AppStackParamList, "ItemFork">;
 type Route = RouteProp<AppStackParamList, "ItemFork">;
 
-const RARITY_NAME: Record<1 | 2 | 3, string> = { 1: "Core", 2: "Prime", 3: "Grail" };
-const RARITY_NAME_WATCH: Record<1 | 2 | 3, string> = { 1: "Heritage", 2: "Icon", 3: "Apex" };
+/** Same split rule as Portfolio's CardDetailScreen — traits come off the catalog as a
+ * bullet-separated string ("Rookie Icon • Bright Pull • Spark"), not comma-separated. */
+function splitTraits(traits: string | null): string[] {
+  if (!traits) return [];
+  return traits
+    .split(/[•,]/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
 
 /** The honest fork the whole Discover journey is built around (mockup 18a/18b): every catalog
  * item ends in one decision, priced against each other with real numbers — chase it in the
@@ -39,7 +47,27 @@ export function ItemForkScreen() {
     [listingsQuery.data, detail.id]
   );
 
-  const rarityName = isWatch ? RARITY_NAME_WATCH[detail.rarityTierLevel] : RARITY_NAME[detail.rarityTierLevel];
+  // Admin-configurable (rarity_tiers table) — never a hardcoded name/color map, so a rename
+  // from the admin dashboard's Rarity Tiers page shows up here immediately, same as everywhere
+  // else in the app that reads real tier data (see RarityBadge.tsx).
+  const rarityTiers = useRarityTiers(category);
+  const rarityTier = rarityTiers[detail.rarityTierLevel];
+  const rarityName = rarityTier?.name ?? "";
+  const traits = useMemo(() => splitTraits(detail.traits), [detail.traits]);
+  const specs = useMemo<[string, string][]>(
+    () =>
+      isWatch
+        ? ([
+            ["Model", detail.watchName ?? detail.modelName ?? detail.name],
+            detail.style ? ["Style", detail.style] : null,
+            detail.caseMaterial ? ["Case material", detail.caseMaterial] : null,
+            detail.dialColor ? ["Dial color", detail.dialColor] : null,
+            detail.movement ? ["Movement", detail.movement] : null,
+            detail.caseSize ? ["Case size", detail.caseSize] : null,
+          ].filter((s): s is [string, string] => s != null))
+        : [],
+    [isWatch, detail]
+  );
 
   // ItemFork lives on the root stack (see AppNavigator) so both Discover and Explore can reach
   // it, but "buy exact"/"try your luck" land inside a *tab's own* nested stack (Marketplace's
@@ -96,7 +124,7 @@ export function ItemForkScreen() {
               </Text>
 
               <View style={styles.specRows}>
-                <SpecRow label={copy.rarity} value={rarityName} valueColor={colors.goldTop} />
+                <SpecRow label={copy.rarity} value={rarityName} valueColor={rarityTier?.colorHex ?? colors.goldTop} />
                 <SpecRow label={copy.collectionLabel} value={detail.collection ?? detail.brand ?? "—"} />
                 <SpecRow label={copy.youOwn} value={item.ownedCount > 0 ? String(item.ownedCount) : copy.none} />
               </View>
@@ -104,12 +132,43 @@ export function ItemForkScreen() {
           </View>
         </View>
 
+        {specs.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{itemDetailCopy.specifications}</Text>
+            <View style={styles.specList}>
+              {specs.map(([label, value]) => (
+                <SpecRow key={label} label={label} value={value} />
+              ))}
+            </View>
+          </View>
+        )}
+
         <View style={styles.section}>
           <View style={styles.valueCard}>
             <Text style={styles.sectionLabel}>{copy.estimatedValue}</Text>
             <Text style={styles.valueBig}>${(detail.currentValueCents / 100).toLocaleString()}</Text>
           </View>
         </View>
+
+        {traits.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{itemDetailCopy.traits}</Text>
+            <View style={styles.traitRow}>
+              {traits.map((t) => (
+                <View key={t} style={styles.traitChip}>
+                  <Text style={styles.traitText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {isWatch && detail.tagline && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{copy.collectorStory}</Text>
+            <Text style={styles.tagline}>{detail.tagline}</Text>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{copy.availability}</Text>
@@ -194,6 +253,25 @@ const styles = StyleSheet.create({
   specValue: { ...typography.metaLine, fontSize: 11, color: "#fff" },
   section: { paddingHorizontal: 20, paddingTop: 16 },
   sectionLabel: typography.eyebrow,
+  specList: { marginTop: 11, gap: 8 },
+  traitRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 9 },
+  traitChip: {
+    height: 28,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    backgroundColor: "rgba(201,155,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(201,155,255,0.45)",
+    justifyContent: "center",
+  },
+  traitText: { ...typography.metaLine, fontSize: 11, color: "#E0C4FF" },
+  tagline: {
+    fontStyle: "italic",
+    fontSize: 13,
+    lineHeight: 21,
+    color: "rgba(255,255,255,0.66)",
+    marginTop: 9,
+  },
   valueCard: {
     padding: 15,
     borderRadius: 18,

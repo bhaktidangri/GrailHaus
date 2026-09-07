@@ -7,6 +7,7 @@ import type { Category, Listing } from "@grailhaus/shared";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useMarketplaceViewModel } from "../../viewmodels/useMarketplaceViewModel";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
+import { SignInPrompt } from "../../components/SignInPrompt";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
@@ -98,7 +99,9 @@ export function MarketplaceScreen() {
         ))}
       </View>
 
-      {vm.isLoading ? (
+      {tab === "mine" && !session.isSignedIn ? (
+        <SignInPrompt title={copy.signInTitle} body={copy.signInBody} />
+      ) : vm.isLoading ? (
         <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
       ) : (
         <FlatList

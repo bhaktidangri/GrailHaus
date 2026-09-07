@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Canvas } from "@react-three/fiber/native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -20,7 +20,7 @@ import { playHapticTrack } from "../core/HapticsTrack";
 import { PackFace } from "../../components/PackFace";
 import { ProgressRing } from "../../components/ProgressRing";
 import { StatBox } from "../../components/StatBox";
-import { ART_GRADIENT } from "../../components/PackTile";
+import { ART_GRADIENT, TIER_LABEL } from "../../components/PackTile";
 import { accents, fonts, ink, spacing } from "../../theme/tokens";
 import { cardFlow as copy } from "../../content/copy";
 
@@ -39,10 +39,18 @@ export function CardFlowEngine({
   sku,
   items,
   onFinished,
+  onRipAgain,
+  onGoHome,
+  onViewCollection,
+  isRipAgainWorking,
 }: {
   sku: PackSku;
   items: ItemDetail[];
   onFinished: () => void;
+  onRipAgain: () => void;
+  onGoHome: () => void;
+  onViewCollection: () => void;
+  isRipAgainWorking: boolean;
 }) {
   const setPhase = usePackFlowStore((s) => s.setPhase);
   const { owned } = useCollectionViewModel();
@@ -146,7 +154,12 @@ export function CardFlowEngine({
         onRevealed={handleFinalRevealed}
       />
     ) : (
+      // Keyed by index so each card gets a fresh mount — CardView's own `translateX` shared
+      // value ends a swipe at -500 (off-screen) and never resets on its own; without a key
+      // change here, advancing to the next card reuses the same instance and that same
+      // already-off-screen position, rendering a "blank" card that's actually just invisible.
       <CardView
+        key={cardIndex}
         item={item}
         tier={tier}
         index={cardIndex}
@@ -160,7 +173,17 @@ export function CardFlowEngine({
   }
 
   // "summary"
-  return <SummaryView sku={sku} items={orderedItems} priorCountById={priorCountById} onDone={onFinished} />;
+  return (
+    <SummaryView
+      sku={sku}
+      items={orderedItems}
+      priorCountById={priorCountById}
+      onRipAgain={onRipAgain}
+      onGoHome={onGoHome}
+      onViewCollection={onViewCollection}
+      isRipAgainWorking={isRipAgainWorking}
+    />
+  );
 }
 
 function ProcessingView({ visibleRows, onComplete }: { visibleRows: number; onComplete: () => void }) {
@@ -418,17 +441,24 @@ function SummaryView({
   sku,
   items,
   priorCountById,
-  onDone,
+  onRipAgain,
+  onGoHome,
+  onViewCollection,
+  isRipAgainWorking,
 }: {
   sku: PackSku;
   items: ItemDetail[];
   priorCountById: Map<string, number>;
-  onDone: () => void;
+  onRipAgain: () => void;
+  onGoHome: () => void;
+  onViewCollection: () => void;
+  isRipAgainWorking: boolean;
 }) {
   const totalValueCents = items.reduce((sum, i) => sum + i.baseValueCents, 0);
   const profitCents = totalValueCents - sku.priceCents;
   const newCount = items.filter((item) => (priorCountById.get(item.id) ?? 0) === 0).length;
   const duplicateCount = items.length - newCount;
+  const tierLabel = TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase();
 
   return (
     <View style={styles.fill}>
@@ -463,14 +493,30 @@ function SummaryView({
           <StatBox label={copy.summary.duplicateLabel} value={String(duplicateCount)} />
           <StatBox label={copy.summary.collectionValueLabel} value={`$${(totalValueCents / 100).toFixed(0)}`} />
         </View>
+
+        {/* Always true — the purchase already inserted these as owned_items server-side in the
+            same atomic transaction, there's no separate "add" step for the user to trigger. */}
+        <Text style={styles.addedNote}>{copy.summary.addedToCollection}</Text>
       </View>
 
       <View style={styles.footer}>
-        <Pressable onPress={onDone}>
+        <Pressable onPress={onRipAgain} disabled={isRipAgainWorking}>
           <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonLabel}>{copy.summary.done}</Text>
+            {isRipAgainWorking ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonLabel}>{copy.summary.ripAgain(tierLabel)}</Text>
+            )}
           </LinearGradient>
         </Pressable>
+        <View style={styles.secondaryRow}>
+          <Pressable onPress={onViewCollection} disabled={isRipAgainWorking} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonLabel}>{copy.summary.viewCollection}</Text>
+          </Pressable>
+          <Pressable onPress={onGoHome} disabled={isRipAgainWorking} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonLabel}>{copy.summary.backToHome}</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -565,4 +611,16 @@ const styles = StyleSheet.create({
   },
   resultValue: { fontFamily: fonts.bold, fontSize: 11, color: "#fff" },
   statRow: { flexDirection: "row", gap: 10, width: "100%" },
+  addedNote: { fontFamily: fonts.semibold, fontSize: 12.5, color: "#8BF285" },
+  secondaryRow: { flexDirection: "row", gap: spacing.sm, width: "100%", minWidth: 260 },
+  secondaryButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonLabel: { fontFamily: fonts.bold, fontSize: 12.5, letterSpacing: 0.5, color: "rgba(255,255,255,0.85)" },
 });

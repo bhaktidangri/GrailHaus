@@ -40,6 +40,7 @@ export function useCollectionViewModel() {
   const brands = useMemo(() => groupBy(watches, (o) => o.item.brand ?? "Independent"), [watches]);
 
   return {
+    isSignedIn,
     isLoading: query.isLoading,
     error: query.error ? (query.error as Error).message : null,
     owned,
