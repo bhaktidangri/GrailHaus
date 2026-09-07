@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute, type RouteProp, type CompositeNavigationProp } from "@react-navigation/native";
@@ -8,13 +8,15 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, PackSku } from "@grailhaus/shared";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useShelfViewModel } from "../viewmodels/useShelfViewModel";
-import { useRevealViewModel } from "../viewmodels/useRevealViewModel";
+import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { useAuthStore } from "../state/authStore";
-import { PackTile } from "../components/PackTile";
-import { BuySheet } from "../components/BuySheet";
+import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/PackTile";
+import { PackFace } from "../components/PackFace";
+import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
+import { CategorySwitch } from "../components/CategorySwitch";
 import { useHideTabBarOnScroll } from "../navigation/tabBarVisibility";
-import { ink, typography } from "../theme/tokens";
-import { shelf as shelfCopy } from "../content/copy";
+import { fonts, ink, typography } from "../theme/tokens";
+import { brand, shelf as shelfCopy, packTile as packTileCopy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
 import type { HomeStackParamList } from "../navigation/HomeStack";
 
@@ -29,18 +31,24 @@ type Nav = CompositeNavigationProp<
 >;
 
 /**
- * "World" — a single category, fully committed, reached only through a door
- * on Home. No switch here: the mockup never lets you flip categories once
- * you're inside a world, only from Home's two doors. View only: no fetch
- * calls, no business logic — everything comes from the viewmodels below.
+ * "World" — a single category's shelf, reached through a door on Home or
+ * flipped in place with the Cards/Watches switch (per the final "full app"
+ * mockup pass, which puts the switch on the shelf itself rather than only
+ * on Home's doors). Switching calls `setParams` rather than pushing a new
+ * route, so there's still exactly one World screen on the stack. View only:
+ * no fetch calls, no business logic — everything comes from the viewmodels
+ * below.
  */
 export function ShelfScreen() {
   const navigation = useNavigation<Nav>();
   const { category } = useRoute<RouteProp<HomeStackParamList, "World">>().params;
+  // Interim: only the watches path still buys straight off this screen (its own
+  // "Explore the Vault" redesign — tier detail, confirm-unlock — is a later pass).
+  // Cards always drills into PackDetail now, per the Cards journey mockup.
   const [sheetSku, setSheetSku] = useState<PackSku | null>(null);
   const session = useSessionViewModel();
   const shelf = useShelfViewModel(category);
-  const reveal = useRevealViewModel();
+  const flow = usePackFlowViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
   // A ref, not state: a rapid double-tap must be blocked before React's next render, or both
@@ -56,7 +64,7 @@ export function ShelfScreen() {
     return { min: prices[0], max: prices[prices.length - 1] };
   }, [shelf.packs]);
 
-  function handleConfirm(quantity: 1 | 10) {
+  function handleConfirm() {
     const sku = sheetSku;
     if (!sku) return;
     // Browsing a world never requires a session — only the moment of intent does.
@@ -64,12 +72,12 @@ export function ShelfScreen() {
       if (isRippingRef.current) return;
       isRippingRef.current = true;
       try {
-        const result = await reveal.startReveal(sku, quantity);
+        const result = await flow.startFlow(sku);
         if (result.ok) {
           setSheetSku(null);
           navigation.navigate("Reveal");
         } else {
-          Alert.alert("Couldn't rip that pack", result.error);
+          Alert.alert("Couldn't unlock that vault", result.error);
         }
       } finally {
         isRippingRef.current = false;
@@ -80,13 +88,16 @@ export function ShelfScreen() {
   return (
     <View style={styles.fill}>
       {/* Bounded to the fixed header+heading area (never scrolls) rather than the whole screen
-          — a full-screen wash here would stay pinned behind the FlatList's scrolled rows too. */}
+          — a full-screen wash here would stay pinned behind the scrolled tier cards too. */}
       <LinearGradient colors={register.wash} style={styles.base} />
 
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
-        </Pressable>
+        <View style={styles.brand}>
+          <View style={styles.brandChip}>
+            <Image source={require("../../assets/icon.png")} style={styles.brandIcon} />
+          </View>
+          <Text style={styles.brandText}>{brand.name}</Text>
+        </View>
         {session.isSignedIn ? (
           session.balanceCents != null && (
             <View style={styles.balancePill}>
@@ -101,42 +112,109 @@ export function ShelfScreen() {
         )}
       </View>
 
+      <CategorySwitch value={category} onChange={(next) => navigation.setParams({ category: next })} />
+
       <View style={styles.heading}>
-        <Text style={styles.headingTitle}>{register.label}</Text>
-        <Text style={styles.headingSub}>
-          {priceRange
-            ? shelfCopy.priceRangeSub(
-                (priceRange.min / 100).toLocaleString(),
-                (priceRange.max / 100).toLocaleString()
-              )
-            : " "}
-        </Text>
+        {category === "cards" ? (
+          <>
+            <Text style={styles.eyebrow}>{shelfCopy.explorePacks.eyebrow}</Text>
+            <Text style={styles.headingTitle}>{shelfCopy.explorePacks.heading}</Text>
+            <Text style={styles.headingSub}>{shelfCopy.explorePacks.sub}</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.headingTitle}>{register.label}</Text>
+            <Text style={styles.headingSub}>
+              {priceRange
+                ? shelfCopy.priceRangeSub(
+                    (priceRange.min / 100).toLocaleString(),
+                    (priceRange.max / 100).toLocaleString()
+                  )
+                : " "}
+            </Text>
+          </>
+        )}
       </View>
 
       {shelf.error && <Text style={styles.error}>{shelfCopy.serverUnreachable(shelf.error)}</Text>}
 
-      <Animated.FlatList
-        style={styles.flatList}
-        data={shelf.packs}
-        keyExtractor={(sku: PackSku) => sku.id}
+      <Animated.ScrollView
+        style={styles.scroll}
         contentContainerStyle={styles.list}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        renderItem={({ item }: { item: PackSku }) => (
-          <PackTile sku={item} onPress={() => setSheetSku(item)} disabled={reveal.isPurchasing} />
-        )}
-        ListEmptyComponent={!shelf.isLoading ? <Text style={styles.empty}>{shelfCopy.emptyPacks}</Text> : null}
-      />
+        showsVerticalScrollIndicator={false}
+      >
+        {category === "cards"
+          ? shelf.packs.map((sku) => (
+              <TierRow key={sku.id} sku={sku} onPress={() => navigation.navigate("PackDetail", { skuId: sku.id })} />
+            ))
+          : shelf.packs.map((sku) => (
+              <PackTile key={sku.id} sku={sku} onBuy={() => setSheetSku(sku)} disabled={flow.isPurchasing} />
+            ))}
+        {!shelf.isLoading && shelf.packs.length === 0 && <Text style={styles.empty}>{shelfCopy.emptyPacks}</Text>}
 
-      <BuySheet
-        visible={sheetSku != null}
-        sku={sheetSku}
-        balanceCents={session.balanceCents}
-        isPurchasing={reveal.isPurchasing}
-        onClose={() => setSheetSku(null)}
-        onConfirm={handleConfirm}
-      />
+        {category === "cards" && shelf.packs.length > 0 && (
+          <>
+            <View style={styles.trustNote}>
+              <View style={styles.trustCheck}>
+                <Text style={styles.trustCheckGlyph}>✓</Text>
+              </View>
+              <Text style={styles.trustNoteText}>{shelfCopy.explorePacks.trustNote}</Text>
+            </View>
+            <Pressable onPress={() => navigation.navigate("Portfolio")}>
+              <Text style={styles.collectionLink}>{shelfCopy.explorePacks.collectionLink}</Text>
+            </Pressable>
+          </>
+        )}
+      </Animated.ScrollView>
+
+      {category === "watches" && (
+        <ConfirmPurchaseSheet
+          visible={sheetSku != null}
+          sku={sheetSku}
+          balanceCents={session.balanceCents}
+          isPurchasing={flow.isPurchasing}
+          onClose={() => setSheetSku(null)}
+          onConfirm={handleConfirm}
+        />
+      )}
     </View>
+  );
+}
+
+/** One row in "Pick your tier" — the middle (hero) tier gets a highlighted
+ * border/shadow and a floating "MOST OPENED" tag, per the mockup. */
+function TierRow({ sku, onPress }: { sku: PackSku; onPress: () => void }) {
+  const isFeatured = HERO_TIER.has(sku.tier);
+  const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
+
+  return (
+    <Pressable onPress={onPress} style={[styles.tierRow, isFeatured && styles.tierRowFeatured]}>
+      {isFeatured && (
+        <View style={styles.mostOpenedTag}>
+          <Text style={styles.mostOpenedText}>{shelfCopy.explorePacks.mostOpened}</Text>
+        </View>
+      )}
+      <View style={styles.tierRowArt}>
+        <PackFace art={art} width={76} height={104} radius={10} />
+      </View>
+      <View style={styles.tierRowInfo}>
+        <Text style={styles.tierRowEyebrow}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.tierRowName} numberOfLines={1}>
+          {sku.name}
+        </Text>
+        <Text style={styles.tierRowSub}>{packTileCopy.countLabel(sku.category, sku.itemCount)}</Text>
+        <View style={styles.tierRowPriceRow}>
+          <Text style={styles.tierRowPrice}>${(sku.priceCents / 100).toLocaleString()}</Text>
+          {sku.stockRemaining != null && (
+            <Text style={styles.tierRowStock}>
+              {sku.stockRemaining} {shelfCopy.explorePacks.leftSuffix}
+            </Text>
+          )}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -150,30 +228,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.16)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
-  },
+  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
+  brandChip: { width: 26, height: 26, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.14)" },
+  brandIcon: { width: "100%", height: "100%" },
+  brandText: typography.navBrand,
   balancePill: {
-    height: 34,
+    height: 36,
     paddingHorizontal: 14,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.14)",
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: "rgba(255,255,255,0.22)",
     flexDirection: "row",
     alignItems: "center",
@@ -182,7 +246,7 @@ const styles = StyleSheet.create({
   coin: { width: 14, height: 14, borderRadius: 7 },
   balanceText: typography.countMain,
   signInChip: {
-    height: 34,
+    height: 36,
     paddingHorizontal: 14,
     borderRadius: 999,
     backgroundColor: "rgba(177,75,255,0.9)",
@@ -191,14 +255,81 @@ const styles = StyleSheet.create({
   },
   signInText: typography.chipLabel,
   heading: { paddingHorizontal: 20, paddingTop: 20 },
-  headingTitle: typography.pageHeading,
+  eyebrow: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.6, color: "rgba(255,255,255,0.55)" },
+  headingTitle: { fontFamily: fonts.black, fontSize: 30, letterSpacing: -0.9, lineHeight: 32, color: ink.text, marginTop: 4 },
   headingSub: { ...typography.sectionSub, marginTop: 4 },
-  flatList: { flex: 1 },
-  list: { padding: 20, paddingTop: 16, gap: 12 },
+  scroll: { flex: 1 },
+  list: { padding: 20, paddingTop: 16, gap: 12, paddingBottom: 40 },
   empty: { ...typography.sectionSub, textAlign: "center", marginTop: 32 },
   error: {
     ...typography.errorText,
     paddingHorizontal: 20,
     marginTop: 8,
+  },
+
+  tierRow: {
+    flexDirection: "row",
+    gap: 14,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  tierRowFeatured: {
+    borderColor: "rgba(177,75,255,0.5)",
+    shadowColor: "#B14BFF",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 28,
+    elevation: 6,
+    marginTop: 10,
+  },
+  mostOpenedTag: {
+    position: "absolute",
+    top: -10,
+    right: 16,
+    paddingHorizontal: 10,
+    height: 19,
+    borderRadius: 999,
+    backgroundColor: "rgba(177,75,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mostOpenedText: { fontFamily: fonts.extrabold, fontSize: 9, letterSpacing: 0.6, color: "#fff" },
+  tierRowArt: { flexShrink: 0 },
+  tierRowInfo: { flex: 1, minWidth: 0, justifyContent: "center" },
+  tierRowEyebrow: typography.tierPill,
+  tierRowName: { ...typography.packNameHero, fontSize: 20, marginTop: 6 },
+  tierRowSub: { ...typography.packSub, marginTop: 4 },
+  tierRowPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginTop: 8 },
+  tierRowPrice: { fontFamily: fonts.black, fontSize: 20, color: ink.text },
+  tierRowStock: { ...typography.footNote },
+
+  trustNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  trustCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(99,232,92,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  trustCheckGlyph: { color: "#8BF285", fontFamily: fonts.extrabold, fontSize: 13 },
+  trustNoteText: { ...typography.packSub, flex: 1 },
+  collectionLink: {
+    ...typography.linkMuted,
+    color: "#C99BFF",
+    textAlign: "center",
+    marginTop: 4,
   },
 });

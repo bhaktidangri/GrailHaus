@@ -1,14 +1,22 @@
 import { StyleSheet, Text, View } from "react-native";
-import { useRevealViewModel } from "../viewmodels/useRevealViewModel";
+import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
+import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
 import { reveal as revealCopy } from "../content/copy";
 
+/**
+ * Cards purchases run through the new multi-phase `CardFlowEngine`
+ * (processing → ready → rip → summary). Watches purchases TEMPORARILY still
+ * render the old single-gesture `RevealEngine` — its own multi-phase
+ * `VaultFlowEngine` (per the "rebuild purchase+reveal flows" plan) is a
+ * later pass.
+ */
 export function RevealScreen() {
-  const reveal = useRevealViewModel();
+  const flow = usePackFlowViewModel();
 
-  if (!reveal.isActive || !reveal.config || !reveal.items || !reveal.sku) {
+  if (!flow.isActive || !flow.config || !flow.items || !flow.sku) {
     return (
       <ScreenBackground>
         <View style={styles.empty}>
@@ -19,13 +27,17 @@ export function RevealScreen() {
     );
   }
 
+  if (flow.sku.category === "cards") {
+    return <CardFlowEngine sku={flow.sku} items={flow.items} onFinished={flow.finishFlow} />;
+  }
+
   return (
     <RevealEngine
-      config={reveal.config}
-      items={reveal.items}
-      rarityTiers={reveal.sku.rarityTiers}
-      packPriceCents={reveal.sku.priceCents}
-      onFinished={reveal.finishReveal}
+      config={flow.config}
+      items={flow.items}
+      rarityTiers={flow.sku.rarityTiers}
+      packPriceCents={flow.sku.priceCents}
+      onFinished={flow.finishFlow}
     />
   );
 }

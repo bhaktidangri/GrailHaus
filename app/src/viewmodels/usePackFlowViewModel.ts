@@ -2,41 +2,48 @@ import { useState } from "react";
 import * as Crypto from "expo-crypto";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PackSku } from "@grailhaus/shared";
-import { useRevealStore } from "../state/revealStore";
+import { usePackFlowStore } from "../state/packFlowStore";
 import { categoryRegistry } from "../engine/categories/registry";
 import { purchaseService } from "../services/purchaseService";
 import { clearPendingPurchase, setPendingPurchase } from "../lib/pendingPurchase";
 
-export type StartRevealResult = { ok: true } | { ok: false; error: string };
+export type StartFlowResult = { ok: true } | { ok: false; error: string };
 
 /**
- * ViewModel for the Reveal screen. Views only ever call `startReveal` / read `items`+`config`
- * here — they don't know about the reveal store, the purchase API, or the category registry
- * directly.
+ * ViewModel for the whole post-payment flow (Pack/Vault Detail's confirm sheet through the
+ * Reveal tab's summary). Views only ever call `startFlow` / read `items`+`config`+`phase` here
+ * — they don't know about the flow store, the purchase API, or the category registry directly.
  *
- * `startReveal` is the real atomic purchase (POST /purchase), not a client-side roll — pack
+ * `startFlow` is the real atomic purchase (POST /purchase), not a client-side roll — pack
  * contents are decided server-side, inside the same transaction that debits the balance and
  * decrements stock, and are already persisted by the time this resolves. The idempotency key
  * is minted and written to secure storage *before* the network call, so a dropped connection
  * or a killed app can be safely retried with the same key rather than risking a double charge.
+ *
+ * Because the purchase has already fully resolved by the time `phase` becomes `"processing"`,
+ * that phase is pure pacing (a deliberate pause before the reveal, per the mockup), not a wait
+ * for the payment/stock/contents steps it visually narrates — those are already done.
  */
-export function useRevealViewModel() {
-  const sku = useRevealStore((s) => s.sku);
-  const items = useRevealStore((s) => s.items);
-  const start = useRevealStore((s) => s.start);
-  const clear = useRevealStore((s) => s.clear);
+export function usePackFlowViewModel() {
+  const sku = usePackFlowStore((s) => s.sku);
+  const items = usePackFlowStore((s) => s.items);
+  const phase = usePackFlowStore((s) => s.phase);
+  const start = usePackFlowStore((s) => s.start);
+  const setPhase = usePackFlowStore((s) => s.setPhase);
+  const clear = usePackFlowStore((s) => s.clear);
   const [isPurchasing, setPurchasing] = useState(false);
   const queryClient = useQueryClient();
 
-  async function startReveal(pack: PackSku, quantity: 1 | 10 = 1): Promise<StartRevealResult> {
+  async function startFlow(pack: PackSku): Promise<StartFlowResult> {
     setPurchasing(true);
     try {
       const idempotencyKey = Crypto.randomUUID();
-      await setPendingPurchase({ idempotencyKey, packId: pack.id, quantity });
+      await setPendingPurchase({ idempotencyKey, packId: pack.id, quantity: 1 });
 
-      const result = await purchaseService.purchase(idempotencyKey, pack.id, quantity);
+      const result = await purchaseService.purchase(idempotencyKey, pack.id, 1);
       await clearPendingPurchase();
       queryClient.invalidateQueries({ queryKey: ["profile", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio", "me"] });
 
       if (result.status !== "completed") {
         return { ok: false, error: failureMessage(result.failureReason) };
@@ -57,11 +64,13 @@ export function useRevealViewModel() {
   return {
     sku,
     items,
+    phase,
     config: sku ? categoryRegistry[sku.category] : null,
     isActive: sku != null && items != null,
     isPurchasing,
-    startReveal,
-    finishReveal: clear,
+    startFlow,
+    setPhase,
+    finishFlow: clear,
   };
 }
 

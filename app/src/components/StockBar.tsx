@@ -14,10 +14,14 @@ export function StockBar({
   remaining,
   max,
   label,
+  fillColor,
 }: {
   remaining: number | null;
   max: number | null;
   label?: string;
+  /** Overrides the default white fill when not low-stock — the shelf's tier
+   * cards color the bar with the category accent instead of plain white. */
+  fillColor?: string;
 }) {
   if (remaining == null || max == null || max <= 0) return null;
   const ratio = Math.max(0, Math.min(1, remaining / max));
@@ -26,7 +30,14 @@ export function StockBar({
   return (
     <View>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${ratio * 100}%` }, isLow && styles.fillLow]} />
+        <View
+          style={[
+            styles.fill,
+            { width: `${ratio * 100}%` },
+            fillColor && !isLow && { backgroundColor: fillColor },
+            isLow && styles.fillLow,
+          ]}
+        />
       </View>
       <Text style={[styles.label, isLow && styles.labelLow]}>
         {label ?? `${remaining} of ${max} left`}

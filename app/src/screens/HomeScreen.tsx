@@ -90,7 +90,10 @@ export function HomeScreen() {
             everything, sized generously rather than to any one section) so it can't bleed into
             or fight with the richer, self-contained gradients on the cards sitting above it. */}
         <View style={styles.scrollInner}>
-          <LinearGradient colors={["rgba(177,75,255,0.12)", "transparent"]} style={styles.ambientWash} />
+          <LinearGradient
+            colors={home.featuredDrop ? ["rgba(255,92,122,0.16)", "transparent"] : ["rgba(177,75,255,0.12)", "transparent"]}
+            style={styles.ambientWash}
+          />
 
           {home.featuredDrop && (
             <FeaturedDropCard
@@ -175,12 +178,13 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
 
       <View style={styles.featured}>
         <LinearGradient
-          colors={["rgba(255,92,122,0.3)", "rgba(90,12,32,0.5)", "rgba(10,6,20,0.85)"]}
-          locations={[0, 0.55, 1]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
+          colors={["rgba(255,92,122,0.24)", "rgba(90,12,32,0.2)", "rgba(10,6,20,0.6)"]}
+          locations={[0, 0.52, 1]}
+          start={{ x: 0.05, y: 0 }}
+          end={{ x: 0.95, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
+        <View style={styles.featuredGlow} pointerEvents="none" />
         <View style={styles.featuredArt} pointerEvents="none">
           <View style={[styles.featuredArtCard, { transform: [{ rotate: "6deg" }] }]}>
             <PackFace art={art} width={74} height={104} radius={11} />
@@ -204,6 +208,7 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
               <Text style={styles.leftPillLabel}>LEFT</Text>
               <Text style={styles.leftPillValue}>{copy.featuredDrop.left(remaining, max)}</Text>
             </View>
+            <Text style={styles.watchingText}>{copy.featuredDrop.watching}</Text>
           </View>
         )}
 
@@ -215,8 +220,10 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
           </View>
         )}
 
-        <Pressable onPress={onPress} style={styles.featuredCta}>
-          <Text style={styles.featuredCtaLabel}>{copy.featuredDrop.cta}</Text>
+        <Pressable onPress={onPress}>
+          <LinearGradient colors={["#FF7A9C", "#C4183C"]} style={styles.featuredCta}>
+            <Text style={styles.featuredCtaLabel}>{copy.featuredDrop.cta}</Text>
+          </LinearGradient>
         </Pressable>
       </View>
     </View>
@@ -240,7 +247,7 @@ function DoorCard({
       <LinearGradient colors={[`${accent.top}33`, `${accent.bottom}1a`]} style={StyleSheet.absoluteFill} />
       <View style={styles.doorArt} pointerEvents="none">
         {category === "cards" ? (
-          <View style={{ transform: [{ rotate: "-10deg" }] }}>
+          <View style={{ opacity: 0.7, transform: [{ rotate: "-12deg" }] }}>
             <PackFace art={art} width={54} height={75} radius={9} />
           </View>
         ) : (
@@ -248,7 +255,7 @@ function DoorCard({
         )}
       </View>
       <Text style={[styles.doorEyebrow, { color: accent.top }]}>{copy.door.eyebrow}</Text>
-      <Text style={styles.doorName}>{shelfCopy.categoryLabel[category]}</Text>
+      <Text style={styles.doorName}>{copy.door.shortLabel[category]}</Text>
       <Text style={styles.doorSub}>
         {summary.tierCount > 0
           ? `${copy.door.tiersLabel(summary.tierCount)} · ${copy.door.fromPrice(summary.fromPriceCents ?? 0)}`
@@ -331,10 +338,34 @@ const SAMPLE_RECENT_PULLS: {
   priceLabel: string;
   timeLabel: string;
   art: [string, string];
+  borderColor: string;
+  glowColor?: string;
 }[] = [
-  { handle: "@vaultrat", badge: "CHASE", priceLabel: "$4,120", timeLabel: "2m", art: ART_GRADIENT.black_label },
-  { handle: "@toploader", badge: null, priceLabel: "$910", timeLabel: "9m", art: ART_GRADIENT.street_rip },
-  { handle: "@heirloom", badge: "GRAIL", priceLabel: "$11,400", timeLabel: "14m", art: ART_GRADIENT.reserve },
+  {
+    handle: "@vaultrat",
+    badge: "CHASE",
+    priceLabel: "$4,120",
+    timeLabel: "2m",
+    art: ART_GRADIENT.black_label,
+    borderColor: "rgba(255,215,94,0.7)",
+    glowColor: "rgba(255,201,74,0.3)",
+  },
+  {
+    handle: "@toploader",
+    badge: null,
+    priceLabel: "$910",
+    timeLabel: "9m",
+    art: ART_GRADIENT.street_rip,
+    borderColor: "rgba(143,169,255,0.55)",
+  },
+  {
+    handle: "@heirloom",
+    badge: "GRAIL",
+    priceLabel: "$11,400",
+    timeLabel: "14m",
+    art: ART_GRADIENT.reserve,
+    borderColor: "rgba(242,196,107,0.5)",
+  },
 ];
 
 const SAMPLE_COLLECTION = {
@@ -379,10 +410,19 @@ function RecentPullCard({ pull }: { pull: (typeof SAMPLE_RECENT_PULLS)[number] }
   return (
     <View style={styles.pullCard}>
       <View style={styles.pullArtWrap}>
-        <PackFace art={pull.art} width={96} height={116} radius={12} />
+        <PackFace
+          art={pull.art}
+          width={96}
+          height={120}
+          radius={12}
+          borderColor={pull.borderColor}
+          glowColor={pull.glowColor}
+        />
         {pull.badge && (
           <View style={styles.pullBadge}>
-            <Text style={[styles.pullBadgeText, pull.badge === "GRAIL" && { color: "#E4E4E4" }]}>{pull.badge}</Text>
+            <Text style={[styles.pullBadgeText, pull.badge === "GRAIL" && { color: colors.watchesTop }]}>
+              {pull.badge}
+            </Text>
           </View>
         )}
       </View>
@@ -529,6 +569,15 @@ const styles = StyleSheet.create({
     padding: 18,
     overflow: "hidden",
   },
+  featuredGlow: {
+    position: "absolute",
+    right: -30,
+    top: -14,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: "rgba(255,201,74,0.16)",
+  },
   featuredArt: { position: "absolute", right: 14, top: 26, flexDirection: "row" },
   featuredArtCard: { shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } },
   featuredArtCardBack: { marginLeft: -30 },
@@ -549,23 +598,24 @@ const styles = StyleSheet.create({
   },
   leftPillLabel: { ...typography.footNote, letterSpacing: 1.4 },
   leftPillValue: { ...typography.countMain, color: "#F2C46B" },
+  watchingText: { ...typography.packSub, color: "rgba(255,255,255,0.6)" },
   pipRow: { flexDirection: "row", gap: 4, marginTop: spacing.md },
   pip: { flex: 1, height: 6, borderRadius: 4 },
   pipFilled: { backgroundColor: "#F2C46B" },
   pipEmpty: { backgroundColor: "rgba(255,255,255,0.14)" },
   featuredCta: {
-    height: 54,
+    height: 56,
     borderRadius: 16,
     marginTop: spacing.lg,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "rgba(255,255,255,0.28)",
-    backgroundColor: "#C4183C",
-    shadowColor: "#000",
-    shadowOpacity: 0.36,
-    shadowOffset: { width: 0, height: 5 },
-    shadowRadius: 0,
+    shadowColor: "rgba(255,92,122,0.4)",
+    shadowOpacity: 1,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 28,
+    elevation: 8,
   },
   featuredCtaLabel: { ...typography.chunkyButtonLabel, letterSpacing: 0.8 },
 
@@ -574,7 +624,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 118,
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 2,
     padding: 15,
     overflow: "hidden",
     justifyContent: "flex-end",
@@ -631,8 +681,8 @@ const styles = StyleSheet.create({
   pullHandle: { ...typography.footNote, color: ink.text, marginTop: 7 },
   pullMeta: { ...typography.footNote, marginTop: 1 },
   revealedMore: {
-    width: 56,
-    height: 116,
+    width: 58,
+    height: 120,
     borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1.5,

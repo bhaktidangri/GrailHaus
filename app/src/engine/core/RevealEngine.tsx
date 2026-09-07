@@ -99,13 +99,31 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
     );
   }
 
+  const isTear = config.gesture.mode === "tear";
+  const hintLabel = isTear ? "SWIPE UP TO TEAR" : "LIFT THE LID";
+
   return (
     <View style={[styles.container, { backgroundColor: config.palette.background }]}>
       <View style={styles.hud}>
-        <Text style={styles.hudText}>
-          {index + 1} / {orderedItems.length}
-        </Text>
-        <RarityBadge tier={currentTier} />
+        {phase === "idle" ? (
+          <>
+            <Text style={styles.hudEyebrow}>
+              {config.label.toUpperCase()} · {isTear ? "SEALED" : "LIFT THE LID"}
+            </Text>
+            <View style={styles.dotRow}>
+              {orderedItems.map((item, i) => (
+                <View key={item.id ?? i} style={[styles.dot, i === index && styles.dotActive]} />
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.hudText}>
+              {index + 1} / {orderedItems.length}
+            </Text>
+            <RarityBadge tier={currentTier} />
+          </>
+        )}
       </View>
 
       <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")}>
@@ -128,7 +146,12 @@ export function RevealEngine({ config, items, rarityTiers, packPriceCents, onFin
         )}
       </GestureLayer>
 
-      {phase === "idle" && <Text style={styles.hint}>Swipe to open</Text>}
+      {phase === "idle" && (
+        <View style={styles.idleFooter}>
+          <Text style={styles.hint}>{hintLabel}</Text>
+          <View style={styles.dragHandle} />
+        </View>
+      )}
     </View>
   );
 }
@@ -194,12 +217,28 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   hudText: { color: reveal.textSecondary, ...typography.caption },
-  hint: {
+  hudEyebrow: { ...typography.eyebrow, color: "rgba(255,255,255,0.7)", letterSpacing: 2 },
+  dotRow: { flexDirection: "row", gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.24)" },
+  dotActive: { backgroundColor: reveal.accent },
+  idleFooter: {
     position: "absolute",
     bottom: spacing.xxl,
-    alignSelf: "center",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+  hint: {
     color: reveal.textSecondary,
     ...typography.body,
+    letterSpacing: 1,
+  },
+  dragHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   summary: {
     flex: 1,

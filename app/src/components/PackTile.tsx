@@ -1,17 +1,17 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { PackSku } from "@grailhaus/shared";
-import { accents, ink, typography } from "../theme/tokens";
+import { accents, fonts, typography } from "../theme/tokens";
 import { packTile as packTileCopy } from "../content/copy";
-import { Price } from "./Price";
 import { WatchDial } from "./WatchDial";
 import { StockBar } from "./StockBar";
 
 /** Display-only labels/art — matches the mockup's own tier vocabulary
  * (CASUAL/MID/HIGH-STAKES, ENTRY/SIGNATURE/GRAIL). Not admin-configurable:
  * only the economics (price, odds, rarity) are meant to be data-driven —
- * this is just how a fixed set of six SKUs is captioned. Exported so BuySheet
- * can render the same tier chip/art without re-deriving them. */
+ * this is just how a fixed set of six SKUs is captioned. Exported so other
+ * screens (ConfirmPurchaseSheet, ShelfScreen's tier rows, ...) can render the
+ * same tier chip/art without re-deriving them. */
 export const TIER_LABEL: Record<string, string> = {
   street_rip: "CASUAL",
   vault_break: "MID",
@@ -35,24 +35,41 @@ export const ART_GRADIENT: Record<string, [string, string]> = {
   obsidian_vault: ["#FFF8E4", "#7A5A22"],
 };
 
-export function PackTile({ sku, onPress, disabled }: { sku: PackSku; onPress: () => void; disabled?: boolean }) {
-  if (sku.category === "watches") return <WatchTileRow sku={sku} onPress={onPress} disabled={disabled} />;
-  return <CardTile sku={sku} onPress={onPress} disabled={disabled} />;
+export function PackTile({
+  sku,
+  onBuy,
+  disabled,
+}: {
+  sku: PackSku;
+  onBuy: (quantity: 1 | 10) => void;
+  disabled?: boolean;
+}) {
+  if (sku.category === "watches") return <WatchTileRow sku={sku} onPress={() => onBuy(1)} disabled={disabled} />;
+  return <CardTile sku={sku} onBuy={onBuy} disabled={disabled} />;
 }
 
 /** Cards: a violet-glowing hero or a compact row, chunky pack art, a stock
- * bar, and the buy button right on the tile — matches the mockup's dense,
- * gamified "shop" register for Card World. */
-function CardTile({ sku, onPress, disabled }: { sku: PackSku; onPress: () => void; disabled?: boolean }) {
+ * bar, and a BUY 1 / ×10 button pair right on the tile — matches the
+ * mockup's dense, gamified "shop" register for Card World. Bulk (×10) is
+ * only offered on Casual/Mid, per the mockup's own footnote and the
+ * backend's bulk-purchase rules. */
+function CardTile({
+  sku,
+  onBuy,
+  disabled,
+}: {
+  sku: PackSku;
+  onBuy: (quantity: 1 | 10) => void;
+  disabled?: boolean;
+}) {
   const accent = accents.cards;
   const isHero = HERO_TIER.has(sku.tier);
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
   const countLabel = packTileCopy.countLabel(sku.category, sku.itemCount);
+  const canBulk = sku.tier !== "black_label" && (sku.stockRemaining == null || sku.stockRemaining >= 10);
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
+    <View
       style={[
         styles.card,
         isHero ? styles.cardHero : styles.cardRow,
@@ -80,17 +97,24 @@ function CardTile({ sku, onPress, disabled }: { sku: PackSku; onPress: () => voi
           {sku.name}
         </Text>
         <Text style={styles.sub}>{countLabel}</Text>
-        <StockBar remaining={sku.stockRemaining} max={sku.maxStock} />
+        <StockBar remaining={sku.stockRemaining} max={sku.maxStock} fillColor={accent.top} />
 
         <View style={styles.buyRow}>
-          <LinearGradient colors={[accent.top, accent.bottom]} style={styles.buyBtn}>
-            <Text style={styles.buyLabel}>{packTileCopy.rip}</Text>
-            <LinearGradient colors={["#FFE27A", "#E0A016"]} style={styles.coin} />
-            <Price cents={sku.priceCents} color={ink.text} />
-          </LinearGradient>
+          <Pressable onPress={() => onBuy(1)} disabled={disabled} style={styles.buyBtnWrap}>
+            <LinearGradient colors={[accent.top, accent.bottom]} style={styles.buyBtn}>
+              <Text style={styles.buyLabel}>{packTileCopy.buyOne}</Text>
+              <LinearGradient colors={["#FFE27A", "#E0A016"]} style={styles.coin} />
+              <Text style={styles.buyPrice}>{Math.round(sku.priceCents / 100)}</Text>
+            </LinearGradient>
+          </Pressable>
+          {canBulk && (
+            <Pressable onPress={() => onBuy(10)} disabled={disabled} style={styles.buyTenBtn}>
+              <Text style={styles.buyTenLabel}>{packTileCopy.buyTen}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -145,8 +169,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.34)",
     overflow: "hidden",
   },
-  artRow: { width: 76, height: 104, flexShrink: 0, alignSelf: "center" },
-  artHero: { width: "100%", height: 190, alignSelf: "stretch" },
+  artRow: { width: 80, height: 108, flexShrink: 0, alignSelf: "center" },
+  artHero: { width: 142, height: 194, alignSelf: "center" },
   artStrip: {
     position: "absolute",
     left: 0,
@@ -171,9 +195,9 @@ const styles = StyleSheet.create({
   nameHero: { fontSize: typography.packNameHero.fontSize, lineHeight: typography.packNameHero.lineHeight },
   sub: { ...typography.packSub, marginTop: 4 },
   buyRow: { flexDirection: "row", gap: 9, marginTop: 12 },
+  buyBtnWrap: { flex: 1 },
   buyBtn: {
-    flex: 1,
-    height: 44,
+    height: 46,
     borderRadius: 13,
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.26)",
@@ -188,12 +212,24 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 0,
   },
+  buyPrice: { fontFamily: fonts.extrabold, fontSize: 13.5, color: "#FFFFFF" },
   coin: {
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: "#FFE27A",
   },
+  buyTenBtn: {
+    width: 58,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buyTenLabel: { fontFamily: fonts.black, fontSize: 13.5, color: "#FFFFFF" },
 
   watchRow: {
     flexDirection: "row",

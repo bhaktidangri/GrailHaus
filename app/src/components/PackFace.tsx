@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, RadialGradient, LinearGradient, Stop, Rect } from "react-native-svg";
-import { typography } from "../theme/tokens";
+import { shadow, typography } from "../theme/tokens";
 
 /**
  * Direct port of rn/src/components/PackFace.js — a pack or card face. CSS
@@ -17,6 +17,8 @@ export function PackFace({
   label,
   tier,
   crimp,
+  borderColor,
+  glowColor,
   children,
 }: {
   art?: string[];
@@ -26,13 +28,26 @@ export function PackFace({
   label?: string;
   tier?: string;
   crimp?: boolean;
+  /** Overrides the default neutral white border — used where a specific
+   * card (e.g. a "chase"-tier pull) needs to read as visually distinct. */
+  borderColor?: string;
+  /** Adds a soft cast glow behind the face, in the same spirit as `shadow.glow` —
+   * only the rare/standout cards in a set get this, not every face. */
+  glowColor?: string;
   children?: ReactNode;
 }) {
   const stops = art ?? ["#FFB3F0", "#C64BFF", "#6420C8", "#2E0B63"];
   const offs = stops.length === 4 ? [0, 0.34, 0.72, 1] : [0, 0.48, 1];
 
   return (
-    <View style={[styles.wrap, { width, height, borderRadius: radius }]}>
+    <View
+      style={[
+        styles.wrap,
+        { width, height, borderRadius: radius },
+        borderColor && { borderColor },
+        glowColor && shadow.glow(glowColor),
+      ]}
+    >
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="face" cx="50%" cy="40%" rx="60%" ry="44%">

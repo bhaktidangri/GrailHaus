@@ -79,28 +79,63 @@ export const shelf = {
   categoryLabel: { cards: "Trading Cards", watches: "Watches" } as const,
   switchLabel: { cards: "TRADING CARDS", watches: "WATCHES" } as const,
   priceRangeSub: (min: string, max: string) => `Three tiers · $${min} to $${max}`,
+  explorePacks: {
+    eyebrow: "EXPLORE PACKS",
+    heading: "Pick your tier.",
+    sub: "Same odds published on every one.",
+    mostOpened: "MOST OPENED",
+    trustNote: "Every tier publishes its odds and expected value before you buy.",
+    collectionLink: "Or open My Collection instead",
+    leftSuffix: "left",
+  },
 } as const;
 
 export const packTile = {
   countLabel: (category: "cards" | "watches", itemCount: number) =>
     category === "cards" ? `${itemCount} card${itemCount === 1 ? "" : "s"}` : "1 watch",
-  rip: "RIP",
+  buyOne: "BUY 1",
+  buyTen: "×10",
 } as const;
 
-export const buySheet = {
-  quantity: (q: 1 | 10) => (q === 1 ? "Buy 1" : "Buy 10"),
-  lineItem: (qty: number, priceCents: number) => `${qty} × $${(priceCents / 100).toFixed(2)}`,
+export const confirmPurchase = {
+  eyebrowCards: "CONFIRM PURCHASE",
+  eyebrowWatches: "CONFIRM UNLOCK",
+  lineItem: "1 × pack",
+  unlockPrice: "Unlock price",
+  youReceive: "You receive",
+  oneWatch: "One watch, sealed",
   balanceNow: "Balance now",
   balanceAfter: "Balance after",
+  evNote: (expectedCents: number, priceCents: number, isWatches: boolean) =>
+    `Expected contents are $${(expectedCents / 100).toFixed(2)} against a $${(priceCents / 100).toFixed(2)} ${
+      isWatches ? "unlock" : "price"
+    }. Most ${isWatches ? "unlocks" : "packs"} return less than they cost. ${
+      isWatches
+        ? "The reference is decided on our server the instant you pay."
+        : "Buy the moment, not the return."
+    }`,
   insufficientBalance: "Not enough balance for this purchase.",
   cancel: "CANCEL",
-  confirm: "CONFIRM",
+  pay: "PAY",
   working: "WORKING…",
+} as const;
+
+export const packDetail = {
+  body: (sku: { itemCount: number }) =>
+    `${sku.itemCount} cards, sealed until you tear it. Odds and expected value are published below — nobody rips without knowing the downside.`,
+  price: "PRICE",
+  cards: "CARDS",
+  valueRange: "VALUE RANGE",
+  possibleRarities: "POSSIBLE RARITIES",
+  collectionPreview: "COLLECTION PREVIEW",
+  fullOdds: "Full odds ›",
+  ripNow: "RIP NOW",
 } as const;
 
 export const home = {
   door: {
     eyebrow: "EXPLORE",
+    shortLabel: { cards: "Cards", watches: "Watches" } as const,
     tiersLabel: (n: number) => `${n} tier${n === 1 ? "" : "s"}`,
     fromPrice: (cents: number) => `from $${(cents / 100).toLocaleString()}`,
     comingSoon: "Coming soon",
@@ -108,6 +143,9 @@ export const home = {
   featuredDrop: {
     eyebrow: "FEATURED DROP · LIVE",
     left: (remaining: number, max: number) => `${remaining} / ${max}`,
+    // Static placeholder — no live viewer-count backend exists yet (same call as the
+    // Drop screens' claims feed: match the mockup's number rather than invent one).
+    watching: "1,842 watching",
     cta: "VIEW THE DROP",
   },
   upcomingDrops: {
@@ -131,9 +169,10 @@ export const home = {
 } as const;
 
 export const dropDetail = {
-  body: (sku: { category: "cards" | "watches"; itemCount: number }) => {
+  body: (sku: { category: "cards" | "watches"; itemCount: number; maxStock: number | null }) => {
     const unit = sku.category === "cards" ? `${sku.itemCount} card${sku.itemCount === 1 ? "" : "s"}` : "one watch";
-    return `Each box holds ${unit}, sealed until you claim it. This drop never restocks — once every unit is claimed, it's gone for good.`;
+    const boxes = sku.maxStock != null ? `${sku.maxStock} box${sku.maxStock === 1 ? "" : "es"}. ` : "";
+    return `${boxes}Each holds ${unit}, sealed until you claim it. Nothing restocks.`;
   },
   goesLiveIn: "GOES LIVE IN",
   perBox: "PER BOX",
@@ -367,4 +406,52 @@ export const buyListing = {
 export const reveal = {
   emptyTitle: "No pack open",
   emptyNote: "Rip a pack from the Shelf to see it here.",
+} as const;
+
+export const cardFlow = {
+  processing: {
+    title: "PURCHASE PROCESSING",
+    heading: "Rolling your pack",
+    body: "Contents were decided on our server the instant you paid — this pause is just theatre before the rip.",
+    paymentSuccess: "Payment success",
+    stockDecremented: "Stock decremented",
+    sealingContents: "Sealing contents",
+  },
+  ready: {
+    title: "PACK READY",
+    heading: "Sealed and waiting for you.",
+    insideLabel: "INSIDE",
+    insideValue: (count: number) => `${count} card${count === 1 ? "" : "s"}`,
+    beginRip: "BEGIN RIP",
+    openLater: "Open it later — it stays in your queue",
+  },
+  introduction: {
+    heading: (count: number) => `${count} cards. One is worth keeping.`,
+    body: "Swipe up to tear the foil. Then swipe left through what you got, one card at a time.",
+    hint: "SWIPE UP TO TEAR",
+  },
+  card: {
+    title: (index: number, total: number) => `CARDS · ${index} OF ${total}`,
+    statusLabel: "STATUS",
+    newLabel: "New to your binder",
+    duplicateLabel: (holdCount: number) => `Duplicate · you hold ${holdCount}`,
+    runningTotalLabel: "RUNNING TOTAL",
+    hint: "SWIPE LEFT",
+  },
+  final: {
+    title: (total: number) => `FINAL CARD · ${total} OF ${total}`,
+    hold: "HOLD",
+    newToBinder: "New to your binder",
+    continueHint: "TAP TO CONTINUE",
+    holdHint: "HOLD TO REVEAL",
+  },
+  summary: {
+    title: "PACK COMPLETE",
+    pulledOn: (totalValueCents: number, priceCents: number, count: number) =>
+      `$${(totalValueCents / 100).toFixed(0)} pulled on a $${(priceCents / 100).toFixed(0)} pack · ${count} cards`,
+    newLabel: "NEW",
+    duplicateLabel: "DUPLICATE",
+    collectionValueLabel: "PULL VALUE",
+    done: "DONE",
+  },
 } as const;
