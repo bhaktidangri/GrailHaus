@@ -1,0 +1,241 @@
+import { useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { CardFace } from "../../components/CardFace";
+import { WatchDial } from "../../components/WatchDial";
+import { itemArtGradient } from "../../content/cardArt";
+import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
+import { useBuyListingViewModel } from "../../viewmodels/useMarketplaceViewModel";
+import { colors, typography } from "../../theme/tokens";
+import { buyListing as copy } from "../../content/copy";
+import type { MarketplaceStackParamList } from "../../navigation/MarketplaceStack";
+
+type Nav = NativeStackNavigationProp<MarketplaceStackParamList, "BuyListing">;
+type Route = RouteProp<MarketplaceStackParamList, "BuyListing">;
+
+type Step = "confirm" | "processing" | "done" | "failed";
+
+/**
+ * "Confirm → payment → atomic transaction → success" (mockup 12b), collapsed to the one real
+ * call that actually is atomic — POST /listings/:id/buy — with the confirm step merged into
+ * the payment step, since GrailHaus balance is the only funding source that exists. The
+ * "processing" beat is honest theater around a request that's already atomic server-side; it
+ * isn't simulating steps that didn't happen.
+ */
+export function BuyListingScreen() {
+  const navigation = useNavigation<Nav>();
+  const { listing } = useRoute<Route>().params;
+  const item = listing.item;
+  const session = useSessionViewModel();
+  const { buy } = useBuyListingViewModel();
+  const [step, setStep] = useState<Step>("confirm");
+  const [error, setError] = useState<string | null>(null);
+
+  const balanceNow = session.balanceCents ?? 0;
+  const balanceAfter = balanceNow - listing.priceCents;
+
+  async function handleConfirm() {
+    setStep("processing");
+    const result = await buy(listing.id);
+    if (result.ok) {
+      setStep("done");
+    } else {
+      setError(result.error);
+      setStep("failed");
+    }
+  }
+
+  if (step === "processing") {
+    return (
+      <View style={styles.fill}>
+        <View style={styles.base} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.goldTop} />
+          <Text style={styles.processingTitle}>Atomic transaction</Text>
+          <Text style={styles.processingBody}>
+            Debit, fee, credit and ownership transfer all commit together — or none do.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (step === "done") {
+    return (
+      <View style={styles.fill}>
+        <View style={[styles.base, styles.baseSuccess]} />
+        <View style={styles.centered}>
+          <View style={styles.doneBadge}>
+            <View style={styles.checkmark} />
+          </View>
+          <Text style={styles.successEyebrow}>{copy.successSub}</Text>
+          <Text style={styles.successTitle}>{copy.successTitle}</Text>
+
+          <View style={styles.receipt}>
+            <Row label={copy.paid} value={`$${(listing.priceCents / 100).toFixed(2)}`} />
+            <Row label={copy.newBalance} value={`$${(balanceAfter / 100).toFixed(2)}`} />
+          </View>
+        </View>
+        <View style={styles.footer}>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => navigation.getParent()?.navigate("Portfolio" as never)}
+          >
+            <LinearGradient colors={["#63E85C", "#12864A"]} style={StyleSheet.absoluteFill} />
+            <Text style={styles.primaryLabel}>{copy.viewInCollection}</Text>
+          </Pressable>
+          <Pressable style={styles.linkButton} onPress={() => navigation.popToTop()}>
+            <Text style={styles.linkLabel}>{copy.keepBrowsing}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.fill}>
+      <View style={styles.base} />
+      <View style={styles.header}>
+        <Text style={styles.headerLabel}>{copy.header.toUpperCase()}</Text>
+      </View>
+
+      <View style={styles.itemRow}>
+        {item.category === "watches" ? (
+          <WatchDial art={itemArtGradient(item)} size={64} />
+        ) : (
+          <CardFace gradient={itemArtGradient(item)} width={64} height={89} />
+        )}
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>
+          <Text style={styles.itemSub}>
+            {[item.collection ?? item.brand, listing.seller.username ? `from @${listing.seller.username}` : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.body}>
+        <View style={styles.payCard}>
+          <Row label={copy.youPay} value={`$${(listing.priceCents / 100).toFixed(2)}`} big />
+        </View>
+
+        <View style={styles.balanceRows}>
+          <Row label={copy.balanceNow} value={`$${(balanceNow / 100).toFixed(2)}`} />
+          <View style={styles.hairline} />
+          <Row label={copy.balanceAfter} value={`$${(balanceAfter / 100).toFixed(2)}`} big />
+        </View>
+
+        <View style={styles.noteCard}>
+          <Text style={styles.noteText}>{copy.feeNote}</Text>
+        </View>
+
+        {error && <Text style={styles.error}>{error}</Text>}
+      </View>
+
+      <View style={styles.footer}>
+        <Pressable style={styles.primaryButton} onPress={handleConfirm}>
+          <LinearGradient colors={["#FFD75E", "#E08A16"]} style={StyleSheet.absoluteFill} />
+          <Text style={[styles.primaryLabel, { color: "#2A1706" }]}>{copy.continue}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function Row({ label, value, big }: { label: string; value: string; big?: boolean }) {
+  return (
+    <View style={styles.row}>
+      <Text style={[styles.rowLabel, big && styles.rowLabelBig]}>{label}</Text>
+      <Text style={[styles.rowValue, big && styles.rowValueBig]}>{value}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  base: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg },
+  baseSuccess: { backgroundColor: "#0A0614" },
+  header: { paddingTop: 24, paddingHorizontal: 22, alignItems: "center" },
+  headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
+  itemRow: { flexDirection: "row", gap: 14, alignItems: "center", paddingHorizontal: 22, paddingTop: 18 },
+  itemInfo: { flex: 1, minWidth: 0 },
+  itemName: { ...typography.pageHeading, fontSize: 20 },
+  itemSub: { ...typography.sectionSub, marginTop: 3 },
+  body: { paddingHorizontal: 22, paddingTop: 22, flex: 1 },
+  payCard: {
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,215,94,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,215,94,0.34)",
+  },
+  balanceRows: { marginTop: 14 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginVertical: 5 },
+  rowLabel: typography.sectionSub,
+  rowLabelBig: { ...typography.body, color: colors.textPrimary },
+  rowValue: { ...typography.body, color: colors.textPrimary },
+  rowValueBig: { ...typography.heroWordmark, fontSize: 26 },
+  hairline: { height: 1, backgroundColor: "rgba(255,255,255,0.12)", marginVertical: 8 },
+  noteCard: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  noteText: { ...typography.footNote, lineHeight: 17 },
+  error: { ...typography.errorText, marginTop: 14 },
+  footer: { padding: 22, gap: 12 },
+  primaryButton: {
+    height: 60,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  primaryLabel: {
+    ...typography.buttonLabel,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
+  linkButton: { alignItems: "center" },
+  linkLabel: { ...typography.body, color: colors.textSecondary },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
+  processingTitle: { ...typography.pageHeading, fontSize: 24, marginTop: 24, textAlign: "center" },
+  processingBody: { ...typography.sectionSub, marginTop: 8, textAlign: "center" },
+  doneBadge: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: "#63E85C",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkmark: {
+    width: 17,
+    height: 9,
+    borderLeftWidth: 3.4,
+    borderBottomWidth: 3.4,
+    borderColor: "#fff",
+    transform: [{ rotate: "-45deg" }, { translateY: -2 }],
+  },
+  successEyebrow: { ...typography.eyebrow, color: "#8BF285", letterSpacing: 3.4, marginTop: 18 },
+  successTitle: { ...typography.heroWordmark, fontSize: 30, marginTop: 8 },
+  receipt: {
+    marginTop: 26,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.14)",
+    width: "100%",
+  },
+});

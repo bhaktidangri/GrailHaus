@@ -214,9 +214,154 @@ export const auth = {
   passwordMismatch: "Passwords don't match.",
 } as const;
 
-export const placeholders = {
-  portfolio: { title: "Portfolio", note: "Live-ticking portfolio goes here (Deliverable 3)." },
-  marketplace: { title: "Marketplace", note: "Peer-to-peer trading goes here (Deliverable 4)." },
+export const collection = {
+  title: "My Collection",
+  itemCount: (n: number, categories: number) => `${n} item${n === 1 ? "" : "s"} · ${categories} categor${categories === 1 ? "y" : "ies"}`,
+  totalValue: "TOTAL VALUE",
+  cardsLabel: (pct: number) => `Cards ${pct}%`,
+  watchesLabel: (pct: number) => `Watches ${pct}%`,
+  binder: { eyebrow: "TRADING CARDS", title: "Collection Binder", cta: "OPEN BINDER" },
+  vault: { eyebrow: "WATCHES", title: "The Vault", cta: "ENTER VAULT" },
+  cardsSummary: (n: number, sets: number, valueCents: number) =>
+    `${n} card${n === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
+  watchesSummary: (n: number, brands: number, valueCents: number) =>
+    `${n} watch${n === 1 ? "" : "es"} · ${brands} brand${brands === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
+  empty: "Rip your first pack to start a collection.",
+} as const;
+
+export const binder = {
+  all: (n: number) => `ALL ${n}`,
+  header: "Collection Binder",
+  empty: "No cards in this collection yet.",
+  filterBack: "Filter binder",
+} as const;
+
+export const vault = {
+  header: "The Vault",
+  piecesHeld: (n: number) => `${n === 1 ? "One piece" : `${numberWord(n)} pieces`} held`,
+  appraised: (valueCents: number) => `$${(valueCents / 100).toLocaleString()} appraised`,
+  brands: (n: number) => `${n} brand${n === 1 ? "" : "s"}`,
+  empty: "No watches in the vault yet.",
+} as const;
+
+function numberWord(n: number): string {
+  const words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+  return words[n] ?? String(n);
+}
+
+export const itemDetail = {
+  owned: "OWNED",
+  rarity: "RARITY",
+  collectionLabel: "COLLECTION",
+  ownedCopies: (n: number) => `${n} cop${n === 1 ? "y" : "ies"}`,
+  traits: "TRAITS",
+  estimatedValue: "ESTIMATED VALUE",
+  valueRange: (minCents: number, maxCents: number) =>
+    `Ranges $${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
+  acquired: (date: string) => `Acquired ${date}`,
+  keep: "KEEP",
+  sell: "SELL",
+  viewCollection: (name: string) => `VIEW COLLECTION · ${name.toUpperCase()}`,
+  specifications: "SPECIFICATIONS",
+  marketValue: "MARKET VALUE",
+} as const;
+
+export const sellItem = {
+  header: "Set listing price",
+  yourAsk: "YOUR ASK",
+  buyerPays: "Buyer pays",
+  platformFee: (pct: number) => `Platform fee · ${pct}%`,
+  youReceive: "You receive",
+  netNote: "Credited the moment a buyer completes checkout. Fee is only charged on a sale — listing is free.",
+  confirm: "CONFIRM LISTING",
+  working: "LISTING…",
+  liveTitle: "Listed",
+  liveBody: (priceCents: number) => `Live on the market at $${(priceCents / 100).toLocaleString()}.`,
+  viewListing: "VIEW IN MARKETPLACE",
+  done: "Done",
+  error: "Couldn't list that item.",
+} as const;
+
+export const discover = {
+  title: "Discover",
+  headline: "Find the thing\nyou already want.",
+  body: "Search the catalogue, then choose how to get it — chase it in a pack, or buy the exact one from someone who has it.",
+  searchPlaceholder: "Search cards, watches, sets, brands",
+  cardsDoor: { eyebrow: "CARDS", title: "Card Discovery" },
+  watchesDoor: { eyebrow: "WATCHES", title: "Watch Discovery" },
+  doorSummary: (items: number, tiers: number, listed: number) =>
+    `${items} items · ${tiers} tier${tiers === 1 ? "" : "s"} · ${listed} listed now`,
+} as const;
+
+export const discoverCategory = {
+  resultsFor: (n: number, query: string) => (query ? `${n} results for "${query}"` : `${n} results`),
+  ownedBadge: (n: number) => `YOU HOLD ${n}`,
+  printings: (n: number) => `${n} printing${n === 1 ? "" : "s"}`,
+  priceRange: (minCents: number, maxCents: number) =>
+    minCents === maxCents
+      ? `$${(minCents / 100).toLocaleString()}`
+      : `$${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
+  empty: "Nothing matches yet.",
+} as const;
+
+export const versions = {
+  header: "All versions",
+  versionCount: (n: number) => `${n} printing${n === 1 ? "" : "s"}`,
+  ownedBadge: (n: number) => `OWNED ×${n}`,
+  listedBadge: (n: number) => `${n} listed`,
+  noneListed: "none listed",
+  tapHint: "Tap a version to see the item",
+} as const;
+
+export const itemFork = {
+  rarity: "RARITY",
+  collectionLabel: "COLLECTION",
+  youOwn: "YOU OWN",
+  none: "None",
+  estimatedValue: "ESTIMATED VALUE",
+  availability: "AVAILABILITY",
+  listedNow: "LISTED NOW",
+  packPrice: "IN PACK",
+  howToGet: "How to get this?",
+  tryYourLuck: "TRY YOUR LUCK",
+  fromPack: (name: string) => `From ${name}`,
+  buyExact: "BUY EXACT ITEM",
+  listingsFrom: (n: number, cents: number) => `${n} listing${n === 1 ? "" : "s"} · from $${(cents / 100).toLocaleString()}`,
+  noListings: "Not listed right now",
+} as const;
+
+export const marketplace = {
+  title: "Market",
+  browse: "BROWSE",
+  myListings: "MY LISTINGS",
+  categoryAll: (n: number) => `Both · ${n} live`,
+  empty: "No listings yet — be the first to list something.",
+  myListingsEmpty: "You don't have anything listed right now.",
+  liveBadge: "LIVE",
+} as const;
+
+export const listingDetail = {
+  ask: "ASK",
+  from: (username: string | null) => (username ? `from @${username}` : "from a collector"),
+  buyNow: "BUY NOW",
+  buying: "BUYING…",
+} as const;
+
+export const buyListing = {
+  header: "Confirm purchase",
+  youPay: "YOU PAY",
+  balanceNow: "Balance now",
+  balanceAfter: "Balance after",
+  feeNote: "The platform fee comes out of the seller's proceeds, not your total. You pay the ask and nothing more.",
+  continue: "CONFIRM & PAY",
+  working: "PROCESSING…",
+  successTitle: "It's yours.",
+  successSub: "PURCHASE COMPLETE",
+  paid: "Paid",
+  newBalance: "New balance",
+  viewInCollection: "VIEW IN COLLECTION",
+  keepBrowsing: "Keep browsing the market",
+  cancel: "CLOSE",
 } as const;
 
 export const reveal = {

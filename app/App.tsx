@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
@@ -15,6 +15,7 @@ import {
   Outfit_900Black,
 } from "@expo-google-fonts/outfit";
 import { AppNavigator } from "./src/navigation/AppNavigator";
+import { TitleScreen } from "./src/screens/TitleScreen";
 import { OnboardingScreen } from "./src/screens/onboarding/OnboardingScreen";
 import { queryClient } from "./src/state/queryClient";
 import { useOnboardingStore } from "./src/state/onboardingStore";
@@ -48,6 +49,9 @@ export default function App() {
   });
   const needsOnboarding = useOnboardingStore((s) => s.needsOnboarding);
   const setNeedsOnboarding = useOnboardingStore((s) => s.setNeedsOnboarding);
+  // The title screen (mockup turn 10) is a game-style launch beat shown every cold start, not
+  // a one-time flag — it's session-only state, unlike onboarding's persisted "seen it" flag.
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     // Always show onboarding in dev builds — otherwise the persisted "seen it"
@@ -71,7 +75,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          {needsOnboarding ? (
+          {!started ? (
+            <TitleScreen onStart={() => setStarted(true)} />
+          ) : needsOnboarding ? (
             <OnboardingScreen
               onDone={() => {
                 setOnboardingComplete();

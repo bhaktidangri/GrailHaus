@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import type { Category } from "@grailhaus/shared";
+import type { Category, RarityTierLevel } from "@grailhaus/shared";
 import { itemDetailSchema } from "../items/items.schema.js";
-import { browseListings, buyListing, createListing, delist, getListing } from "./marketplace.service.js";
+import { browseListings, buyListing, createListing, delist, getListing, previewFeeSplit } from "./marketplace.service.js";
 
 const partySchema = {
   type: "object",
@@ -66,6 +66,43 @@ export async function marketplaceRoutes(app: FastifyInstance) {
     async (req) => {
       const { id } = req.params as { id: string };
       return getListing(id);
+    }
+  );
+
+  app.get(
+    "/marketplace/fee-preview",
+    {
+      schema: {
+        tags: ["marketplace"],
+        summary: "Live fee/net preview at today's configured rate, before a listing is created",
+        querystring: {
+          type: "object",
+          required: ["category", "rarityTierLevel", "priceCents"],
+          properties: {
+            category: { type: "string", enum: ["cards", "watches"] },
+            rarityTierLevel: { type: "number", enum: [1, 2, 3] },
+            priceCents: { type: "number", minimum: 1 },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              feePercent: { type: "number" },
+              feeCents: { type: "number" },
+              sellerProceedsCents: { type: "number" },
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const { category, rarityTierLevel, priceCents } = req.query as {
+        category: Category;
+        rarityTierLevel: RarityTierLevel;
+        priceCents: number;
+      };
+      return previewFeeSplit(category, rarityTierLevel, priceCents);
     }
   );
 

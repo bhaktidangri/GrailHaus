@@ -2,15 +2,17 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { withTiming } from "react-native-reanimated";
 import { HomeStack } from "./HomeStack";
 import { DropsScreen } from "../screens/DropsScreen";
-import { PlaceholderScreen } from "../screens/PlaceholderScreen";
 import { RevealScreen } from "../screens/RevealScreen";
+import { CollectionStack } from "./CollectionStack";
+import { MarketplaceStack } from "./MarketplaceStack";
+import { DiscoverStack } from "./DiscoverStack";
 import { PillTabBar } from "./PillTabBar";
 import { TabBarVisibilityProvider, useTabBarHidden } from "./tabBarVisibility";
 import { colors, typography } from "../theme/tokens";
-import { placeholders } from "../content/copy";
 
 export type RootTabParamList = {
   Home: undefined;
+  Discover: undefined;
   Drops: undefined;
   Reveal: undefined;
   Portfolio: undefined;
@@ -48,18 +50,15 @@ function RootTabsInner() {
       }}
     >
       <Tab.Screen name="Home" component={HomeStack} options={{ headerShown: false }} />
+      <Tab.Screen name="Discover" component={DiscoverStack} options={{ headerShown: false }} />
       <Tab.Screen name="Drops" component={DropsScreen} options={{ headerShown: false }} />
       <Tab.Screen
         name="Reveal"
         component={RevealScreen}
         options={{ title: "Reveal" }}
       />
-      <Tab.Screen name="Portfolio">
-        {() => <PlaceholderScreen title={placeholders.portfolio.title} note={placeholders.portfolio.note} />}
-      </Tab.Screen>
-      <Tab.Screen name="Marketplace">
-        {() => <PlaceholderScreen title={placeholders.marketplace.title} note={placeholders.marketplace.note} />}
-      </Tab.Screen>
+      <Tab.Screen name="Portfolio" component={CollectionStack} options={{ headerShown: false }} />
+      <Tab.Screen name="Marketplace" component={MarketplaceStack} options={{ headerShown: false }} />
     </Tab.Navigator>
   );
 }
