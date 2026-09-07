@@ -14,6 +14,15 @@ function describeSlot(position: number, totalSlots: number) {
   return "Escalating pull — odds shift further toward the higher tiers than earlier slots.";
 }
 
+/** `datetime-local` inputs need `YYYY-MM-DDTHH:mm` in the *viewer's* local time, not the raw
+ * UTC ISO string Postgres returns — otherwise the field silently shows the wrong hour. */
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 async function getPack(id: string) {
   const packRes = await pool.query<{
     id: string;
@@ -22,7 +31,18 @@ async function getPack(id: string) {
     name: string;
     price_cents: string;
     item_count: number;
-  }>("select id, category, tier, name, price_cents, item_count from public.packs where id = $1", [id]);
+    stock_remaining: number | null;
+    max_stock: number | null;
+    restock_amount: number | null;
+    restock_interval_seconds: number | null;
+    goes_live_at: string | null;
+    ends_at: string | null;
+  }>(
+    `select id, category, tier, name, price_cents, item_count,
+            stock_remaining, max_stock, restock_amount, restock_interval_seconds, goes_live_at, ends_at
+     from public.packs where id = $1`,
+    [id]
+  );
   const pack = packRes.rows[0];
   if (!pack) return null;
 
@@ -94,6 +114,43 @@ export default async function PackDetailPage({ params }: { params: Promise<{ id:
           >
             <Input name="itemCount" type="number" defaultValue={pack.item_count} />
           </Field>
+        </Card>
+
+        <Card>
+          <CardTitle info="Null goesLiveAt means evergreen — always purchasable. Set a future date to schedule a timed drop (PRD §19-20); it won't be buyable before that instant. A restock amount/interval makes stock replenish over time (also §19) — leave both blank to make this pack sell out permanently once stock hits 0, which is what a drop should do.">
+            Availability &amp; stock
+          </CardTitle>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <Field label="Stock remaining" info="How many are left to buy right now.">
+              <Input name="stockRemaining" type="number" min={0} defaultValue={pack.stock_remaining ?? ""} />
+            </Field>
+            <Field
+              label="Max stock"
+              info="The ceiling an evergreen pack restocks up to, or a drop's one-time starting inventory."
+            >
+              <Input name="maxStock" type="number" min={0} defaultValue={pack.max_stock ?? ""} />
+            </Field>
+            <Field
+              label="Restock amount"
+              info="How much stock is added back per interval. Leave blank for a drop — it should never restock."
+            >
+              <Input name="restockAmount" type="number" min={1} defaultValue={pack.restock_amount ?? ""} />
+            </Field>
+            <Field label="Restock interval (seconds)" info="How often the restock amount is added back.">
+              <Input
+                name="restockIntervalSeconds"
+                type="number"
+                min={1}
+                defaultValue={pack.restock_interval_seconds ?? ""}
+              />
+            </Field>
+            <Field label="Goes live at" info="Blank = evergreen, purchasable immediately. A future date/time makes this a scheduled drop.">
+              <Input name="goesLiveAt" type="datetime-local" defaultValue={toDatetimeLocal(pack.goes_live_at)} />
+            </Field>
+            <Field label="Ends at" info="Optional hard cutoff for a drop — leave blank to let it end purely by selling out.">
+              <Input name="endsAt" type="datetime-local" defaultValue={toDatetimeLocal(pack.ends_at)} />
+            </Field>
+          </div>
         </Card>
 
         <Card>

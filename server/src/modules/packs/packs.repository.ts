@@ -1,18 +1,30 @@
+import type { PoolClient } from "pg";
 import { pool } from "../../db/pool.js";
 import type { ItemRow, PackRow, PressureRuleRow, RarityTierRow, SlotProbabilityRow } from "./packs.types.js";
+
+const PACK_COLUMNS =
+  "id, category, tier, name, price_cents, item_count, stock_remaining, max_stock, goes_live_at, ends_at";
 
 export async function findPacks(category?: string): Promise<PackRow[]> {
   if (category) {
     const { rows } = await pool.query<PackRow>(
-      "select id, category, tier, name, price_cents, item_count from public.packs where category = $1 order by price_cents asc",
+      `select ${PACK_COLUMNS} from public.packs where category = $1 order by price_cents asc`,
       [category]
     );
     return rows;
   }
   const { rows } = await pool.query<PackRow>(
-    "select id, category, tier, name, price_cents, item_count from public.packs order by category, price_cents asc"
+    `select ${PACK_COLUMNS} from public.packs order by category, price_cents asc`
   );
   return rows;
+}
+
+export async function findPackById(packId: string): Promise<PackRow | null> {
+  const { rows } = await pool.query<PackRow>(
+    `select ${PACK_COLUMNS} from public.packs where id = $1`,
+    [packId]
+  );
+  return rows[0] ?? null;
 }
 
 export async function findItemsForPacks(packIds: string[]): Promise<ItemRow[]> {
@@ -55,4 +67,64 @@ export async function findRarityTiers(category?: string): Promise<RarityTierRow[
     "select category, tier_level, name, color_hex, value_min_cents, value_max_cents from public.rarity_tiers order by category, tier_level"
   );
   return rows;
+}
+
+/** Admin-only writes — everything below is used by packs.admin.routes.ts, gated on
+ * app.requireAdmin, never by the public-facing packs.routes.ts. */
+
+export interface PackCoreUpdate {
+  priceCents?: number;
+  itemCount?: number;
+  stockRemaining?: number | null;
+  maxStock?: number | null;
+  /** null = never restocks (a drop's defining trait) — distinct from "leave unchanged," which
+   * is what omitting the key entirely means. */
+  restockAmount?: number | null;
+  restockIntervalSeconds?: number | null;
+  /** null = evergreen (available immediately) — a timed date makes it a drop. */
+  goesLiveAt?: string | null;
+  endsAt?: string | null;
+}
+
+const CORE_UPDATE_COLUMNS: Record<keyof PackCoreUpdate, string> = {
+  priceCents: "price_cents",
+  itemCount: "item_count",
+  stockRemaining: "stock_remaining",
+  maxStock: "max_stock",
+  restockAmount: "restock_amount",
+  restockIntervalSeconds: "restock_interval_seconds",
+  goesLiveAt: "goes_live_at",
+  endsAt: "ends_at",
+};
+
+export async function updatePackCoreFields(client: PoolClient, packId: string, updates: PackCoreUpdate): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  for (const key of Object.keys(CORE_UPDATE_COLUMNS) as (keyof PackCoreUpdate)[]) {
+    // `key in updates` (not `updates[key] != null`) is what lets a caller explicitly clear a
+    // nullable field — e.g. un-scheduling a drop back to evergreen by sending `goesLiveAt: null`
+    // — while a key that's simply absent from the payload stays untouched.
+    if (!(key in updates)) continue;
+    params.push(updates[key] ?? null);
+    sets.push(`${CORE_UPDATE_COLUMNS[key]} = $${params.length}`);
+  }
+  if (sets.length === 0) return;
+  params.push(packId);
+  await client.query(`update public.packs set ${sets.join(", ")} where id = $${params.length}`, params);
+}
+
+export async function upsertSlotProbability(
+  client: PoolClient,
+  packId: string,
+  slotPosition: number,
+  rarityTierLevel: number,
+  probabilityPercent: number
+): Promise<void> {
+  await client.query(
+    `insert into public.slot_probabilities (pack_id, slot_position, rarity_tier_level, probability_percent)
+     values ($1, $2, $3, $4)
+     on conflict (pack_id, slot_position, rarity_tier_level)
+     do update set probability_percent = excluded.probability_percent`,
+    [packId, slotPosition, rarityTierLevel, probabilityPercent]
+  );
 }

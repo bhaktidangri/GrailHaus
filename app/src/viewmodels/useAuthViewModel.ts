@@ -1,84 +1,187 @@
 import { useEffect, useRef, useState } from "react";
-import { authService, type AuthIdentifier } from "../services/authService";
+import { useQueryClient } from "@tanstack/react-query";
+import { authService } from "../services/authService";
+import { profileService } from "../services/profileService";
+import { useAuthStore } from "../state/authStore";
+import { auth as authCopy } from "../content/copy";
 
-const RESEND_COOLDOWN_SECONDS = 30;
+export type AuthStep =
+  | "welcome"
+  | "register"
+  | "confirm-email"
+  | "signin"
+  | "forgot"
+  | "forgot-sent"
+  | "claim-username"
+  | "welcome-back";
 
-type Step = "identifier" | "otp";
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
-export function useAuthViewModel() {
-  const [step, setStep] = useState<Step>("identifier");
-  const [identifier, setIdentifier] = useState<AuthIdentifier | null>(null);
+const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const USERNAME_CHECK_DEBOUNCE_MS = 400;
+
+function messageFor(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
+
+/**
+ * Drives the whole account sheet — welcome, register/sign-in, forgot
+ * password, and (for a brand-new account) the mandatory Collector ID claim
+ * that follows it. `initialStep` lets AuthProvider drop a signed-in-but-
+ * unclaimed user straight into "claim-username" (e.g. the app was killed
+ * between registering and claiming) instead of replaying the welcome
+ * screen. Nothing here closes the sheet on its own — `finish()` is the only
+ * exit, called once the account is genuinely usable.
+ */
+export function useAuthViewModel(initialStep: AuthStep = "welcome") {
+  const [step, setStep] = useState<AuthStep>(initialStep);
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cooldown, setCooldown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [claimedUsername, setClaimedUsername] = useState<string | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
+  const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const usernameCheckToken = useRef(0);
+  const queryClient = useQueryClient();
 
-  useEffect(() => () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current);
+    },
+    []
+  );
 
-  function startCooldown() {
-    setCooldown(RESEND_COOLDOWN_SECONDS);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCooldown((s) => {
-        if (s <= 1 && timerRef.current) clearInterval(timerRef.current);
-        return Math.max(0, s - 1);
-      });
-    }, 1000);
+  function goTo(next: AuthStep) {
+    setError(null);
+    setStep(next);
   }
 
-  async function sendOtp(method: AuthIdentifier["method"], value: string) {
-    setSubmitting(true);
+  async function afterAuthenticated() {
+    const profile = await profileService.getCurrent();
+    queryClient.setQueryData(["profile", "me"], profile);
+    if (profile.username) {
+      setClaimedUsername(profile.username);
+      setStep("welcome-back");
+    } else {
+      setStep("claim-username");
+    }
+  }
+
+  async function register(email: string, password: string, confirmPassword: string) {
     setError(null);
+    if (password.length < 8) {
+      setError(authCopy.passwordTooShort);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(authCopy.passwordMismatch);
+      return;
+    }
+    setSubmitting(true);
     try {
-      const next: AuthIdentifier = { method, value };
-      await authService.sendOtp(next);
-      setIdentifier(next);
-      setStep("otp");
-      startCooldown();
+      const trimmed = email.trim();
+      const { hasSession } = await authService.signUp(trimmed, password);
+      if (hasSession) {
+        await afterAuthenticated();
+      } else {
+        setPendingEmail(trimmed);
+        setStep("confirm-email");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't send code — try again.");
+      setError(messageFor(err, "Couldn't create your account — try again."));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function resend() {
-    if (!identifier || cooldown > 0) return;
-    setSubmitting(true);
+  async function signIn(email: string, password: string) {
     setError(null);
+    setSubmitting(true);
     try {
-      await authService.sendOtp(identifier);
-      startCooldown();
+      await authService.signIn(email.trim(), password);
+      await afterAuthenticated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't resend code — try again.");
+      setError(messageFor(err, "That email and password don't match."));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function verifyOtp(code: string) {
-    if (!identifier) return;
-    setSubmitting(true);
+  async function sendReset(email: string) {
     setError(null);
+    setSubmitting(true);
     try {
-      await authService.verifyOtp(identifier, code);
-      // Session update flows through supabase.auth.onAuthStateChange, handled at the app root.
+      const trimmed = email.trim();
+      await authService.sendPasswordReset(trimmed);
+      setPendingEmail(trimmed);
+      setStep("forgot-sent");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "That code didn't work — try again.");
+      setError(messageFor(err, "Couldn't send that reset email — try again."));
     } finally {
       setSubmitting(false);
     }
   }
 
-  function reset() {
-    setStep("identifier");
-    setIdentifier(null);
-    setError(null);
-    setCooldown(0);
-    if (timerRef.current) clearInterval(timerRef.current);
+  function checkUsername(raw: string) {
+    const token = ++usernameCheckToken.current;
+    if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current);
+
+    const normalized = raw.trim().toLowerCase();
+    if (normalized.length === 0) {
+      setUsernameStatus("idle");
+      return;
+    }
+    if (!USERNAME_PATTERN.test(normalized)) {
+      setUsernameStatus("invalid");
+      return;
+    }
+    setUsernameStatus("checking");
+    usernameCheckTimer.current = setTimeout(async () => {
+      try {
+        const result = await authService.checkUsernameAvailability(normalized);
+        if (usernameCheckToken.current !== token) return;
+        setUsernameStatus(result.available ? "available" : "taken");
+      } catch {
+        if (usernameCheckToken.current !== token) return;
+        setUsernameStatus("idle");
+      }
+    }, USERNAME_CHECK_DEBOUNCE_MS);
   }
 
-  return { step, identifier, isSubmitting, error, cooldown, sendOtp, resend, verifyOtp, reset };
+  async function claimUsername(raw: string) {
+    if (usernameStatus !== "available") return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const { username } = await authService.claimUsername(raw.trim().toLowerCase());
+      const profile = await profileService.getCurrent();
+      queryClient.setQueryData(["profile", "me"], profile);
+      setClaimedUsername(username);
+      setStep("welcome-back");
+    } catch (err) {
+      setError(messageFor(err, "Couldn't claim that Collector ID — try again."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function finish() {
+    useAuthStore.getState().resolvePendingAction();
+  }
+
+  return {
+    step,
+    isSubmitting,
+    error,
+    pendingEmail,
+    claimedUsername,
+    usernameStatus,
+    goTo,
+    register,
+    signIn,
+    sendReset,
+    checkUsername,
+    claimUsername,
+    finish,
+  };
 }

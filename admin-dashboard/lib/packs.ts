@@ -15,7 +15,13 @@ export async function listPacksWithEv(): Promise<PackWithEv[]> {
       name: string;
       price_cents: string;
       item_count: number;
-    }>("select id, category, tier, name, price_cents, item_count from public.packs order by category, price_cents"),
+      stock_remaining: number | null;
+      max_stock: number | null;
+      goes_live_at: string | null;
+      ends_at: string | null;
+    }>(
+      "select id, category, tier, name, price_cents, item_count, stock_remaining, max_stock, goes_live_at, ends_at from public.packs order by category, price_cents"
+    ),
     pool.query<{
       category: string;
       tier_level: number;
@@ -68,6 +74,10 @@ export async function listPacksWithEv(): Promise<PackWithEv[]> {
       pressureRules: [],
       rarityTiers: rarityByCategory.get(pack.category) ?? [],
       itemsByTier: { 1: [], 2: [], 3: [] },
+      goesLiveAt: pack.goes_live_at,
+      endsAt: pack.ends_at,
+      stockRemaining: pack.stock_remaining,
+      maxStock: pack.max_stock,
     };
 
     return { ...packSku, evCents: evByPack.get(pack.id) ?? 0 };

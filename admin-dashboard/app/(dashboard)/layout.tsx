@@ -4,8 +4,12 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 const NAV = [
   { href: "/", label: "Overview" },
+  { href: "/economics", label: "Economics" },
+  { href: "/packs", label: "Packs" },
+  { href: "/catalog", label: "Catalog" },
   { href: "/rarity-tiers", label: "Rarity Tiers" },
   { href: "/pressure-rules", label: "Pressure Rules" },
+  { href: "/ownership-weights", label: "Duplicate Weights" },
   { href: "/platform-config", label: "Platform Config" },
   { href: "/marketplace-fees", label: "Marketplace Fees" },
 ];

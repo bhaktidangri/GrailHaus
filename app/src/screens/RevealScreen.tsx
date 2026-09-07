@@ -3,6 +3,7 @@ import { useRevealViewModel } from "../viewmodels/useRevealViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
+import { reveal as revealCopy } from "../content/copy";
 
 export function RevealScreen() {
   const reveal = useRevealViewModel();
@@ -11,8 +12,8 @@ export function RevealScreen() {
     return (
       <ScreenBackground>
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No pack open</Text>
-          <Text style={styles.emptyNote}>Rip a pack from the Shelf to see it here.</Text>
+          <Text style={styles.emptyTitle}>{revealCopy.emptyTitle}</Text>
+          <Text style={styles.emptyNote}>{revealCopy.emptyNote}</Text>
         </View>
       </ScreenBackground>
     );

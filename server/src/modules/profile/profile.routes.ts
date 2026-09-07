@@ -16,6 +16,7 @@ export async function profileRoutes(app: FastifyInstance) {
             properties: {
               id: { type: "string", description: "Opaque public id, e.g. usr_..." },
               displayName: { type: ["string", "null"] },
+              username: { type: ["string", "null"], description: "The public Collector ID, null until claimed" },
               balanceCents: { type: "number" },
               createdAt: { type: "string" },
             },

@@ -5,6 +5,10 @@ export interface PackRow {
   name: string;
   price_cents: string;
   item_count: number;
+  stock_remaining: number | null;
+  max_stock: number | null;
+  goes_live_at: string | null;
+  ends_at: string | null;
 }
 
 export interface ItemRow {

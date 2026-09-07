@@ -1,13 +1,13 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { colors, radii, spacing, typography } from "../theme/tokens";
+import { accents, colors, radii, shadow, spacing, typography } from "../theme/tokens";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const VARIANTS = {
-  gold: { top: colors.gold, bottom: colors.goldDeep, ledge: "#b17a0a", text: colors.textPrimary },
-  blue: { top: colors.blue, bottom: colors.blueDeep, ledge: "#163b96", text: "#ffffff" },
+  violet: accents.cards,
+  gold: accents.watches,
 };
 
 export function GlossyButton({
@@ -15,7 +15,7 @@ export function GlossyButton({
   onPress,
   disabled,
   loading,
-  variant = "gold",
+  variant = "violet",
 }: {
   label: string;
   onPress: () => void;
@@ -30,17 +30,17 @@ export function GlossyButton({
 
   return (
     <AnimatedPressable
-      style={[styles.wrap, { borderColor: palette.ledge }, animatedStyle, isDisabled && styles.disabled]}
+      style={[shadow.glow(palette.glow), animatedStyle, isDisabled && styles.disabled]}
       onPressIn={() => !isDisabled && (scale.value = withSpring(0.96, { damping: 15 }))}
       onPressOut={() => (scale.value = withSpring(1, { damping: 15 }))}
       onPress={onPress}
       disabled={isDisabled}
     >
-      <LinearGradient colors={[palette.top, palette.bottom]} style={styles.gradient}>
+      <LinearGradient colors={[palette.top, palette.bottom]} style={styles.wrap}>
         {loading ? (
-          <ActivityIndicator color={palette.text} />
+          <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={[styles.label, { color: palette.text }]}>{label}</Text>
+          <Text style={styles.label}>{label}</Text>
         )}
       </LinearGradient>
     </AnimatedPressable>
@@ -50,14 +50,21 @@ export function GlossyButton({
 const styles = StyleSheet.create({
   wrap: {
     borderRadius: radii.md,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.28)",
     borderBottomWidth: 4,
-    overflow: "hidden",
-  },
-  gradient: {
+    borderBottomColor: "rgba(0,0,0,0.38)",
     paddingVertical: spacing.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  label: { ...typography.title, fontSize: 16 },
+  label: {
+    ...typography.buttonLabel,
+    color: "#fff",
+    textTransform: "uppercase",
+    textShadowColor: "rgba(0,0,0,0.32)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
   disabled: { opacity: 0.5 },
 });

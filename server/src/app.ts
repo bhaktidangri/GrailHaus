@@ -7,6 +7,12 @@ import { swaggerPlugin } from "./plugins/swagger.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
 import { profileRoutes } from "./modules/profile/profile.routes.js";
 import { packsRoutes } from "./modules/packs/packs.routes.js";
+import { usernameRoutes } from "./modules/username/username.routes.js";
+import { purchaseRoutes } from "./modules/purchase/purchase.routes.js";
+import { itemsRoutes } from "./modules/items/items.routes.js";
+import { portfolioRoutes } from "./modules/portfolio/portfolio.routes.js";
+import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes.js";
+import { packsAdminRoutes } from "./modules/packs/packs.admin.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -26,9 +32,19 @@ export async function buildApp() {
   // Public — browsable without a session.
   await app.register(healthRoutes);
   await app.register(packsRoutes);
+  await app.register(itemsRoutes);
 
   // Requires a valid Supabase session.
   await app.register(profileRoutes);
+  await app.register(usernameRoutes);
+  await app.register(purchaseRoutes);
+  await app.register(portfolioRoutes);
+
+  // Mixed — browsing listings is public (like /packs), listing/delisting/buying require a session.
+  await app.register(marketplaceRoutes);
+
+  // Admin only — requires profiles.is_admin, not just a valid session.
+  await app.register(packsAdminRoutes);
 
   return app;
 }

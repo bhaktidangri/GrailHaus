@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import type { PackSku, PulledItem } from "@grailhaus/shared";
+import type { ItemDetail, PackSku } from "@grailhaus/shared";
 
 interface RevealState {
   sku: PackSku | null;
-  items: PulledItem[] | null;
-  start: (sku: PackSku, items: PulledItem[]) => void;
+  /** Full catalog detail, not just the reward engine's minimal PulledItem shape — POST
+   * /purchase enriches its response before this store ever sees it. */
+  items: ItemDetail[] | null;
+  start: (sku: PackSku, items: ItemDetail[]) => void;
   clear: () => void;
 }
 

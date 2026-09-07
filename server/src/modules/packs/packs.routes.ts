@@ -24,7 +24,7 @@ const rarityTierSchema = {
   },
 };
 
-const packSkuSchema = {
+export const packSkuSchema = {
   type: "object",
   properties: {
     id: { type: "string" },
@@ -33,6 +33,13 @@ const packSkuSchema = {
     name: { type: "string", description: "Display name, e.g. Street Rip" },
     priceCents: { type: "number" },
     itemCount: { type: "number", description: "Slots per pull — 5-7 for cards, 1 for watches" },
+    goesLiveAt: {
+      type: ["string", "null"],
+      description: "Null = evergreen. Set = a timed drop, not purchasable before this instant.",
+    },
+    endsAt: { type: ["string", "null"], description: "Optional hard cutoff for a drop." },
+    stockRemaining: { type: ["number", "null"] },
+    maxStock: { type: ["number", "null"], description: "Evergreen restock ceiling, or a drop's starting inventory." },
     slotProbabilities: {
       type: "array",
       items: {

@@ -1,24 +1,30 @@
 import type { Category, PackItem, PackSku, PressureRule, RarityTier, RarityTierLevel, SlotProbability } from "@grailhaus/shared";
+import type { PackRow } from "./packs.types.js";
 import {
   findItemsForPacks,
+  findPackById,
   findPacks,
   findPressureRulesForPacks,
   findRarityTiers,
   findSlotProbabilitiesForPacks,
 } from "./packs.repository.js";
 
-export async function listPacks(category?: Category): Promise<PackSku[]> {
-  const [packRows, rarityTierRows] = await Promise.all([findPacks(category), findRarityTiers(category)]);
+/** Shared by `listPacks` (the Shelf) and `getPackSkuById` (the purchase path) — one
+ * assembly of a pack's full catalog shape, so there's exactly one place that turns
+ * DB rows into the `PackSku` the reward engine consumes. */
+async function buildPackSkus(packRows: PackRow[]): Promise<PackSku[]> {
   const packIds = packRows.map((p) => p.id);
+  const categories = [...new Set(packRows.map((p) => p.category))];
 
-  const [itemRows, slotRows, pressureRows] = await Promise.all([
+  const [rarityTierRowLists, itemRows, slotRows, pressureRows] = await Promise.all([
+    Promise.all(categories.map((c) => findRarityTiers(c))),
     findItemsForPacks(packIds),
     findSlotProbabilitiesForPacks(packIds),
     findPressureRulesForPacks(packIds),
   ]);
 
   const rarityTiersByCategory = new Map<string, RarityTier[]>();
-  for (const row of rarityTierRows) {
+  for (const row of rarityTierRowLists.flat()) {
     const list = rarityTiersByCategory.get(row.category) ?? [];
     list.push({
       level: row.tier_level as RarityTierLevel,
@@ -76,6 +82,22 @@ export async function listPacks(category?: Category): Promise<PackSku[]> {
       pressureRules,
       rarityTiers: rarityTiersByCategory.get(pack.category) ?? [],
       itemsByTier,
+      goesLiveAt: pack.goes_live_at,
+      endsAt: pack.ends_at,
+      stockRemaining: pack.stock_remaining,
+      maxStock: pack.max_stock,
     };
   });
+}
+
+export async function listPacks(category?: Category): Promise<PackSku[]> {
+  const packRows = await findPacks(category);
+  return buildPackSkus(packRows);
+}
+
+export async function getPackSkuById(packId: string): Promise<PackSku | null> {
+  const packRow = await findPackById(packId);
+  if (!packRow) return null;
+  const [sku] = await buildPackSkus([packRow]);
+  return sku ?? null;
 }

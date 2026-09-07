@@ -3,18 +3,38 @@
 import { revalidatePath } from "next/cache";
 import { pool } from "./db";
 
+function numberOrNull(formData: FormData, key: string): number | null {
+  const raw = formData.get(key);
+  if (!raw || raw === "") return null;
+  return Number(raw);
+}
+
+function isoOrNull(formData: FormData, key: string): string | null {
+  const raw = formData.get(key);
+  if (!raw || raw === "") return null;
+  return new Date(raw as string).toISOString();
+}
+
 export async function updatePack(packId: string, formData: FormData) {
   const priceCents = Math.round(Number(formData.get("priceDollars")) * 100);
   const itemCount = Number(formData.get("itemCount"));
+  const stockRemaining = numberOrNull(formData, "stockRemaining");
+  const maxStock = numberOrNull(formData, "maxStock");
+  const restockAmount = numberOrNull(formData, "restockAmount");
+  const restockIntervalSeconds = numberOrNull(formData, "restockIntervalSeconds");
+  const goesLiveAt = isoOrNull(formData, "goesLiveAt");
+  const endsAt = isoOrNull(formData, "endsAt");
 
   const client = await pool.connect();
   try {
     await client.query("begin");
-    await client.query("update public.packs set price_cents = $1, item_count = $2 where id = $3", [
-      priceCents,
-      itemCount,
-      packId,
-    ]);
+    await client.query(
+      `update public.packs
+       set price_cents = $1, item_count = $2, stock_remaining = $3, max_stock = $4,
+           restock_amount = $5, restock_interval_seconds = $6, goes_live_at = $7, ends_at = $8
+       where id = $9`,
+      [priceCents, itemCount, stockRemaining, maxStock, restockAmount, restockIntervalSeconds, goesLiveAt, endsAt, packId]
+    );
 
     for (const [key, value] of formData.entries()) {
       const match = /^slot_(\d+)_tier_(\d)$/.exec(key);
@@ -122,4 +142,27 @@ export async function updatePressureRule(ruleId: string, formData: FormData) {
     [Number(formData.get("steps")), formData.get("effectValue") ? Number(formData.get("effectValue")) : null, ruleId]
   );
   revalidatePath("/pressure-rules");
+}
+
+export async function updateOwnershipWeights(formData: FormData) {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    for (const [key, value] of formData.entries()) {
+      const match = /^(cards|watches)_(\d)$/.exec(key);
+      if (!match) continue;
+      const [, category, copiesOwned] = match;
+      await client.query(
+        "update public.ownership_weight_tiers set weight_percent = $1 where category = $2 and copies_owned = $3",
+        [Number(value), category, Number(copiesOwned)]
+      );
+    }
+    await client.query("commit");
+  } catch (err) {
+    await client.query("rollback");
+    throw err;
+  } finally {
+    client.release();
+  }
+  revalidatePath("/ownership-weights");
 }

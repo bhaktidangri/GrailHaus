@@ -1,294 +1,2615 @@
-# GrailHaus
-GrailHaus Mobile — Work Trial
-Build a native mobile app for a luxury mystery-pack platform. Users buy packs — some always on the shelf, some in limited timed drops — rip them open one at a time or ten at once through a real-time 3D reveal, build a portfolio, and trade what they pull on a peer-to-peer marketplace.
+# GrailHaus — Product Requirements Document
 
-This trial tests two things at once, and both are graded hard.
+**Version:** 1.0  
+**Status:** Product Definition Finalized — Ready for Development
 
-The reveal experience is the product. We are hiring product engineers who can make software feel expensive on a phone — real-time 3D, haptics, gesture physics, frame pacing, restraint. A reveal that looks fine in a screen recording but feels dead in the hand fails.
+---
 
-The money must be correct. Finite per-SKU stock, limited timed drops, concurrent purchases, atomic trades. Correctness is not a bonus track here — it is roughly a quarter of your grade, and it is pass/fail in spirit. A breathtaking rip on a drop that oversells fails the trial.
+# 1. Product Overview
 
-Inspiration — study these on a phone before writing any code:
+## 1.1 Product Name
 
-Pokémon TCG Pocket — the gold standard for mobile pack opening: swipe-to-tear, card-by-card choreography, the rare-pull slow-burn, haptics that land on the beat
-Rips by Triumph — live pack-rip energy, the tension of the reveal
-Robinhood / Courtyard.io / StockX — portfolio and marketplace surfaces that feel premium
-Total time: 40 hours of effort, spread across up to 9 days. Single part. All tools available.
+**GrailHaus**
 
-Before You Start — Read This Section
-This trial mandates React Native on the client and TypeScript on the server, because that is our house stack top to bottom and we need to see you write it. We know from your interview that your professional mobile work has been Flutter and your backend work has been Python.
+GrailHaus is a premium mobile mystery-collecting platform where users purchase collectible products, experience category-specific cinematic reveals, build a portfolio of owned assets, and trade those assets through a peer-to-peer marketplace.
 
-That is a deliberate choice on our part, and we are telling you so up front rather than letting you discover it as a penalty.
+The platform currently supports two categories:
 
-Three things follow from it:
+1. **Trading Cards**
+2. **Luxury Watches**
 
-Ramp time is expected and is not held against you. Getting a React Native dev build running with a native graphics module for the first time is real work. Budget for it, and report in your README roughly how many hours went to toolchain and setup versus product. We would rather read an honest number than guess at one.
-We would much rather see two things excellent than everything thin. The prioritisation guide below is not decoration. Build P0 to a standard you're proud of and tell us plainly what you didn't reach.
-Ask questions. Anything ambiguous in this document is either your call to make and document, or a question worth asking — and asking is never held against you. In particular: if you hit a wall on tooling rather than on the product, tell us instead of burning six hours on it. We are grading your judgment and your craft, not your ability to fight a build system alone. How and when you ask for help is useful information to us, not a mark against you.
-Product Concept
-GrailHaus is a consumer app where users buy mystery packs, reveal the contents through a category-specific cinematic experience, hold a portfolio whose value moves, and buy/sell items with other users.
+These categories must feel like two completely different products emotionally and visually while sharing a scalable underlying product and reveal architecture.
 
-The core loop: Deposit funds → Grab a pack off the shelf, or wait for a drop → Rip it open → Feel something → Hold it, flex it, or sell it.
+The core product loop is:
 
-Every category has its own personality. Ripping a card pack should feel nothing like unboxing a Rolex. That difference — designed, engineered, and felt through the device — is the heart of this trial.
+> **Start with funds → Browse → Buy → Reveal → Feel something → Collect → Track value → Trade → Repeat**
 
-Why the polish matters commercially: on mobile, the feel is the conversion funnel. A user deposits real money because the app feels premium and trustworthy, and comes back tomorrow because the rip felt good in their hand. Every screen should pull them deeper into the motion — shelf → buy → rip → portfolio → marketplace → rip again. If any step feels cheap or janky, the loop breaks and the money stops.
+The product is designed around two principles:
 
-Key Parameters
-Some are fixed. Most are yours to design, and you will defend every one on the review call.
+> **The reveal is the product.**
 
-Parameter	Value
-Categories	Trading Cards (Pokémon-style) and Watches (Rolex-tier luxury) — both across the catalog, shelf, portfolio and marketplace, each with its own reveal. They must feel like different products, not one reveal with two skins. Sneakers are explicitly out of scope for this trial — do not build them.
-Item data	Seeded catalog you generate and commit (see Catalog). Pokémon TCG API optional for card data/images.
-Currency	USD, paper only — no real money moves. Starting balance is yours to decide.
-Financial math	Decimal library on the server (decimal.js or equivalent) and integer-cents or decimal on the client. Floating-point money is an automatic fail.
-Pack tiers	At least 3 tiers per category, casual to high-stakes. Floors must be category-appropriate — a $10 card pack makes sense, a $10 watch box does not (a Rolex-tier box starts at $500+). You pick the ladder and justify it.
-Pack availability	Both models required. Evergreen SKUs sit on the shelf with finite restocked stock, buyable any time. At least one limited timed drop with a countdown and a fixed unit count. You decide the SKU ladder, stock levels, drop cadence, and quantities.
-Bulk ripping	Required. Users can buy and rip multiple packs in one go — offer at least a 10-pack. The pacing model for a bulk rip is yours to design and defend.
-Rarity odds	We are not testing EV optimization. Pick sensible odds per tier, publish them in-app, document them. They must not be a loophole.
-Marketplace fee	You decide. The platform takes a cut on every fixed-price trade.
-Price movement	Light simulated drift, bounded, so portfolios tick. No real market-data pipeline required.
-Objective
-Build a working mobile app where a user can:
+and
 
-Sign up and see their balance
-Browse the pack shelf by category and tier and buy an in-stock SKU on the spot
-See a countdown to the next timed drop, then compete for limited inventory when it goes live
-Rip the pack open through a category-specific real-time 3D reveal (the star of this trial)
-Buy and rip a batch of packs in one session without the experience becoming tedious
-View their collection as a premium portfolio with live-ticking values
-List an item at a fixed price, browse listings, and buy from other users
-See a simple platform view: fees earned, packs sold, margin per category
-Cut scope wherever necessary — except the reveal and except the correctness floor. One category beautifully revealed with an honest note about the other beats two mediocre ones — but both shipped and genuinely distinct is the bar strong candidates hit.
+> **The money must always be correct.**
 
-Deliverable 1 — The Reveal Experience (the star, ~45% of your effort)
-Each category gets its own reveal choreography. Same underlying engine, completely different feel.
+---
 
-Required category personalities
-Cards — the rip. Swipe-to-tear the foil (study TCG Pocket's gesture until you can feel it). Cards revealed one at a time, commons first. When a rare is coming, the card knows — glow, hold, slow-burn before the flip. This is the dopamine loop; pace it like one.
+# 2. Product Goals
 
-Watches — the luxury unboxing. Slow. Dark. Deliberate. Velvet, lacquered wood, a single light source. The box opens with weight. The watch emerges with a glint. Nothing bounces, nothing is fast. The luxury is in the restraint — easing, shadow, negative space. The user should feel slightly underdressed.
+## Primary Goals
 
-These two are the tonal poles of the product. If they share an easing curve, something has gone wrong.
+### Goal 1 — Create a premium mobile-native experience
 
-Hard requirements
-Gesture physics, not gesture detection. The user performs the rip, and the gesture must behave like a physical object:
+The application must feel designed specifically for a phone.
 
-1:1 finger tracking — the foil follows the thumb, it does not animate to a preset on touch-up
-Reversible mid-gesture — start the tear, change your mind, it springs back
-Velocity-aware completion — a flick finishes the tear; a slow drag past the same distance does not
-Interruptible — a new touch during the settle animation takes control immediately
-Reveals that auto-play on a timer, or that fire a canned animation on tap, miss the entire point. This is the least negotiable item in the document.
+Priority areas include:
 
-Haptics as a designed track. Haptics are choreography alongside the animation, not a single buzz on success. The P0 bar: a deliberate, sequenced track — something like a light tick per card sliding out, a sharper impact at the moment the foil gives, escalating intensity through the rare-pull hold. Sequenced platform-level haptics (expo-haptics or equivalent) are an acceptable way to hit that bar, provided the sequencing and timing are designed rather than incidental.
+- Real-time interaction
+- Gesture physics
+- Haptic feedback
+- Smooth frame pacing
+- Premium visual design
+- Category-specific personality
 
-Richer native choreography — CoreHaptics on iOS, VibrationEffect composition on Android, via a platform channel or native module — is P1 and a bonus, not a requirement. If you build it, say so loudly; it will earn credit. If you don't, spend the hours on the gesture and the pacing instead.
+---
 
-We will feel this on our own device. Haptics are not gradeable from video, at either bar.
+### Goal 2 — Make collecting emotionally rewarding
 
-Real-time 3D, GPU-accelerated. The pack, box or crate is an actual object in an actual scene — geometry, materials, lighting, camera. Not a sprite sheet, not a layered-parallax illusion, not a pre-rendered video. Requirements:
+Users should experience:
 
-The object responds to the camera and to light — foil catches a highlight as it turns, the watch box has depth and shadow
-The user's gesture drives the object directly: the thumb turns it, the tear deforms it, the lid lifts on the drag
-Gyroscope input where it earns its place — tilt the phone, the highlight moves
-A fallback path for devices where your renderer isn't supported. Detect it, degrade to a 2D reveal that still feels good, and say so in the README. Shipping something that white-screens on a third of Android is not shipping.
-Recommended stack: react-three-fiber on expo-gl. Given three.js experience, this is the shortest path from what you already know to something running on a device, and it is a fully legitimate production choice — we are recommending it, not tolerating it.
+- Anticipation before opening
+- Tension during reveals
+- Surprise from rarity
+- Satisfaction from valuable pulls
+- Motivation to continue collecting
 
-react-native-webgpu is also permitted and we will not penalise the choice, but go in informed: it maps to Metal on iOS and Vulkan on Android, support on mid-range Android is uneven, and the RN bindings are young. That is a real engineering risk to take and a real one to decline. @shopify/react-native-skia, Filament, or something else are all open too.
+The rarity system should provide excitement without making outcomes feel mechanically predictable.
 
-Whatever you pick, state in the architecture doc why it is the better choice here, including the fallback path. We grade the reasoning, not the brand. What we will not accept is a choice made by default with no argument behind it.
+---
 
-Tension choreography. Contents ordered for drama, commons → rare last. The rare-pull moment is a graded artifact: we will ask you to show us your best pull and we will judge how it lands.
-
-A summary moment. All items laid out, total value vs pack price, profit/loss — styled per category, satisfying to screenshot.
+### Goal 3 — Build a trustworthy economic system
 
-Multi-pack ripping (a design problem disguised as a feature)
-A user buys ten packs. Ten full cinematic reveals back to back is torture — and skipping straight to a spreadsheet of results throws away the entire reason they bought ten. Solving that tension is the sharpest product-judgment test in this trial, and there is no single right answer. We want to see yours, and hear why.
-
-Things you will have to decide:
-
-Pacing. Does the choreography compress for bulk? Does each pack get a shorter beat with the batch's best pull earning the full treatment? Is there a rhythm across ten, or ten identical rips?
-Agency. Tap to advance, hold to skip, skip-all, auto-play? A user who wants speed should get speed without losing the moment that mattered.
-The batch summary. Everything pulled across ten packs, total spend versus total value, and the best pull surfaced as the hero. This is the screenshot they post.
-Where tension lives. If a chase item is in pack seven of ten, the user should feel it coming. A batch that flattens every pull into the same beat has lost the plot.
-Engineering requirements that come with it:
-
-GPU discipline. Ten packs of 3D scenes in one session must not leak. Dispose geometries, materials and textures between packs; reuse what you can. A session that climbs in memory until it crashes or thermally throttles fails this section regardless of how good pack one looked.
-Sustained frame pacing. Pack ten holds the same frame rate as pack one. Watch for thermal throttling on a real device — this is exactly where it shows up.
-Per-pack resume. Kill the app at pack six of ten. On reopen, packs one to five stay revealed, six resumes or lands on its summary, seven to ten are still sealed. Nothing is re-rolled.
-Frame pacing. 60fps minimum, 120 where the device offers it. Test on a real mid-range Android, not a flagship and not a simulator. The first rip of a cold session must not stutter — no shader compilation hitch, no first-render jank.
-
-Interruption-safe, the mobile version. Contents are decided server-side at purchase and are immutable. The reveal must survive:
-
-Backgrounding mid-rip (incoming call, app switcher, notification)
-Process death — force-stop the app mid-reveal, reopen it
-Rotation and safe-area changes
-On return, the reveal either resumes at the right beat or lands on the summary. Contents are never lost, never re-rolled, never different.
-
-Required performance report
-This is a deliverable, not a remark in the README. Fill in this table with measured numbers, not estimates:
-
-Metric	Value
-Test device (model) and GPU	
-Renderer used, and fallback used (if any)	
-Time to first frame, cold session, first rip	
-Median / worst frame time — pack 1	
-Median / worst frame time — pack 10	
-Peak memory — pack 1	
-Peak memory — pack 10	
-Memory after batch completes and reveal is dismissed	
-Hours spent on toolchain/setup vs product	
-If your renderer is unsupported on your test device, report the fallback path's numbers instead and say so. How you measured is part of the answer — tell us the tool.
-
-Architecture requirement
-Build the reveal as a framework, not two hardcoded screens. Category personality — models, materials, lighting rigs, camera moves, timing curves, haptic track, reveal-order rules, sound if you add it — should be configuration and composition over a shared reveal engine. The same engine drives a single rip and a 10-pack batch; bulk mode is a pacing configuration, not a second implementation.
-
-On the review call we will hand you a third category — handbags — and ask you to wire it in live. If the answer is "copy the folder and rewrite it," the architecture failed.
-
-Deliverable 2 — The Shelf, Drops & Purchase (the concurrency test)
-Two ways to buy, one purchase path underneath.
-
-The shelf (evergreen). Defined pack SKUs per category and tier, always available, each with finite stock that restocks. Browse, tap, buy, rip. This is the everyday loop and where most volume lives.
-
-Timed drops (scarcity). A limited SKU released at a scheduled time with a fixed unit count. Countdown before, competition at go-live, inventory decrementing visibly in real time, clean sold-out state after.
-
-The tier must be felt in the UI — a $10 rip and a $5,000 box should not look like the same product. Price the presentation, not just the pack. A drop should feel different from the shelf: scarcity is a design problem, not just a stock number.
-
-Both paths run through the same atomic purchase logic. Do not fork it.
-
-What must not break:
-
-Exact inventory, on both paths: if N users buy the last M units of any SKU in the same millisecond — shelf or drop — exactly M succeed and exactly N−M get a clean sold-out state. Not M+1. Not M−1.
-Atomic purchase: balance debit + inventory decrement + content generation happen in one transaction. No state where money is taken and no pack exists, or vice versa.
-Contents server-side at purchase time, persisted and immutable. Replaying the reveal, killing the app, or calling the API directly can never change or re-roll a pull.
-No overdraft: rapid or concurrent purchases can never take a balance negative.
-Bulk purchase is all-or-nothing, or explicitly partial — never accidentally either. A 10-pack buy debits for exactly what it delivers. Decide what happens when a user asks for 10 and 7 remain: fail the whole thing, or fulfil 7 and charge for 7. Either is defensible; silently charging for 10 and delivering 7 is not. Document the choice.
-One transaction for the batch. Ten packs' contents are generated and persisted together. No state where six packs exist and four are missing.
-Idempotent under network loss. This is the mobile version of the double-click test and we take it seriously. Enable airplane mode mid-purchase. On reconnect, the client retries and the user is charged once and receives exactly what they paid for — one pack on a single buy, ten on a bulk buy, never twenty. Optimistic UI must roll back cleanly when the server disagrees.
-You must ship a concurrency harness. Include scripts/hammer.ts (or equivalent) in the repo that fires N concurrent purchase requests at the last unit of a given SKU — shelf or drop — and prints the outcome. We will run it. Proving your own correctness is part of the job.
-
-Deliverable 3 — Portfolio
-The collection as a premium tracker — Robinhood energy, styled to the luxury identity.
-
-Grid of owned items: image, name, category, rarity, current value, P&L since acquisition
-Total portfolio value ticking with price drift (realtime subscription or polling — your call, document the tradeoff)
-Filter by category; sort by value / P&L / recency
-Per-item actions: view details, list for sale
-Deliverable 4 — Marketplace
-Fixed-price peer-to-peer trading. No auctions in this trial.
-
-List an owned item at a chosen price; delist anytime before sale
-Browse and search listings across categories
-Buy instantly: money moves, item moves, fee is taken — one atomic transaction
-Listings feel like the category they belong to — a watch listing should not be styled like a card listing
-What must not break:
-
-A listed item cannot sell to two buyers. One succeeds, one gets a clean "already sold."
-A seller cannot list an item twice, sell an item they no longer own, or trade with themselves to mint money.
-A buyer cannot spend the same funds twice via concurrent purchases.
-Listing state and ownership never disagree — no item is both owned-and-listed by two people, or listed with no owner.
-The platform fee is collected on every sale, exactly, and recorded.
-Deliverable 5 — Economics Floor (an audit, not an algorithm)
-We are not asking for an EV optimizer or dynamic rebalancing. We're asking for something simpler and stricter: the platform must not be a loss-making machine, and there must be no loopholes.
-
-In your architecture doc, include a short "Why GrailHaus can't lose money" section:
-
-Pack pricing vs contents: with your odds and catalog prices, expected contents value sits sensibly below pack price. Show the simple math per tier — a paragraph and a table, not a solver.
-Fee integrity: every sale pays the fee; no path around it.
-Loophole audit: walk the money paths and state why each of these is impossible — self-trading to inflate balance, buy/sell cycles that create money, selling to an alt account, revealing a pack twice, listing an item mid-sale, delisting during a purchase to duplicate an item or refund twice.
-A thin admin screen closes the loop: packs sold, fees collected, contents payout vs pack revenue, margin per category. Simple numbers, honestly computed.
-
-Catalog & Assets
-No paid APIs, no scraping.
-
-Generate a seeded catalog (LLMs welcome): ~30–50 items per category with believable names, tiers, rarities, images, and realistic USD prices. A Submariner is not $400; a common card is not $4,000. Commit the catalog to the repo.
-Images: free assets, AI-generated, or tasteful placeholders. Cohesion and styling matter more than provenance.
-Pokémon TCG API (free, no auth) may be used for card data and images.
-Price drift: bounded simulated random walk so portfolio values tick without a Rolex drifting to $12. Document the bounds.
-Tech Stack
-Layer	Technology
-Mobile client	React Native. A dev build (Expo prebuild or bare) — the graphics layer needs native modules, so Expo Go won't cut it.
-Backend	TypeScript. Supabase Edge Functions / Postgres RPC, or a small Express/Fastify service.
-Database	PostgreSQL (Supabase or Neon recommended — atomicity must be real and testable)
-3D / graphics	react-three-fiber on expo-gl recommended. react-native-webgpu, Skia, Filament or others welcome with a clear written justification — see Deliverable 1.
-Realtime	Supabase Realtime, WebSocket, or polling — your call, document the tradeoff
-Financial math	Decimal on the server. Floating-point money is an automatic fail.
-Distribution	Signed Android APK + Firebase App Distribution (or equivalent install link). iOS via TestFlight is welcome but optional — we will not penalise a Windows machine.
-The backend is mandated in TypeScript because our house stack is TypeScript top to bottom and we need to see you write it. The client is React Native for the same reason, and because the graphics path we want to see runs there. See Before You Start on what that means for your ramp.
-
-Submission
-Installable build — a signed APK or install link that runs on a real Android device. iOS optional.
-GitHub repo — clean code, README with setup, architecture overview, the completed performance table from Deliverable 1, and your scope cuts. Cutting scope is expected and graded; silent gaps read as misses.
-Architecture document (2 pages): the reveal engine design and how a category personality is defined; your graphics library choice and the argument for it, including the fallback path for unsupported devices; your multi-pack pacing model and why; how you manage GPU memory across a batch; the atomic purchase path across shelf, drop and bulk buys; the "Why GrailHaus can't lose money" audit; your animation and haptics stack.
-Concurrency harness — scripts/hammer.ts, documented, runnable by us.
-Loom walkthrough (max 8 min): ~3 min ripping one pack per category including your best rare pull; ~2 min on a full 10-pack rip at real speed, uncut; ~3 min on the hardest problem you solved.
-Evaluation Criteria
-Criteria	Weight	What we look for
-Reveal & 3D craft	28%	Two genuinely distinct category personalities on one engine. Real-time 3D that reads as a physical object — materials, lighting, gesture-driven motion. Gesture physics that behave like a physical object, not a triggered animation. Tension choreography and a rare-pull moment that lands. Luxury-grade polish — spacing, type, easing, restraint. The honest test: after using it, do we want to rip another?
-Mobile-native feel & performance	20%	60/120fps on a mid-range device, held through pack ten of a batch. No GPU memory growth across a session. Clean cold start, no first-rip hitch. Measured, reported numbers with a named device — and a credible method behind them. Haptics designed as a sequenced track. Interruption-safe through backgrounding, process death and mid-batch resume. Fallback path for unsupported devices.
-Correctness under concurrency	23%	Shelf and drop inventory never oversell by one unit in either direction. Purchases and trades atomic. Idempotent under network loss. Ownership and listing state never disagree. Survives the harness and our probing.
-Architecture & system design	12%	Reveal engine is genuinely extensible — a third category is config, not a rewrite. Schema makes sense. Native boundary is deliberate. Tradeoffs documented.
-Ship quality & release hygiene	9%	The build installs and runs. Versioning, signing, and distribution handled. README is honest and complete.
-Product judgment	8%	The multi-pack pacing model — does ripping ten feel good or feel like a chore? Smart scope cuts, stated and reasoned. Parameter and library choices you can defend. Feels like one coherent product, not a feature list.
-Note the balance: craft and mobile feel together are 48% — this is a product-engineering role and the rip is the product. But correctness at 23% is pass/fail in spirit. Neither half saves the other.
-
-What We'll Test During Review (30 min)
-We rip a 10-pack on our own phone, uninterrupted, watching the frame counter and memory. Then we do it again immediately to see what pack one of session two looks like. Both categories get ripped singly too. We'll name our favourite and least favourite moment and ask you to walk the code behind each — the timeline, the easing choices, why this duration, what you tried and threw away. Haptics get judged in the hand.
-"Add handbags." We hand you a third category and you wire it into your reveal engine live, on screen share. We are watching how much of it is configuration and how much is new code.
-We run your harness against the last unit of a shelf SKU and of a drop, and check the balances afterward.
-Airplane mode mid-purchase of a 10-pack. Then reconnect. One charge, ten packs, not twenty.
-"Walk me through your idempotency key." How it's constructed, who generates it, what happens if two of them collide, and what the server does to enforce single execution.
-"Only 7 left, user asks for 10." What does your system do, and why is that the right call?
-"Why this renderer?" Defend your graphics choice against the two obvious alternatives, and show us the fallback path running.
-Force-stop at pack six of ten. Reopen. Packs one to five revealed, six resumes, seven to ten still sealed, nothing re-rolled.
-Two devices, one listing. Simultaneous buys on the same item, then we check both balances and who owns it.
-We hunt loopholes with your audit doc in one hand and your app in the other. Self-trades, alt-account sales, fee bypasses, replayed reveals, delist-during-purchase races.
-"How would you have built this in Flutter, and what was genuinely harder in React Native?" An honest comparison, not a diplomatic one. Tell us what you missed from your own stack and what surprised you about ours.
-We interrogate parameters: why these odds, why this fee, why this SKU ladder, why this pacing on the rare pull.
-You must understand every line, including anything a model generated. The reveal code especially — "the library did it" is not an answer to "why does this easing curve feel right?"
-
-Prioritization Guide
-This trial is deliberately over-specified. Nobody finishes all of it in 40 hours, and we are not expecting you to. What we grade is where you spent the time and how honestly you tell us what you cut. Build the P0 list to a standard you're proud of before touching P1.
-
-Must be excellent (P0):
-
-Card rip in real-time 3D — gesture-driven with real gesture physics, sequenced haptics, 60fps, interruption-safe
-Multi-pack rip with a deliberate pacing model and a batch summary that surfaces the best pull
-Atomic purchase, single and bulk — no oversell on finite SKU stock, no overdraft, server-side contents, idempotent under network loss
-Portfolio with live-ticking values
-Installable signed build, plus a fallback path if your renderer isn't universally supported
-The completed performance table, measured on a named mid-range Android
-Should work (P1):
-
-Watch reveal, fully distinct in pacing and personality
-Fixed-price marketplace buy — atomic, no double-sell, fee collected
-Timed drop with countdown, live inventory, and competition at go-live
-Reveal engine clean enough to accept a third category live
-Concurrency harness
-Economics audit (the document matters more than the admin screen)
-Native haptic choreography (CoreHaptics / VibrationEffect composition) above the sequenced-platform-haptics baseline
-Cut these first, and say so (P2 / acceptable casualties):
-
-Admin totals screen — the audit section in your doc covers the thinking
-Marketplace search and filtering — list and buy is enough
-Nice to have (P2):
-
-Sound design layered with the haptic track
-Shareable pull card via native share sheet / save to camera roll
-Provably fair commit-reveal: commit a hashed seed at purchase, reveal it after, let the user verify the pull was not manipulated. Small to build and it punches well above its weight on the review call.
-Push or local notification when a drop goes live
-Price-history sparklines per item
-Out of scope — do not build:
-
-Sneakers. Two categories plus the live third prove the framework. Spend the hours on the two you're building.
-A Note on AI Tools
-Use whatever you want — Claude, Cursor, Copilot, AI-generated assets. We don't care how it's made; we care that you understand it and that it feels right.
-
-The parts models struggle with here: haptic and animation taste (pacing, restraint, the difference between luxurious and cheesy), gesture physics on real hardware, GPU memory discipline across a long session, judging whether ripping ten packs actually feels good, the reveal engine's architecture, and transaction atomicity under real concurrency. Those need judgment. The review call is where we find out whose it was.
-
-Time and Terms
-40 hours of effort across up to 10 days, paid. You're currently employed, so we've set the outside window at ten days rather than seven — use it. Single submission.
-
-Deliberately more than fits; see the prioritisation guide. Toolchain ramp is expected and reported, not penalised. Ask questions freely, including about tooling.
-
-Build something that feels expensive in the hand and never loses a cent — on the first pack and on the tenth. The rip is the product. Make us feel it.
+All money, inventory, ownership and purchases must remain correct under:
+
+- Concurrent purchases
+- Network failures
+- Retries
+- Multiple devices
+- Marketplace races
+
+---
+
+### Goal 4 — Build an extensible product
+
+The architecture must allow future categories to be added without rewriting the core system.
+
+The reveal system should eventually support categories such as:
+
+- Handbags
+- Sneakers
+- Jewelry
+- Other luxury collectibles
+
+Adding a category should primarily involve configuration and category-specific assets rather than copying an entire feature implementation.
+
+---
+
+# 3. Product Scope
+
+## In Scope
+
+### Core Categories
+
+- Trading Cards
+- Luxury Watches
+
+### Core Features
+
+- User balance
+- Pack/case shelf
+- Evergreen inventory
+- Limited timed drops
+- Single purchases
+- Bulk card purchases
+- Category-specific reveals
+- Portfolio
+- Simulated price movement
+- Marketplace
+- Fixed-price trading
+- Platform fees
+- Concurrency protection
+- Idempotent purchases
+- Performance reporting
+
+---
+
+## Explicitly Out of Scope
+
+- Real money payments
+- Cryptocurrency
+- Real-world market price integrations
+- Auctions
+- Sneakers
+- Paid APIs
+- Scraping
+
+---
+
+# 4. Currency & User Balance
+
+## Currency
+
+**USD**
+
+All money in the prototype is paper money.
+
+No real financial transactions occur.
+
+---
+
+## Starting Balance
+
+### **$25,000**
+
+Every new user starts with:
+
+> **$25,000.00**
+
+### Reasoning
+
+This balance allows the evaluator to experience:
+
+- All three card tiers
+- All three watch tiers
+- Multiple purchases
+- Bulk card purchases
+- Marketplace transactions
+- Portfolio value movement
+
+The application should feel like a premium collecting environment rather than a prototype where the user immediately runs out of funds.
+
+---
+
+# 5. Product Categories
+
+# Category A — Trading Cards
+
+## Category Personality
+
+Cards represent:
+
+> **Speed. Energy. Competition. Suspense. Dopamine.**
+
+The experience should feel dynamic and tactile.
+
+The user is actively ripping open something.
+
+The emotional progression is:
+
+> **Curiosity → Momentum → Suspicion → Tension → Reveal → Celebration**
+
+---
+
+# 6. Trading Card Product Tiers
+
+The card category contains three tiers.
+
+---
+
+## Tier 1 — Street Rip
+
+### Price
+
+**$25**
+
+### Contents
+
+**5 Cards**
+
+### Position
+
+Entry-level collecting experience.
+
+Street Rip should encourage frequent openings.
+
+The user should feel:
+
+> “I can open one quickly. Maybe I get lucky.”
+
+---
+
+## Tier 2 — Vault Break
+
+### Price
+
+**$75**
+
+### Contents
+
+**6 Cards**
+
+### Position
+
+Premium collecting experience.
+
+Vault Break provides:
+
+- One additional card
+- Better rarity opportunities
+- A guaranteed premium outcome
+- Higher reveal tension
+
+---
+
+## Tier 3 — Black Label
+
+### Price
+
+**$250**
+
+### Contents
+
+**7 Cards**
+
+### Position
+
+High-stakes collecting.
+
+Black Label should feel significant before the user even begins opening it.
+
+The user should feel:
+
+> “Something serious could happen here.”
+
+---
+
+# 7. Trading Card Rarity System
+
+Cards use three rarity levels.
+
+## 1. Core
+
+The foundation of the collection.
+
+Core cards are the most frequently obtained items.
+
+---
+
+## 2. Prime
+
+Premium collectible cards.
+
+Prime cards create meaningful excitement during an opening.
+
+---
+
+## 3. Grail
+
+The chase items.
+
+Grail cards represent the highest rarity level and should create the strongest reveal moments.
+
+---
+
+# 8. Trading Card Probability Architecture
+
+## Design Principle
+
+Card rarity must not be generated using one simple probability for the entire pack.
+
+The system uses:
+
+> **Progressive Slot Probability**
+
+Each card position has its own rarity probability.
+
+As the user progresses through a pack, the probability profile becomes more exciting.
+
+This creates a natural emotional progression without making every pack identical.
+
+---
+
+# 9. Street Rip Probability Table
+
+## Price: $25
+
+## Cards: 5
+
+| Card Position | Core | Prime | Grail |
+|---|---:|---:|---:|
+| Card 1 | 100% | 0% | 0% |
+| Card 2 | 100% | 0% | 0% |
+| Card 3 | 85% | 14% | 1% |
+| Card 4 | 70% | 26% | 4% |
+| Card 5 — Final Pull | 55% | 35% | 10% |
+
+### Experience Logic
+
+Cards 1 and 2 establish rhythm.
+
+Card 3 introduces possibility.
+
+Card 4 increases anticipation.
+
+Card 5 becomes the major tension point.
+
+The final card matters, but it is never guaranteed to be extraordinary.
+
+---
+
+# 10. Vault Break Probability Table
+
+## Price: $75
+
+## Cards: 6
+
+| Card Position | Core | Prime | Grail |
+|---|---:|---:|---:|
+| Card 1 | 100% | 0% | 0% |
+| Card 2 | 90% | 10% | 0% |
+| Card 3 | 75% | 23% | 2% |
+| Card 4 | 65% | 30% | 5% |
+| Card 5 | 45% | 42% | 13% |
+| Card 6 — Final Pull | 30% | 50% | 20% |
+
+## Guarantee
+
+Every Vault Break pack guarantees:
+
+> **At least one Prime-or-Grail card.**
+
+If the generated result contains no Prime or Grail:
+
+- The highest eligible Core result is upgraded to Prime.
+
+---
+
+# 11. Black Label Probability Table
+
+## Price: $250
+
+## Cards: 7
+
+| Card Position | Core | Prime | Grail |
+|---|---:|---:|---:|
+| Card 1 | 90% | 10% | 0% |
+| Card 2 | 80% | 19% | 1% |
+| Card 3 | 65% | 32% | 3% |
+| Card 4 | 50% | 43% | 7% |
+| Card 5 | 40% | 47% | 13% |
+| Card 6 | 25% | 52% | 23% |
+| Card 7 — Final Pull | 15% | 55% | 30% |
+
+## Guarantees
+
+Every Black Label pack guarantees:
+
+- At least **2 Prime-or-Grail cards**
+- A premium final reveal position
+
+A Grail is never guaranteed by default.
+
+The chase must remain meaningful.
+
+---
+
+# 12. Grail Pressure System
+
+Cards include a transparent bad-luck protection system.
+
+## Name
+
+**Grail Pressure**
+
+The system tracks:
+
+> `consecutivePacksWithoutGrail`
+
+The counter is maintained separately for each user.
+
+---
+
+## Packs 1–5 Without a Grail
+
+Normal probabilities apply.
+
+---
+
+## After 5 Packs Without a Grail
+
+Add:
+
+> **+3 percentage points**
+
+to Grail probability on eligible premium slots.
+
+---
+
+## After 8 Packs Without a Grail
+
+Add:
+
+> **+6 percentage points**
+
+to Grail probability on eligible premium slots.
+
+---
+
+## After 10 Packs Without a Grail
+
+The next eligible final pull is:
+
+> **Guaranteed Grail**
+
+After a Grail is obtained:
+
+> The Grail Pressure counter resets.
+
+---
+
+## Transparency
+
+The user should be able to see their current progression.
+
+Example:
+
+> **Grail Pressure: 6 / 10**
+
+The system must be documented clearly.
+
+It should never secretly manipulate odds.
+
+---
+
+# 13. Card Value Ranges
+
+Rarity and value are related but are not identical.
+
+This prevents the system from feeling artificially linear.
+
+## Core
+
+Typical range:
+
+**$5–$30**
+
+---
+
+## Prime
+
+Typical range:
+
+**$25–$150**
+
+---
+
+## Grail
+
+Typical range:
+
+**$100–$1,000+**
+
+---
+
+## Value Overlap
+
+Some overlap is intentional.
+
+Example:
+
+A highly desirable Prime may be worth more than a lower-end Grail.
+
+This makes the portfolio and marketplace feel more like a genuine collecting ecosystem.
+
+---
+
+---
+
+# Category B — Luxury Watches
+
+## Category Personality
+
+Watches represent:
+
+> **Luxury. Restraint. Mystery. Weight. Prestige.**
+
+The user is not opening a pack.
+
+The user is unveiling a:
+
+> **Grail Case**
+
+The experience should feel fundamentally different from Cards.
+
+Cards are fast and energetic.
+
+Watches are slow and deliberate.
+
+---
+
+# 14. Watch Product Tiers
+
+Every Grail Case contains:
+
+> **1 Watch**
+
+The difference between tiers is primarily the rarity and quality distribution.
+
+---
+
+## Tier 1 — The Reserve
+
+### Price
+
+**$750**
+
+### Contents
+
+**1 Watch**
+
+### Position
+
+The entry point into luxury collecting.
+
+The experience should feel premium without feeling inaccessible.
+
+---
+
+## Tier 2 — The Archive
+
+### Price
+
+**$2,500**
+
+### Contents
+
+**1 Watch**
+
+### Position
+
+Serious collector territory.
+
+The user now has a meaningful chance of receiving a highly desirable watch.
+
+---
+
+## Tier 3 — The Obsidian Vault
+
+### Price
+
+**$7,500**
+
+### Contents
+
+**1 Watch**
+
+### Position
+
+The highest-stakes watch experience.
+
+This purchase should feel ceremonial.
+
+---
+
+# 15. Watch Rarity System
+
+Watches use completely separate nomenclature.
+
+## 1. Heritage
+
+Recognisable luxury watches.
+
+The foundation of the luxury collection.
+
+---
+
+## 2. Icon
+
+Highly desirable collector watches.
+
+These should create a noticeable increase in excitement.
+
+---
+
+## 3. Apex
+
+Exceptional watches.
+
+These are the chase outcomes.
+
+An Apex reveal should be memorable.
+
+---
+
+# 16. Watch Probability System
+
+Unlike Cards, Watches contain only one item.
+
+Therefore the probability system is based on:
+
+> **Case-Class Probability**
+
+---
+
+# The Reserve
+
+## Price: $750
+
+| Rarity | Probability |
+|---|---:|
+| Heritage | 75% |
+| Icon | 22% |
+| Apex | 3% |
+
+---
+
+# The Archive
+
+## Price: $2,500
+
+| Rarity | Probability |
+|---|---:|
+| Heritage | 55% |
+| Icon | 35% |
+| Apex | 10% |
+
+---
+
+# The Obsidian Vault
+
+## Price: $7,500
+
+| Rarity | Probability |
+|---|---:|
+| Heritage | 30% |
+| Icon | 45% |
+| Apex | 25% |
+
+---
+
+# 17. The Curator's Guarantee
+
+Watches have their own collection protection system.
+
+It should feel premium rather than game-like.
+
+## Name
+
+**The Curator's Guarantee**
+
+The system tracks consecutive outcomes that do not meet the expected premium threshold.
+
+---
+
+## The Reserve
+
+After:
+
+> **4 consecutive Heritage pulls**
+
+The next case guarantees:
+
+> **Icon or Apex**
+
+---
+
+## The Archive
+
+After:
+
+> **3 consecutive Heritage pulls**
+
+The next case guarantees:
+
+> **Icon or Apex**
+
+---
+
+## The Obsidian Vault
+
+After:
+
+> **3 consecutive non-Apex pulls**
+
+The next Vault receives:
+
+> **+10 percentage points Apex probability**
+
+After:
+
+> **5 consecutive non-Apex pulls**
+
+The next Vault guarantees:
+
+> **Apex**
+
+---
+
+## Transparency
+
+The guarantee progression must be visible to the user.
+
+Example:
+
+> **Curator's Guarantee: 3 / 5**
+
+---
+
+# 18. Watch Value Ranges
+
+The catalog uses believable luxury value ranges without requiring live market data.
+
+---
+
+## Heritage
+
+Typical range:
+
+**$1,000–$4,000**
+
+---
+
+## Icon
+
+Typical range:
+
+**$3,000–$15,000**
+
+---
+
+## Apex
+
+Typical range:
+
+**$8,000–$50,000+**
+
+Overlap between rarities is allowed where it makes sense.
+
+---
+
+# 19. Pack and Case Availability
+
+Both purchase models are required.
+
+---
+
+## Evergreen Shelf
+
+Evergreen products:
+
+- Have finite inventory
+- Are available immediately
+- Restock after inventory is depleted
+- Can be purchased at any time
+
+The shelf contains products across:
+
+- Categories
+- Tiers
+
+---
+
+## Timed Drops
+
+At least one limited product must use a timed drop.
+
+Timed drops include:
+
+- Countdown
+- Scheduled go-live time
+- Fixed inventory
+- Real-time inventory updates
+- Competition at release
+- Sold-out state
+
+---
+
+# 20. Initial Drop Recommendation
+
+## Pending Final SKU Selection
+
+The product model is finalized, but the exact drop SKU should be selected while creating the seeded catalog.
+
+Recommended direction:
+
+> **A limited Black Label Card Drop**
+
+Reason:
+
+It creates strong visual contrast with the evergreen shelf and naturally supports the required high-competition inventory test.
+
+---
+
+# 21. Bulk Purchase Model
+
+## Cards
+
+Bulk purchasing supports:
+
+> **10 Packs**
+
+Bulk purchases are supported for:
+
+- Street Rip
+- Vault Break
+- Black Label
+
+Mixed-tier bulk purchases are not required.
+
+A bulk purchase contains:
+
+> 10 packs of the selected SKU.
+
+---
+
+## Watches
+
+Bulk purchasing is not a primary product experience.
+
+Watch cases are intended to feel deliberate and individually significant.
+
+The product will therefore prioritize:
+
+> **Single-case watch purchases**
+
+This is a conscious category-specific product decision.
+
+---
+
+# 22. Insufficient Stock Rule
+
+When a user requests 10 packs but fewer than 10 remain:
+
+> **The entire purchase fails.**
+
+Example:
+
+User requests:
+
+> 10 Street Rip packs
+
+Inventory remaining:
+
+> 7
+
+Result:
+
+> **Purchase fails with no charge.**
+
+### Reasoning
+
+This creates:
+
+- Clear transaction behavior
+- Simple implementation
+- No ambiguous partial orders
+- Better user understanding
+- Easier concurrency testing
+
+Bulk purchases are therefore:
+
+> **All-or-nothing.**
+
+---
+
+# 23. Purchase Architecture
+
+All purchase paths use the same atomic purchase system.
+
+This includes:
+
+- Evergreen purchases
+- Timed drops
+- Single purchases
+- Bulk purchases
+
+The system must not have separate purchase implementations for each flow.
+
+---
+
+## Atomic Purchase Requirements
+
+A purchase transaction must include:
+
+1. Validate user balance
+2. Validate inventory
+3. Reserve/decrement inventory
+4. Debit user balance
+5. Generate item contents
+6. Persist immutable ownership records
+7. Persist purchase record
+
+All operations must succeed or fail together.
+
+---
+
+# 24. Idempotency
+
+Every purchase request must include an:
+
+> **Idempotency Key**
+
+The same purchase request may be retried after:
+
+- Network loss
+- App restart
+- Airplane mode
+- Client timeout
+
+The server must guarantee:
+
+> The user is charged once and receives exactly one successful result.
+
+For bulk purchases:
+
+> The user receives exactly the purchased number of packs.
+
+Never duplicates.
+
+---
+
+# 25. Inventory Rules
+
+Inventory must always be exact.
+
+If:
+
+- 100 users attempt to buy
+- 5 units remain
+
+Then:
+
+> Exactly 5 purchases succeed.
+
+The remaining 95 receive a clean failure.
+
+Never:
+
+- Oversell
+- Undersell accidentally
+- Create duplicate inventory
+
+---
+
+# 26. Concurrency Harness
+
+The repository includes:
+
+> `scripts/hammer.ts`
+
+The script must:
+
+- Fire concurrent purchase requests
+- Target a low-stock SKU
+- Simulate multiple users
+- Print successful purchases
+- Print failed purchases
+- Verify the final inventory state
+
+It must be usable for:
+
+- Evergreen inventory
+- Timed drop inventory
+
+---
+
+# 27. Portfolio
+
+The Portfolio represents the user's collection as a premium financial-style experience.
+
+Each owned item displays:
+
+- Image
+- Name
+- Category
+- Rarity
+- Current value
+- Purchase value
+- Profit/Loss
+
+---
+
+## Portfolio Features
+
+### Filters
+
+- All
+- Cards
+- Watches
+
+### Sorting
+
+- Highest value
+- Highest P&L
+- Most recent
+
+### Item Actions
+
+- View details
+- List for sale
+
+---
+
+# 28. Price Drift
+
+Real-world market data is intentionally not used.
+
+The prototype uses:
+
+> **Bounded Simulated Random Drift**
+
+Each item contains:
+
+- `baseValue`
+- `currentValue`
+- `minValue`
+- `maxValue`
+
+---
+
+## Update Frequency
+
+Prices update:
+
+> **Every 30 seconds**
+
+---
+
+## Card Drift
+
+Each update:
+
+> **±0.5% to ±2%**
+
+Cards may move more aggressively.
+
+---
+
+## Watch Drift
+
+Each update:
+
+> **±0.2% to ±1%**
+
+Watches move more slowly.
+
+---
+
+## Boundaries
+
+Every item has a minimum and maximum value.
+
+Example:
+
+Base Value:
+
+> $100
+
+Minimum:
+
+> $80
+
+Maximum:
+
+> $130
+
+The value can move within this range but never outside it.
+
+---
+
+# 29. Realtime Strategy
+
+## Decision
+
+> **Polling every 30 seconds**
+
+### Reasoning
+
+Price movement is:
+
+- Simulated
+- Low-frequency
+- Not time-critical
+
+Polling provides:
+
+- Faster implementation
+- Lower architectural complexity
+- Easier debugging
+- Sufficient prototype realism
+
+Realtime subscriptions are not required for this prototype.
+
+---
+
+# 30. Marketplace
+
+The marketplace supports:
+
+> **Fixed-price peer-to-peer trading**
+
+No auctions.
+
+---
+
+## Seller Flow
+
+A user can:
+
+1. Select an owned item
+2. Choose a listing price
+3. Publish the listing
+4. Delist before sale
+
+---
+
+## Buyer Flow
+
+A user can:
+
+1. Browse listings
+2. Select an item
+3. Buy immediately
+
+---
+
+# 31. Marketplace Fee
+
+## Platform Fee
+
+> **8%**
+
+Every successful marketplace transaction collects an 8% platform fee.
+
+Example:
+
+Listing Price:
+
+> $10,000
+
+Seller receives:
+
+> $9,200
+
+GrailHaus receives:
+
+> $800
+
+The fee is calculated and recorded atomically during the transaction.
+
+---
+
+# 32. Marketplace Correctness Rules
+
+The marketplace must prevent:
+
+- One item selling twice
+- One item being listed twice
+- Selling an item not owned
+- Self-trading
+- Double-spending
+- Listing and ownership disagreement
+- Fee bypassing
+
+The following operations must happen atomically:
+
+1. Validate listing availability
+2. Validate buyer balance
+3. Debit buyer
+4. Credit seller
+5. Collect platform fee
+6. Transfer ownership
+7. Mark listing sold
+
+---
+
+# 33. Reward Engine Architecture
+
+Rarity generation should not be implemented as a simple random-number check.
+
+The product uses a reusable:
+
+> **Reward Engine**
+
+---
+
+## Reward Engine Inputs
+
+### Cards
+
+- Tier
+- Card position
+- Base probability table
+- Grail Pressure state
+- Guarantee rules
+
+---
+
+### Watches
+
+- Tier
+- Base probability table
+- Curator's Guarantee state
+- Guarantee rules
+
+---
+
+## Reward Engine Outputs
+
+- Selected rarity
+- Selected catalog item
+- Applied guarantee
+- Applied probability modifier
+- Immutable result
+
+---
+
+# 34. Content Generation Rules
+
+Contents are generated:
+
+> **Server-side at purchase time**
+
+The result becomes:
+
+> **Immutable**
+
+The reveal client does not generate randomness.
+
+The reveal only displays the already-generated result.
+
+This guarantees:
+
+- No rerolls
+- No cheating through replay
+- No changed contents after restart
+- No client-side manipulation
+
+---
+
+# 35. Catalog Requirements
+
+The seeded catalog must contain approximately:
+
+> **30–50 items per category**
+
+---
+
+## Card Catalog Data
+
+Each card includes:
+
+- ID
+- Name
+- Tier eligibility
+- Rarity
+- Image
+- Base value
+- Minimum value
+- Maximum value
+
+---
+
+## Watch Catalog Data
+
+Each watch includes:
+
+- ID
+- Name
+- Tier eligibility
+- Rarity
+- Image
+- Base value
+- Minimum value
+- Maximum value
+
+---
+
+# 36. Catalog Selection Rules
+
+The Reward Engine:
+
+1. Determines rarity
+2. Filters the catalog by:
+   - Category
+   - Tier eligibility
+   - Rarity
+3. Selects an eligible item
+4. Persists the result
+
+The catalog must contain sufficient items in every rarity/tier combination to prevent repetitive outcomes.
+
+---
+
+# 37. Economics
+
+# 37. Economics & Expected Value Model
+
+## 37.1 Economics Philosophy
+
+GrailHaus is designed around a premium and transparent mystery-collecting economy.
+
+The platform should not feel like a system where users are guaranteed to lose a large percentage of their purchase value.
+
+Instead, the economic philosophy is:
+
+> **Every opening has meaningful value. Every collection has upside.**
+
+GrailHaus generates revenue through two complementary mechanisms:
+
+1. **Primary product economics** — a controlled positive margin on packs and watch cases.
+2. **Secondary marketplace economics** — an 8% platform fee whenever an item is successfully traded.
+
+The objective is to create a sustainable economy while maintaining a premium and fair user experience.
+
+---
+
+# 37.2 Expected Value Philosophy
+
+Expected Value (EV) represents the average mathematical value of the contents distributed across a large number of purchases.
+
+It does **not** mean that every individual user receives exactly that amount.
+
+For example:
+
+A product costing **$100** may have an EV of **$95**.
+
+Individual outcomes may be:
+
+* $90
+* $95
+* $110
+* $150
+* $300
+
+However, across a sufficiently large number of purchases, the average distributed value should approach:
+
+> **$95**
+
+This creates a controlled platform margin while preserving meaningful upside for exceptional outcomes.
+
+---
+
+# 37.3 Target Expected Value by Tier
+
+The following target EVs are fixed product decisions.
+
+## Trading Cards
+
+| Product     | Price | Target EV | Target Return |
+| ----------- | ----: | --------: | ------------: |
+| Street Rip  |   $25 |      ~$23 |          ~92% |
+| Vault Break |   $75 |      ~$70 |          ~93% |
+| Black Label |  $250 |     ~$240 |          ~96% |
+
+---
+
+## Luxury Watches
+
+| Product            |  Price | Target EV | Target Return |
+| ------------------ | -----: | --------: | ------------: |
+| The Reserve        |   $750 |     ~$700 |          ~93% |
+| The Archive        | $2,500 |   ~$2,400 |          ~96% |
+| The Obsidian Vault | $7,500 |   ~$7,300 |          ~97% |
+
+Higher-priced tiers intentionally provide a higher expected return.
+
+This is a deliberate premium product decision.
+
+The more a user commits to the GrailHaus experience, the more economically generous the experience becomes.
+
+---
+
+# 37.4 Expected Value Formula
+
+The Expected Value of a rarity outcome is calculated using:
+
+> **Probability × Average Eligible Item Value**
+
+For a single slot:
+
+```text
+Slot EV =
+(Core Probability × Average Core Value)
++
+(Prime Probability × Average Prime Value)
++
+(Grail Probability × Average Grail Value)
+```
+
+For Watches:
+
+```text
+Case EV =
+(Heritage Probability × Average Heritage Value)
++
+(Icon Probability × Average Icon Value)
++
+(Apex Probability × Average Apex Value)
+```
+
+---
+
+# 37.5 Pack Expected Value Formula
+
+Card packs use progressive slot probabilities.
+
+Therefore, the total pack EV is:
+
+```text
+Pack EV =
+EV(Card 1)
++
+EV(Card 2)
++
+EV(Card 3)
++
+...
+EV(Final Card)
+```
+
+Each card position has its own probability distribution.
+
+This means the system does not treat every card as mathematically identical.
+
+Later positions can have greater upside and therefore contribute differently to the overall expected value.
+
+---
+
+# 37.6 Example EV Calculation
+
+Suppose a card slot has:
+
+| Rarity | Probability | Average Eligible Value |
+| ------ | ----------: | ---------------------: |
+| Core   |         70% |                    $15 |
+| Prime  |         26% |                    $60 |
+| Grail  |          4% |                   $250 |
+
+The slot EV is:
+
+```text
+(0.70 × $15)
++
+(0.26 × $60)
++
+(0.04 × $250)
+```
+
+Result:
+
+```text
+$10.50 + $15.60 + $10.00
+```
+
+Therefore:
+
+> **Slot Expected Value = $36.10**
+
+The same calculation is performed for every slot in the pack.
+
+---
+
+# 37.7 Tier-Specific Reward Pools
+
+GrailHaus does not use one universal rarity pool for all products.
+
+Each product tier has its own eligible reward pool.
+
+This is essential for controlling:
+
+* Expected Value
+* Product differentiation
+* Premium progression
+* Chase-item economics
+
+For example:
+
+A Grail pulled from a **Street Rip** does not necessarily come from the same pool as a Grail pulled from a **Black Label** product.
+
+---
+
+## Example Card Grail Pools
+
+### Street Rip Grails
+
+Typical value range:
+
+> **$80–$200**
+
+---
+
+### Vault Break Grails
+
+Typical value range:
+
+> **$150–$500**
+
+---
+
+### Black Label Grails
+
+Typical value range:
+
+> **$400–$1,000+**
+
+This means rarity alone does not determine the complete value of an item.
+
+The item's:
+
+* Category
+* Product tier
+* Rarity
+* Individual catalog value
+
+all contribute to its economic position.
+
+---
+
+# 37.8 The Reward Selection Model
+
+The Reward Engine follows this sequence:
+
+### Step 1 — Identify the Category
+
+Example:
+
+> Cards
+
+or
+
+> Watches
+
+---
+
+### Step 2 — Identify the Product Tier
+
+Example:
+
+> Vault Break
+
+---
+
+### Step 3 — Apply the Relevant Probability Model
+
+For Cards:
+
+> Progressive Slot Probability
+
+For Watches:
+
+> Case-Class Probability
+
+---
+
+### Step 4 — Apply Guarantee or Protection Rules
+
+Cards:
+
+> Grail Pressure
+
+Watches:
+
+> Curator's Guarantee
+
+---
+
+### Step 5 — Select the Rarity
+
+Example:
+
+> Prime
+
+---
+
+### Step 6 — Select From the Eligible Catalog Pool
+
+The system filters items using:
+
+* Category
+* Product tier
+* Rarity
+
+Only eligible items can be selected.
+
+---
+
+### Step 7 — Persist the Result
+
+The selected item becomes:
+
+> **Immutable**
+
+The client never generates or rerolls the reward.
+
+---
+
+# 37.9 Why Tier-Specific Pools Are Important
+
+Without tier-specific reward pools, the economy becomes difficult to control.
+
+For example:
+
+A $25 product could theoretically access the same high-value Grail pool as a $250 product.
+
+That creates two problems:
+
+1. The premium tier loses differentiation.
+2. The EV of lower-priced products becomes difficult to control.
+
+Tier-specific pools solve this.
+
+They allow GrailHaus to create:
+
+> **Vertical rarity progression**
+
+rather than simply:
+
+> Common → Rare → Legendary.
+
+The complete reward identity becomes:
+
+> **Tier + Rarity + Item**
+
+For example:
+
+> **Black Label + Grail + Midnight Phantom**
+
+is economically and emotionally different from:
+
+> **Street Rip + Grail + Neon Chase**
+
+Both are Grails.
+
+But they belong to different levels of the GrailHaus ecosystem.
+
+---
+
+# 37.10 Controlled Value Overlap
+
+Rarity and value should not have a perfectly linear relationship.
+
+A Prime item may occasionally be worth more than a lower-end Grail item.
+
+For example:
+
+| Item             | Rarity | Value |
+| ---------------- | ------ | ----: |
+| Chrome Signature | Prime  |  $180 |
+| Neon Chase       | Grail  |  $150 |
+
+This creates a more believable collecting economy.
+
+Users should evaluate:
+
+* The item
+* Its desirability
+* Its value
+
+—not only its rarity label.
+
+---
+
+# 37.11 Guarantee Systems and Economics
+
+Guarantee systems must be included in the economic model.
+
+The platform cannot calculate EV using only base probabilities while ignoring:
+
+* Grail Pressure
+* Curator's Guarantee
+* Minimum rarity upgrades
+
+These systems increase the probability of premium outcomes.
+
+Therefore, the final Economics Audit must calculate:
+
+> **Effective Expected Value**
+
+rather than only:
+
+> **Base Expected Value**
+
+The final audit should evaluate:
+
+1. Base probability EV
+2. Guarantee-adjusted EV
+3. Long-run average EV
+4. Maximum platform exposure
+
+This ensures that protection systems do not accidentally make the platform structurally loss-making.
+
+---
+
+# 37.12 Grail Pressure Economic Impact
+
+Grail Pressure modifies Grail probabilities after consecutive unsuccessful packs.
+
+Therefore, the system must calculate the EV impact across a complete pressure cycle.
+
+For Cards:
+
+```text
+Normal Packs
+        ↓
+5 Packs Without Grail
+        ↓
++3% Eligible Grail Probability
+        ↓
+8 Packs Without Grail
+        ↓
++6% Eligible Grail Probability
+        ↓
+10 Packs Without Grail
+        ↓
+Guaranteed Grail
+        ↓
+Counter Reset
+```
+
+The economics audit must simulate this complete cycle.
+
+This is more accurate than calculating every purchase as an independent random event.
+
+---
+
+# 37.13 Curator's Guarantee Economic Impact
+
+The same principle applies to Watches.
+
+The Watch EV model must include:
+
+* Heritage streak protection
+* Icon guarantees
+* Apex probability increases
+* Apex guarantees
+
+The final watch economics should therefore be calculated using:
+
+> **Long-run guarantee-adjusted probabilities**
+
+rather than the displayed base probability alone.
+
+---
+
+# 37.14 Economics Audit Methodology
+
+The final Economics Audit will be generated after the seeded catalog is finalized.
+
+The process is:
+
+### Step 1
+
+Create the complete catalog.
+
+Each item receives:
+
+* Category
+* Tier eligibility
+* Rarity
+* Base value
+* Minimum value
+* Maximum value
+
+---
+
+### Step 2
+
+Calculate the average value of every eligible rarity pool.
+
+Example:
+
+```text
+Average Street Rip Core Value
+Average Street Rip Prime Value
+Average Street Rip Grail Value
+```
+
+---
+
+### Step 3
+
+Apply the probability tables.
+
+Calculate:
+
+> **Base Expected Value**
+
+---
+
+### Step 4
+
+Apply guarantee systems.
+
+Calculate:
+
+> **Guarantee-Adjusted Expected Value**
+
+---
+
+### Step 5
+
+Compare against the product price.
+
+Calculate:
+
+```text
+Expected Margin =
+Product Price − Effective Expected Value
+```
+
+---
+
+### Step 6
+
+Calculate Expected Return.
+
+```text
+Expected Return % =
+(Effective Expected Value ÷ Product Price) × 100
+```
+
+---
+
+# 37.15 Platform Revenue Model
+
+GrailHaus has two revenue streams.
+
+---
+
+## Revenue Stream 1 — Primary Product Margin
+
+Example:
+
+Product Price:
+
+> $100
+
+Effective Expected Value:
+
+> $95
+
+Expected Primary Margin:
+
+> $5
+
+The platform earns a controlled margin through the difference between:
+
+> Product price
+
+and
+
+> Long-run distributed value.
+
+---
+
+## Revenue Stream 2 — Marketplace Fees
+
+Every successful marketplace transaction collects:
+
+> **8%**
+
+Example:
+
+Listing Price:
+
+> $10,000
+
+Buyer pays:
+
+> $10,000
+
+Seller receives:
+
+> $9,200
+
+GrailHaus receives:
+
+> $800
+
+The marketplace fee is calculated and recorded atomically during the transaction.
+
+---
+
+Absolutely. We will **remove immediate duplicate protection completely**.
+
+That means:
+
+> **The same exact card CAN appear twice—or even more—in the same pack if randomness selects it that way.**
+
+We will keep the **same overall logic**, with only the personal duplicate weighting applied. Nothing will be removed from the pool during the pack reveal.
+
+# Final Correct Logic 🔒
+
+## 🃏 Cards
+
+```text
+PACK PURCHASED
+      ↓
+Slot Probabilities
+      ↓
+Pressure Rules
+      ↓
+Final Rarity for Each Slot
+      ↓
+Get Eligible Catalog Pool for that Rarity
+      ↓
+Apply User Ownership Weight Adjustment
+      ↓
+Weighted Random Item Selection
+      ↓
+Create Ownership Instance
+```
+
+---
+
+# Step-by-Step Example
+
+A user opens a **5-card pack**.
+
+### Step 1 — Slot probabilities + pressure rules
+
+The system determines the final rarity composition:
+
+| Slot | Final Rarity |
+| ---- | ------------ |
+| 1    | Core         |
+| 2    | Core         |
+| 3    | Prime        |
+| 4    | Core         |
+| 5    | Core         |
+
+At this point, the **rarity logic is complete**.
+
+---
+
+# Step 2 — Select the actual collectible
+
+For every slot, the system gets the eligible catalog items for that rarity.
+
+For example:
+
+### Slot 1
+
+```text
+Rarity: Core
+```
+
+The engine looks at all eligible **Core cards**.
+
+Then it applies the user's ownership adjustment.
+
+---
+
+# Personal Duplicate Weight Logic
+
+We still want different users to naturally build different collections, without making duplicates impossible.
+
+### Card the user has never owned
+
+```text
+Weight = 1.00
+```
+
+### User already owns 1 copy
+
+```text
+Weight = 0.50
+```
+
+### User already owns 2 copies
+
+```text
+Weight = 0.25
+```
+
+### User already owns 3+ copies
+
+```text
+Weight = 0.15
+```
+
+So duplicates are:
+
+✅ Possible
+✅ Natural
+✅ Useful for marketplace supply
+✅ Possible even within the same pack
+
+But repeated cards become progressively less likely **based on the user's existing collection**.
+
+---
+
+# Important: No Immediate Pack-Level Blocking
+
+We are explicitly **NOT doing this**:
+
+❌ Remove a card after it is pulled in Slot 1
+❌ Block the same card from appearing in Slot 2
+❌ Guarantee unique cards within a pack
+
+Instead, every slot independently selects from its eligible rarity pool.
+
+Example:
+
+A user could theoretically receive:
+
+```text
+Slot 1 → Pikachu — Thunderheart
+Slot 2 → Pikachu — Thunderheart
+Slot 3 → Gengar — Phantom Grin
+Slot 4 → Charmander — First Ember
+Slot 5 → Pikachu — Thunderheart
+```
+
+This is allowed.
+
+The probability will naturally depend on the item's weight after considering the user's collection.
+
+---
+
+# The Key Rule
+
+## Slot probabilities and pressure rules control:
+
+> **WHAT RARITY the user gets.**
+
+## Catalog selection controls:
+
+> **WHICH SPECIFIC ITEM of that rarity the user gets.**
+
+These two systems remain completely separate.
+
+---
+
+# Final Card Selection Formula
+
+For a card inside the eligible rarity pool:
+
+```text
+Final Selection Weight
+=
+Base Item Weight
+× User Ownership Modifier
+```
+
+For the prototype, we can keep:
+
+```text
+Base Item Weight = 1.0
+```
+
+So all catalog items of the same rarity start equally likely.
+
+Then:
+
+```text
+Final Weight = 1.0 × Ownership Modifier
+```
+
+Example:
+
+| Card                     | Copies Already Owned | Final Weight |
+| ------------------------ | -------------------: | -----------: |
+| Pikachu — Thunderheart   |                    0 |         1.00 |
+| Charmander — First Ember |                    1 |         0.50 |
+| Eevee — Open Horizon     |                    2 |         0.25 |
+| Psyduck — Quiet Static   |                    4 |         0.15 |
+
+Then the system performs a **weighted random selection**.
+
+---
+
+# ⌚ Watches — Same Logic
+
+For watches:
+
+```text
+WATCH PURCHASE
+       ↓
+Tier Probability
+       ↓
+Pressure Rules
+       ↓
+Final Rarity
+       ↓
+Get Eligible Watch Pool
+       ↓
+Apply User Ownership Weight Adjustment
+       ↓
+Weighted Random Watch Selection
+       ↓
+Create Ownership Instance
+```
+
+Again:
+
+### No hard duplicate blocking.
+
+A user **can receive the same watch again**.
+
+However, because watches are premium collectibles, we can use stronger ownership modifiers:
+
+| Copies Already Owned | Weight |
+| -------------------- | -----: |
+| 0                    |   1.00 |
+| 1                    |   0.35 |
+| 2                    |   0.10 |
+| 3+                   |   0.05 |
+
+This makes duplicates possible without making them the normal experience.
+
+---
+
+# Final GrailHaus Principle 🏆
+
+> **Nothing is artificially blocked. Nothing is guaranteed unique.**
+
+The experience remains genuinely random.
+
+But the user's existing collection influences the probability enough to encourage discovery and collection diversity.
+
+So the complete system is:
+
+```text
+SLOT PROBABILITIES
+        +
+PRESSURE RULES
+        ↓
+FINAL RARITY
+        ↓
+ELIGIBLE ITEM POOL
+        ↓
+USER OWNERSHIP WEIGHTING
+        ↓
+WEIGHTED RANDOM SELECTION
+        ↓
+UNIQUE OWNERSHIP INSTANCE
+```
+
+This is the correct version based on the system we've already designed.
+
+----
+# 37.16 Economic Flywheel
+
+The GrailHaus economy creates a continuous product loop:
+
+```text
+PURCHASE
+    ↓
+REVEAL
+    ↓
+OWN
+    ↓
+TRACK VALUE
+    ↓
+LIST FOR SALE
+    ↓
+8% MARKETPLACE FEE
+    ↓
+NEW OWNER
+    ↓
+COLLECT / HOLD / TRADE
+    ↓
+CONTINUED PLATFORM ACTIVITY
+```
+
+The platform does not depend exclusively on users receiving less value than they paid.
+
+Revenue is generated through:
+
+1. Controlled primary product margins.
+2. Continued secondary-market activity.
+
+---
+
+# 37.17 GrailHaus Economic Differentiator
+
+The core economic differentiator of GrailHaus is:
+
+> **High-return mystery collecting.**
+
+Rather than maximizing platform margin by making the average user outcome significantly lower than the purchase price, GrailHaus intentionally targets a high expected return.
+
+The progression is:
+
+> **Higher commitment → Higher expected return**
+
+This means premium tiers are not only visually more exciting.
+
+They are also economically more generous.
+
+---
+
+# 37.18 Final Economics Principle
+
+GrailHaus is built around three economic rules:
+
+### Rule 1 — The user must always have meaningful upside.
+
+Premium outcomes must be capable of exceeding the purchase price.
+
+---
+
+### Rule 2 — The platform must remain structurally sustainable.
+
+Effective Expected Value must remain below product price over the long run.
+
+---
+
+### Rule 3 — Protection systems must be mathematically audited.
+
+Grail Pressure and Curator's Guarantee must be included in the final EV calculation.
+
+---
+
+# Final Economics Statement
+
+> **GrailHaus is not designed around making users lose.**
+
+> **It is designed around creating suspenseful collecting experiences with controlled economics, meaningful upside, premium protection systems, and a sustainable secondary marketplace.**
+
+The final expected-value table will be mathematically generated from the seeded catalog while preserving the already-defined product prices, probability systems and target return philosophy.
+
+
+# 38. Required Economic Protection
+
+The audit must address:
+
+- Pack price vs expected contents value
+- Marketplace fee collection
+- Self-trading prevention
+- Buy/sell cycle exploits
+- Duplicate ownership
+- Duplicate reveals
+- Listing race conditions
+- Delist-during-purchase races
+- Double refunds
+
+---
+
+# 39. Mobile Client
+
+## Platform
+
+**React Native**
+
+The application requires a native development build.
+
+Expo Go is not sufficient for the required graphics stack.
+
+---
+
+# 40. Backend
+
+## Language
+
+**TypeScript**
+
+---
+
+## Database
+
+**PostgreSQL**
+
+The database must support real atomic transactions and concurrency protection.
+
+---
+
+# 41. Financial Math
+
+Server-side money calculations must use:
+
+> **Decimal-safe arithmetic**
+
+Examples include:
+
+- `decimal.js`
+- Integer cents
+
+Floating-point arithmetic must not be used for money.
+
+---
+
+# 42. Graphics & Reveal Architecture
+
+The final graphics implementation must support:
+
+- Real-time rendering
+- GPU acceleration
+- Lighting
+- Materials
+- Camera movement
+- Direct gesture interaction
+
+The recommended implementation direction is:
+
+> **react-three-fiber + expo-gl**
+
+However, the final renderer choice remains a technical architecture decision that must be justified based on implementation feasibility and device compatibility.
+
+---
+
+# 43. Reveal Architecture Requirements
+
+The reveal system must be:
+
+> **Configuration-driven**
+
+The shared engine should support category-specific configuration for:
+
+- Models
+- Materials
+- Lighting
+- Camera
+- Timing curves
+- Haptics
+- Reveal order
+- Sounds
+- Bulk pacing
+
+Cards and Watches should not be implemented as unrelated hardcoded features.
+
+---
+
+# 44. Reveal Animation Design
+
+## Status
+
+> **Intentionally pending detailed design**
+
+The following remains to be designed separately:
+
+### Cards
+
+- Exact rip gesture
+- Foil deformation
+- Camera choreography
+- Card timing
+- Rare slow-burn
+- Exact haptic sequence
+- Bulk reveal pacing
+
+### Watches
+
+- Case interaction
+- Opening mechanism
+- Lighting choreography
+- Watch emergence
+- Camera movement
+- Exact haptic sequence
+
+This is the primary remaining creative design area.
+
+---
+
+# 45. Performance Requirements
+
+The application must target:
+
+- 60 FPS minimum
+- 120 FPS where supported
+
+Performance must be tested on a real mid-range Android device.
+
+---
+
+## Performance Metrics
+
+The final report must measure:
+
+- Device model
+- GPU
+- Renderer
+- Fallback renderer
+- Cold first-frame time
+- Median frame time — Pack 1
+- Worst frame time — Pack 1
+- Median frame time — Pack 10
+- Worst frame time — Pack 10
+- Peak memory — Pack 1
+- Peak memory — Pack 10
+- Memory after reveal dismissal
+- Toolchain/setup hours
+- Product development hours
+
+---
+
+# 46. Interruption Safety
+
+The application must handle:
+
+- Backgrounding
+- App switching
+- Notifications
+- Process death
+- Rotation
+- Safe-area changes
+
+Contents must never:
+
+- Disappear
+- Reroll
+- Change
+
+---
+
+# 47. Multi-Pack Resume
+
+For a 10-pack Card session:
+
+If the app closes during Pack 6:
+
+- Packs 1–5 remain revealed
+- Pack 6 resumes or lands safely on its summary
+- Packs 7–10 remain sealed
+- No results change
+
+---
+
+# 48. Haptics
+
+Haptics are part of the product choreography.
+
+The application must use:
+
+> **Sequenced haptic feedback**
+
+Haptics must be tied intentionally to meaningful moments.
+
+The advanced native haptic implementation remains optional.
+
+---
+
+# 49. Submission Requirements
+
+The final submission includes:
+
+## 1. Installable Build
+
+- Signed Android APK or install link
+
+---
+
+## 2. GitHub Repository
+
+Including:
+
+- Setup instructions
+- Architecture overview
+- Scope cuts
+- Performance report
+
+---
+
+## 3. Architecture Document
+
+Including:
+
+- Reveal engine architecture
+- Category configuration
+- Graphics decision
+- Fallback strategy
+- Multi-pack strategy
+- GPU memory strategy
+- Atomic purchase architecture
+- Economics audit
+- Animation and haptics architecture
+
+---
+
+## 4. Concurrency Harness
+
+> `scripts/hammer.ts`
+
+---
+
+## 5. Loom Walkthrough
+
+Maximum:
+
+> **8 minutes**
+
+---
+
+# 50. Development Priority
+
+## P0 — Must Be Excellent
+
+1. Card real-time 3D reveal
+2. Gesture physics
+3. Sequenced haptics
+4. 10-pack experience
+5. Atomic single purchase
+6. Atomic bulk purchase
+7. Exact inventory
+8. Idempotency
+9. Portfolio with live value movement
+10. Installable Android build
+11. Renderer fallback
+12. Performance measurement
+
+---
+
+## P1 — Should Work
+
+1. Watch reveal
+2. Marketplace
+3. Timed drops
+4. Extensible reveal engine
+5. Concurrency harness
+6. Economics audit
+7. Advanced native haptics
+
+---
+
+## P2 — Cut First If Necessary
+
+1. Admin totals screen
+2. Marketplace search
+3. Marketplace filtering
+4. Advanced sound design
+5. Shareable pull cards
+6. Notifications
+7. Price-history charts
+
+---
+
+# 51. Final Product Definition
+
+GrailHaus is now defined as a premium mobile collecting platform with two deliberately different emotional experiences.
+
+## Cards
+
+> **Street Rip → Vault Break → Black Label**
+
+Rarity:
+
+> **Core → Prime → Grail**
+
+Mechanic:
+
+> **Progressive Slot Probability + Grail Pressure**
+
+---
+
+## Watches
+
+> **The Reserve → The Archive → The Obsidian Vault**
+
+Rarity:
+
+> **Heritage → Icon → Apex**
+
+Mechanic:
+
+> **Case-Class Probability + Curator's Guarantee**
+
+---
+
+## Platform Economics
+
+- Starting balance: **$25,000**
+- Marketplace fee: **8%**
+- Paper USD
+- Server-side immutable rewards
+- Bounded simulated price movement
+- Polling every 30 seconds
+- Atomic purchases
+- All-or-nothing bulk purchases
+
+---
+
+# 52. Development Readiness
+
+The product is ready to move into technical planning and development.
+
+The remaining major creative work is:
+
+> **The exact rip and reveal choreography.**
+
+All major product rules, pricing, tiers, rarity systems, marketplace economics, purchase rules and portfolio behavior are now defined.
+
+# Final Product Principle
+
+> **GrailHaus should feel expensive in the hand, exciting in the moment, and mathematically trustworthy underneath.**

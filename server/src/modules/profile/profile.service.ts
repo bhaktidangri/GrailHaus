@@ -10,6 +10,7 @@ export async function getCurrentProfile(userId: string): Promise<Profile> {
   return {
     id: row.public_id,
     displayName: row.display_name,
+    username: row.username,
     balanceCents: Number(row.balance_cents),
     createdAt: row.created_at,
   };

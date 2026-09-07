@@ -1,159 +1,340 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
-import { useAuthViewModel } from "../viewmodels/useAuthViewModel";
-import { OtpInput } from "../components/OtpInput";
+import { useAuthViewModel, type AuthStep } from "../viewmodels/useAuthViewModel";
 import { GlossyButton } from "../components/GlossyButton";
 import { ScreenBackground } from "../components/ScreenBackground";
+import { AuthGem } from "../components/AuthGem";
 import { colors, radii, spacing, typography } from "../theme/tokens";
+import { auth as authCopy } from "../content/copy";
 
-type Method = "email" | "phone";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function AuthScreen({ onClose }: { onClose: () => void }) {
-  const auth = useAuthViewModel();
-  const [method, setMethod] = useState<Method>("email");
-  const [input, setInput] = useState("");
-  const [code, setCode] = useState("");
+const BACK_TARGET: Partial<Record<AuthStep, AuthStep>> = {
+  register: "welcome",
+  signin: "welcome",
+  forgot: "signin",
+  "forgot-sent": "signin",
+  "confirm-email": "signin",
+};
+
+export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; initialStep?: AuthStep }) {
+  const auth = useAuthViewModel(initialStep);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  function handleContinue() {
-    setValidationError(null);
-    if (method === "email") {
-      const trimmed = input.trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-        setValidationError("Enter a valid email address.");
-        return;
-      }
-      auth.sendOtp("email", trimmed);
-    } else {
-      const parsed = parsePhoneNumberFromString(input.trim());
-      if (!parsed?.isValid()) {
-        setValidationError("Enter a valid phone number with country code, e.g. +1 555 123 4567.");
-        return;
-      }
-      auth.sendOtp("phone", parsed.number);
-    }
-  }
+  const backTarget = BACK_TARGET[auth.step];
+  const showClose = onClose && auth.step !== "claim-username";
+  const shownError = validationError ?? auth.error;
 
-  function handleVerify(nextCode: string) {
-    setCode(nextCode);
-    if (nextCode.length === 6) auth.verifyOtp(nextCode);
+  function validEmail(value: string) {
+    setValidationError(null);
+    if (!EMAIL_PATTERN.test(value.trim())) {
+      setValidationError(authCopy.emailInvalid);
+      return false;
+    }
+    return true;
   }
 
   return (
     <ScreenBackground>
       <View style={styles.container}>
-        <Pressable style={styles.close} onPress={onClose} hitSlop={12}>
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
+        {backTarget && (
+          <Pressable style={styles.back} onPress={() => auth.goTo(backTarget)} hitSlop={12}>
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+        )}
+        {showClose && (
+          <Pressable style={styles.close} onPress={onClose} hitSlop={12}>
+            <Text style={styles.closeText}>{authCopy.close}</Text>
+          </Pressable>
+        )}
 
-        {auth.step === "identifier" ? (
-          <>
-            <Text style={styles.title}>Sign in to continue</Text>
-            <Text style={styles.subtitle}>Browsing stays open — this is only needed to rip and hold packs.</Text>
-
-            <View style={styles.segment}>
-              {(["email", "phone"] as Method[]).map((m) => (
-                <Pressable
-                  key={m}
-                  style={[styles.segmentItem, method === m && styles.segmentItemActive]}
-                  onPress={() => {
-                    setMethod(m);
-                    setInput("");
-                    setValidationError(null);
-                  }}
-                >
-                  <Text style={[styles.segmentText, method === m && styles.segmentTextActive]}>
-                    {m === "email" ? "Email" : "Phone"}
-                  </Text>
-                </Pressable>
-              ))}
+        {auth.step === "welcome" && (
+          <View style={styles.centerFill}>
+            <AuthGem />
+            <Text style={styles.wordmark}>{authCopy.welcomeTitle}</Text>
+            <Text style={styles.tagline}>{authCopy.welcomeTagline}</Text>
+            <View style={styles.welcomeActions}>
+              <GlossyButton label={authCopy.createAccount} onPress={() => auth.goTo("register")} variant="violet" />
+              <Pressable style={styles.linkRow} onPress={() => auth.goTo("signin")}>
+                <Text style={styles.linkMuted}>
+                  {authCopy.alreadyCollecting} <Text style={styles.link}>{authCopy.signInLink}</Text>
+                </Text>
+              </Pressable>
             </View>
+          </View>
+        )}
 
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder={method === "email" ? "you@example.com" : "+1 555 123 4567"}
-              placeholderTextColor={colors.textMuted}
-              keyboardType={method === "email" ? "email-address" : "phone-pad"}
-              autoCapitalize="none"
-              autoComplete={method === "email" ? "email" : "tel"}
-              style={styles.input}
+        {auth.step === "register" && (
+          <>
+            <Text style={styles.title}>{authCopy.registerTitle}</Text>
+            <Text style={styles.subtitle}>{authCopy.registerSubtitle}</Text>
+
+            <Field
+              label={authCopy.emailLabel}
+              value={email}
+              onChangeText={setEmail}
+              placeholder={authCopy.emailPlaceholder}
+              keyboardType="email-address"
+              autoComplete="email"
             />
-            {(validationError || auth.error) && (
-              <Text style={styles.error}>{validationError ?? auth.error}</Text>
-            )}
+            <Field
+              label={authCopy.passwordLabel}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={authCopy.passwordPlaceholder}
+              secureTextEntry
+              autoComplete="new-password"
+            />
+            <Field
+              label={authCopy.confirmPasswordLabel}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder={authCopy.confirmPasswordPlaceholder}
+              secureTextEntry
+              autoComplete="new-password"
+            />
+            {shownError && <Text style={styles.error}>{shownError}</Text>}
 
             <GlossyButton
-              label="Continue"
-              onPress={handleContinue}
-              disabled={!input}
+              label={authCopy.createAccountCta}
+              onPress={() => {
+                if (validEmail(email)) auth.register(email, password, confirmPassword);
+              }}
+              disabled={!email || !password || !confirmPassword}
               loading={auth.isSubmitting}
-              variant="blue"
+              variant="violet"
             />
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Enter the code</Text>
-            <Text style={styles.subtitle}>
-              Sent to {auth.identifier?.value}.{" "}
-              <Text style={styles.link} onPress={auth.reset}>
-                Not you?
-              </Text>
-            </Text>
-
-            <OtpInput value={code} onChange={handleVerify} autoFocus />
-            {auth.error && <Text style={[styles.error, styles.errorCentered]}>{auth.error}</Text>}
-            {auth.isSubmitting && <ActivityIndicator color={colors.blue} style={{ marginTop: spacing.md }} />}
-
-            <Pressable
-              style={styles.resend}
-              onPress={auth.resend}
-              disabled={auth.cooldown > 0 || auth.isSubmitting}
-            >
-              <Text style={[styles.link, auth.cooldown > 0 && styles.linkDisabled]}>
-                {auth.cooldown > 0 ? `Resend code in ${auth.cooldown}s` : "Resend code"}
+            <Pressable style={styles.linkRow} onPress={() => auth.goTo("signin")}>
+              <Text style={styles.linkMuted}>
+                {authCopy.alreadyCollecting} <Text style={styles.link}>{authCopy.signInLink}</Text>
               </Text>
             </Pressable>
           </>
+        )}
+
+        {auth.step === "confirm-email" && (
+          <View style={styles.centerFill}>
+            <Text style={styles.title}>{authCopy.confirmEmailTitle}</Text>
+            <Text style={[styles.subtitle, styles.centerText]}>{authCopy.confirmEmailBody(auth.pendingEmail)}</Text>
+            <GlossyButton label={authCopy.confirmEmailCta} onPress={() => auth.goTo("signin")} variant="violet" />
+          </View>
+        )}
+
+        {auth.step === "signin" && (
+          <>
+            <Text style={styles.title}>{authCopy.signInTitle}</Text>
+            <Text style={styles.subtitle}>{authCopy.signInSubtitle}</Text>
+
+            <Field
+              label={authCopy.emailLabel}
+              value={email}
+              onChangeText={setEmail}
+              placeholder={authCopy.emailPlaceholder}
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+            <Field
+              label={authCopy.passwordLabel}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={authCopy.passwordPlaceholder}
+              secureTextEntry
+              autoComplete="password"
+            />
+            <Pressable onPress={() => auth.goTo("forgot")}>
+              <Text style={[styles.link, styles.forgotLink]}>{authCopy.forgotPassword}</Text>
+            </Pressable>
+            {shownError && <Text style={styles.error}>{shownError}</Text>}
+
+            <GlossyButton
+              label={authCopy.signInCta}
+              onPress={() => {
+                if (validEmail(email)) auth.signIn(email, password);
+              }}
+              disabled={!email || !password}
+              loading={auth.isSubmitting}
+              variant="violet"
+            />
+            <Pressable style={styles.linkRow} onPress={() => auth.goTo("register")}>
+              <Text style={styles.linkMuted}>
+                {authCopy.noAccount} <Text style={styles.link}>{authCopy.createAccount}</Text>
+              </Text>
+            </Pressable>
+          </>
+        )}
+
+        {auth.step === "forgot" && (
+          <>
+            <Text style={styles.title}>{authCopy.forgotTitle}</Text>
+            <Text style={styles.subtitle}>{authCopy.forgotSubtitle}</Text>
+
+            <Field
+              label={authCopy.emailLabel}
+              value={email}
+              onChangeText={setEmail}
+              placeholder={authCopy.emailPlaceholder}
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+            {shownError && <Text style={styles.error}>{shownError}</Text>}
+
+            <GlossyButton
+              label={authCopy.sendResetCta}
+              onPress={() => {
+                if (validEmail(email)) auth.sendReset(email);
+              }}
+              disabled={!email}
+              loading={auth.isSubmitting}
+              variant="violet"
+            />
+            <Pressable style={styles.linkRow} onPress={() => auth.goTo("signin")}>
+              <Text style={styles.link}>{authCopy.backToSignIn}</Text>
+            </Pressable>
+          </>
+        )}
+
+        {auth.step === "forgot-sent" && (
+          <View style={styles.centerFill}>
+            <Text style={styles.title}>{authCopy.forgotSentTitle}</Text>
+            <Text style={[styles.subtitle, styles.centerText]}>{authCopy.forgotSentBody(auth.pendingEmail)}</Text>
+            <GlossyButton label={authCopy.backToSignIn} onPress={() => auth.goTo("signin")} variant="violet" />
+          </View>
+        )}
+
+        {auth.step === "claim-username" && (
+          <View style={styles.centerFill}>
+            <Text style={styles.title}>{authCopy.claimTitle}</Text>
+            <Text style={[styles.subtitle, styles.centerText]}>{authCopy.claimSubtitle}</Text>
+
+            <View style={styles.handleRow}>
+              <Text style={styles.handleAt}>@</Text>
+              <TextInput
+                value={username}
+                onChangeText={(value) => {
+                  setUsername(value);
+                  auth.checkUsername(value);
+                }}
+                placeholder={authCopy.usernamePlaceholder}
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.handleInput}
+                autoFocus
+              />
+            </View>
+            <UsernameStatusLine status={auth.usernameStatus} />
+            {auth.error && <Text style={styles.error}>{auth.error}</Text>}
+
+            <GlossyButton
+              label={authCopy.claimCta}
+              onPress={() => auth.claimUsername(username)}
+              disabled={auth.usernameStatus !== "available"}
+              loading={auth.isSubmitting}
+              variant="violet"
+            />
+          </View>
+        )}
+
+        {auth.step === "welcome-back" && (
+          <View style={styles.centerFill}>
+            <AuthGem />
+            <Text style={styles.wordmark}>{authCopy.welcomeBackTitle(auth.claimedUsername ?? "")}</Text>
+            <Text style={styles.tagline}>{authCopy.welcomeBackBody}</Text>
+            <GlossyButton label={authCopy.enterGrailhaus} onPress={auth.finish} variant="violet" />
+          </View>
         )}
       </View>
     </ScreenBackground>
   );
 }
 
+function Field({
+  label,
+  ...inputProps
+}: { label: string } & React.ComponentProps<typeof TextInput>) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput placeholderTextColor={colors.textMuted} autoCapitalize="none" style={styles.input} {...inputProps} />
+    </View>
+  );
+}
+
+function UsernameStatusLine({ status }: { status: "idle" | "checking" | "available" | "taken" | "invalid" }) {
+  if (status === "idle") return <View style={styles.usernameStatusSpacer} />;
+  const text =
+    status === "checking"
+      ? authCopy.usernameChecking
+      : status === "available"
+        ? `✓ ${authCopy.usernameAvailable}`
+        : status === "taken"
+          ? authCopy.usernameTaken
+          : authCopy.usernameInvalid;
+  return (
+    <Text
+      style={[
+        styles.usernameStatus,
+        status === "available" && styles.usernameStatusOk,
+        (status === "taken" || status === "invalid") && styles.usernameStatusBad,
+      ]}
+    >
+      {status === "checking" ? <ActivityIndicator size="small" color={colors.textMuted} /> : null} {text}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, paddingTop: spacing.xxl * 2 },
-  close: { position: "absolute", top: spacing.xl, right: spacing.xl },
+  centerFill: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
+  back: { position: "absolute", top: spacing.xl, left: spacing.xl, zIndex: 1 },
+  backText: { color: colors.textPrimary, fontSize: 28, lineHeight: 28 },
+  close: { position: "absolute", top: spacing.xl, right: spacing.xl, zIndex: 1 },
   closeText: { color: colors.textMuted, ...typography.body },
+
+  wordmark: { color: colors.textPrimary, ...typography.display, fontSize: 34, marginTop: spacing.lg, textAlign: "center" },
+  tagline: { color: colors.textSecondary, ...typography.body, textAlign: "center", marginBottom: spacing.lg },
+  welcomeActions: { width: "100%", gap: spacing.lg, marginTop: spacing.md },
+
   title: { color: colors.textPrimary, ...typography.display, marginBottom: spacing.xs },
   subtitle: { color: colors.textSecondary, ...typography.body, marginBottom: spacing.xl },
-  segment: {
-    flexDirection: "row",
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    borderColor: colors.outlineSoft,
-    padding: 4,
-    marginBottom: spacing.lg,
-  },
-  segmentItem: { flex: 1, paddingVertical: spacing.sm, borderRadius: radii.sm, alignItems: "center" },
-  segmentItemActive: { backgroundColor: colors.blue },
-  segmentText: { color: colors.textMuted, ...typography.body },
-  segmentTextActive: { color: "#ffffff" },
+  centerText: { textAlign: "center" },
+
+  field: { marginBottom: spacing.md },
+  fieldLabel: { color: colors.textSecondary, ...typography.caption, marginBottom: spacing.xs },
   input: {
     backgroundColor: colors.surface,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: colors.outlineSoft,
     borderRadius: radii.md,
     padding: spacing.md,
     color: colors.textPrimary,
     ...typography.body,
-    marginBottom: spacing.sm,
   },
+
   error: { color: colors.danger, ...typography.caption, marginBottom: spacing.sm },
-  errorCentered: { textAlign: "center", marginTop: spacing.md },
-  link: { color: colors.blue },
-  linkDisabled: { color: colors.textMuted },
-  resend: { marginTop: spacing.xl, alignSelf: "center" },
+  link: { color: colors.violetTop },
+  linkMuted: { color: colors.textMuted, ...typography.body },
+  linkRow: { marginTop: spacing.xl, alignSelf: "center" },
+  forgotLink: { alignSelf: "flex-end", marginBottom: spacing.lg, marginTop: -spacing.sm },
+
+  handleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.outlineSoft,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    width: "100%",
+  },
+  handleAt: { color: colors.textMuted, ...typography.title, marginRight: spacing.xs },
+  handleInput: { flex: 1, color: colors.textPrimary, ...typography.title, paddingVertical: spacing.md },
+  usernameStatus: { color: colors.textMuted, ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.lg },
+  usernameStatusOk: { color: colors.success },
+  usernameStatusBad: { color: colors.danger },
+  usernameStatusSpacer: { height: 12 + spacing.sm + spacing.lg },
 });

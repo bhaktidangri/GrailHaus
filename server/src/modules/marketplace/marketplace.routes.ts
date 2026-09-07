@@ -1,0 +1,141 @@
+import type { FastifyInstance } from "fastify";
+import type { Category } from "@grailhaus/shared";
+import { itemDetailSchema } from "../items/items.schema.js";
+import { browseListings, buyListing, createListing, delist, getListing } from "./marketplace.service.js";
+
+const partySchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    username: { type: ["string", "null"] },
+  },
+};
+
+const listingSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    ownedItemId: { type: "string" },
+    item: itemDetailSchema,
+    seller: partySchema,
+    buyer: { anyOf: [partySchema, { type: "null" }] },
+    priceCents: { type: "number" },
+    status: { type: "string", enum: ["active", "sold", "delisted"] },
+    feePercent: { type: ["number", "null"] },
+    feeCents: { type: ["number", "null"] },
+    sellerProceedsCents: { type: ["number", "null"] },
+    createdAt: { type: "string" },
+    resolvedAt: { type: ["string", "null"] },
+  },
+};
+
+export async function marketplaceRoutes(app: FastifyInstance) {
+  app.get(
+    "/listings",
+    {
+      schema: {
+        tags: ["marketplace"],
+        summary: "Browse active listings — public, same access model as /packs",
+        querystring: {
+          type: "object",
+          properties: {
+            category: { type: "string", enum: ["cards", "watches"] },
+            limit: { type: "number", minimum: 1, maximum: 200, default: 50 },
+            offset: { type: "number", minimum: 0, default: 0 },
+          },
+        },
+        response: { 200: { type: "array", items: listingSchema } },
+      },
+    },
+    async (req) => {
+      const { category, limit, offset } = req.query as { category?: Category; limit?: number; offset?: number };
+      return browseListings(category, limit, offset);
+    }
+  );
+
+  app.get(
+    "/listings/:id",
+    {
+      schema: {
+        tags: ["marketplace"],
+        summary: "One listing's detail — public, any status",
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: { 200: listingSchema },
+      },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return getListing(id);
+    }
+  );
+
+  app.post(
+    "/listings",
+    {
+      preHandler: app.authenticate,
+      schema: {
+        tags: ["marketplace"],
+        summary: "List an owned item for sale at a fixed price",
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          required: ["ownedItemId", "priceCents"],
+          properties: {
+            ownedItemId: { type: "string", description: "The specific owned_items row id, not the catalog item id" },
+            priceCents: { type: "number", minimum: 1 },
+          },
+        },
+        response: { 200: listingSchema },
+      },
+    },
+    async (req) => {
+      const { ownedItemId, priceCents } = req.body as { ownedItemId: string; priceCents: number };
+      return createListing(req.userId!, ownedItemId, priceCents);
+    }
+  );
+
+  app.post(
+    "/listings/:id/delist",
+    {
+      preHandler: app.authenticate,
+      schema: {
+        tags: ["marketplace"],
+        summary: "Cancel your own active listing",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: { 200: listingSchema },
+      },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return delist(req.userId!, id);
+    }
+  );
+
+  app.post(
+    "/listings/:id/buy",
+    {
+      preHandler: app.authenticate,
+      schema: {
+        tags: ["marketplace"],
+        summary: "Buy a listing instantly — atomic: debit buyer, credit seller minus fee, transfer ownership",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string", enum: ["completed", "failed"] },
+              failureReason: { type: ["string", "null"] },
+              listing: listingSchema,
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return buyListing(req.userId!, id);
+    }
+  );
+}

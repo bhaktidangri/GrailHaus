@@ -1,4 +1,4 @@
-import type { PackItem, PackSku, PressureRule, PressureState, RarityTierLevel } from "./types.js";
+import type { OwnershipCounts, PackItem, PackSku, PressureRule, PressureState, RarityTierLevel } from "./types.js";
 
 const TIER_LEVELS: RarityTierLevel[] = [1, 2, 3];
 
@@ -113,13 +113,68 @@ export function pullPack(
   };
 }
 
-/** Turns rolled tier levels into actual catalog items, one random pick per tier from that pack's pool. */
-export function resolveItems(pack: PackSku, tierLevels: RarityTierLevel[]): PackItem[] {
+/** One category's ownership-weight ladder: `byCopies[n]` is the weight for owning
+ * exactly `n` copies already; `floor` applies from `byCopies.length` copies up. */
+export interface OwnershipWeightCurve {
+  byCopies: number[];
+  floor: number;
+}
+
+export type OwnershipWeightTable = Record<"cards" | "watches", OwnershipWeightCurve>;
+
+/**
+ * Personal Duplicate Weight Logic: owning more copies of an item makes it
+ * progressively less likely to be selected again — never impossible, never
+ * removed from the pool, and never blocked within a single pack (two slots
+ * in the same pack can independently land on the same item). Cards fade out
+ * faster of a hard floor since they're meant to circulate more (bulk buys,
+ * marketplace supply); watches use a steeper drop since a repeat premium
+ * watch should be rarer. Weight is `1.0 (base) × ownership modifier` — the
+ * base is always 1.0 here since there's no other per-item weighting yet.
+ *
+ * This is the fallback used when no table is supplied — the real, current
+ * values live in the `ownership_weight_tiers` DB table (admin-editable),
+ * not here; a caller reading that table passes it into `resolveItems`
+ * instead of relying on this default. Kept here anyway so existing callers
+ * that don't pass one yet (nothing does, today) still get correct behavior.
+ */
+export const DEFAULT_OWNERSHIP_WEIGHTS: OwnershipWeightTable = {
+  cards: { byCopies: [1.0, 0.5, 0.25], floor: 0.15 },
+  watches: { byCopies: [1.0, 0.35, 0.1], floor: 0.05 },
+};
+
+function ownershipWeight(table: OwnershipWeightTable, category: PackSku["category"], copiesOwned: number): number {
+  const { byCopies, floor } = table[category];
+  return copiesOwned < byCopies.length ? byCopies[copiesOwned] : floor;
+}
+
+/**
+ * Turns rolled tier levels into actual catalog items — one weighted-random
+ * pick per tier from that pack's pool. `ownershipCounts` (item id → copies
+ * this user already owns) is optional and defaults to empty, which makes
+ * every item weight 1.0 (plain uniform selection, today's behavior) — there
+ * is currently nowhere ownership is persisted from, so real callers have
+ * nothing to pass yet. `weightTable` defaults to `DEFAULT_OWNERSHIP_WEIGHTS`;
+ * pass the live `ownership_weight_tiers` DB rows once a caller reads them.
+ */
+export function resolveItems(
+  pack: PackSku,
+  tierLevels: RarityTierLevel[],
+  ownershipCounts: OwnershipCounts = {},
+  weightTable: OwnershipWeightTable = DEFAULT_OWNERSHIP_WEIGHTS
+): PackItem[] {
   return tierLevels.map((level) => {
     const pool = pack.itemsByTier[level] ?? [];
     if (pool.length === 0) {
       throw new Error(`No catalog items for ${pack.name} at tier ${level}`);
     }
-    return pool[Math.floor(Math.random() * pool.length)];
+    const weights = pool.map((item) => ownershipWeight(weightTable, pack.category, ownershipCounts[item.id] ?? 0));
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      roll -= weights[i];
+      if (roll <= 0) return pool[i];
+    }
+    return pool[pool.length - 1];
   });
 }
