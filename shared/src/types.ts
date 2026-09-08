@@ -168,6 +168,16 @@ export interface ListingParty {
  * listing they're a live preview computed from the current admin-configured rate, which can
  * still change before a sale actually happens.
  */
+/** One row in the "Recently Revealed" feed — a real pack pull (not a marketplace transfer),
+ * newest first. `username` is null for the rare account that hasn't claimed a Collector ID yet
+ * (shouldn't normally happen post-onboarding, but the feed degrades gracefully either way). */
+export interface RecentPull {
+  ownedItemId: string;
+  item: ItemDetail;
+  username: string | null;
+  acquiredAt: string;
+}
+
 export interface Listing {
   id: string;
   ownedItemId: string;

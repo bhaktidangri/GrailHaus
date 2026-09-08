@@ -87,3 +87,58 @@ export function computePriceDrift(
     maxValueCents,
   };
 }
+
+export interface PriceDriftBucket {
+  /** Bucket start, ms epoch. */
+  timestamp: number;
+  minValueCents: number;
+  maxValueCents: number;
+  avgValueCents: number;
+}
+
+/** How many points inside each bucket get sampled to find its min/max/avg — enough to catch a
+ * card's ~40-minute cycle within even a 1-hour bucket without evaluating the (cheap, but not
+ * free) sine per millisecond. */
+const DRIFT_HISTORY_SAMPLES_PER_BUCKET = 8;
+
+/**
+ * Sweeps `computePriceDrift` — the exact same deterministic formula `/items` evaluates for
+ * "now" — across a past time window, bucketed rather than sampled as one continuous line: a
+ * card's ~40-minute cycle (PRD §28) is much faster than a useful chart timescale like a week, so
+ * a single-point-per-moment line would alias into noise. Each bucket instead reports the
+ * min/max/avg it actually swept through, which correctly reads as "cycles through its whole
+ * range constantly" for a fast-moving card and as a legible wave for a slower-moving watch —
+ * both are real, not a smoothing or approximation choice.
+ */
+export function computePriceDriftHistory(
+  item: { id: string; category: Category; baseValueCents: number },
+  windowMs: number,
+  bucketCount: number,
+  end: Date = new Date()
+): PriceDriftBucket[] {
+  const bucketMs = windowMs / bucketCount;
+  const startMs = end.getTime() - windowMs;
+  const buckets: PriceDriftBucket[] = [];
+
+  for (let b = 0; b < bucketCount; b++) {
+    const bucketStart = startMs + b * bucketMs;
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    for (let s = 0; s < DRIFT_HISTORY_SAMPLES_PER_BUCKET; s++) {
+      const t = bucketStart + (bucketMs * s) / (DRIFT_HISTORY_SAMPLES_PER_BUCKET - 1);
+      const { currentValueCents } = computePriceDrift(item, new Date(t));
+      min = Math.min(min, currentValueCents);
+      max = Math.max(max, currentValueCents);
+      sum += currentValueCents;
+    }
+    buckets.push({
+      timestamp: Math.round(bucketStart),
+      minValueCents: Math.round(min),
+      maxValueCents: Math.round(max),
+      avgValueCents: Math.round(sum / DRIFT_HISTORY_SAMPLES_PER_BUCKET),
+    });
+  }
+
+  return buckets;
+}
