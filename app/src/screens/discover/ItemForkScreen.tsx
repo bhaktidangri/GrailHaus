@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -32,6 +34,7 @@ function splitTraits(traits: string | null): string[] {
  * pack that can drop it, or buy the exact one from someone who already pulled it. */
 export function ItemForkScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { category, item } = useRoute<Route>().params;
   const { detail } = item;
   const isWatch = category === "watches";
@@ -106,9 +109,9 @@ export function ItemForkScreen() {
             style={StyleSheet.absoluteFill}
           />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
             <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-              <View style={styles.backChevron} />
+              <Ionicons name="chevron-back" size={18} color="#fff" />
             </Pressable>
             <Text style={styles.headerLabel}>{rarityName.toUpperCase()} VERSION</Text>
             <View style={{ width: 36 }} />
@@ -118,7 +121,7 @@ export function ItemForkScreen() {
             {isWatch ? (
               <WatchDial art={itemArtGradient(detail)} size={124} />
             ) : (
-              <CardFace gradient={itemArtGradient(detail)} width={124} height={173} borderColor="rgba(255,215,94,0.78)" />
+              <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={124} height={173} borderColor="rgba(255,215,94,0.78)" />
             )}
             <View style={styles.heroInfo}>
               <Text style={styles.name}>{(detail.cardTitle ?? detail.watchName ?? detail.name).toUpperCase()}</Text>
@@ -236,14 +239,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4, color: colors.goldTop },
   heroRow: { flexDirection: "row", gap: 15, paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" },

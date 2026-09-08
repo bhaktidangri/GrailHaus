@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem, RarityTierLevel } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
@@ -25,7 +27,13 @@ type Facet = "collection" | "rarity";
  * "7 / 9" would be worse than not showing it. */
 export function BinderScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const route = useRoute<Route>();
+  // Sized off the real viewport (grid's 20px side padding + the 9px inter-column gap, ×3 columns)
+  // rather than a fixed 108px, which ran the third column off the edge on any phone narrower than
+  // ~382pt (iPhone SE/mini and similar).
+  const { width: windowWidth } = useWindowDimensions();
+  const cellWidth = (windowWidth - 20 * 2 - 9 * 2) / 3;
   const vm = useCollectionViewModel();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
   const rarityTiers = useRarityTiers("cards");
@@ -62,9 +70,9 @@ export function BinderScreen() {
       {/* Bounded to the fixed header+filter row (never scrolls) rather than the whole screen —
           a full-screen wash here would stay pinned behind the grid's scrolled rows too. */}
       <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>{copy.header}</Text>
         <View style={{ width: 38 }} />
@@ -110,8 +118,8 @@ export function BinderScreen() {
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
         renderItem={({ item: owned }: { item: OwnedItem }) => (
-          <Pressable style={styles.cell} onPress={() => navigation.navigate("CardDetail", { owned })}>
-            <CardFace gradient={itemArtGradient(owned.item)} width={cellWidth} height={cellWidth * 1.36} />
+          <Pressable style={{ width: cellWidth }} onPress={() => navigation.navigate("CardDetail", { owned })}>
+            <CardFace gradient={itemArtGradient(owned.item)} imageUrl={owned.item.textureUrl} width={cellWidth} height={cellWidth * 1.36} />
             <Text style={styles.cellName} numberOfLines={1}>
               {(owned.item.cardTitle ?? owned.item.name).toUpperCase()}
             </Text>
@@ -122,8 +130,6 @@ export function BinderScreen() {
     </View>
   );
 }
-
-const cellWidth = 108;
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: ink.groundDeep },
@@ -144,14 +150,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerTitle: { ...typography.title, fontSize: 15 },
   facetRow: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingTop: 16 },
@@ -183,7 +181,6 @@ const styles = StyleSheet.create({
   chipTextActive: { color: "#fff" },
   grid: { padding: 20, paddingTop: 8, gap: 14 },
   gridRow: { gap: 9 },
-  cell: { width: cellWidth },
   cellName: { ...typography.footNote, fontWeight: "800" as const, color: "#fff", marginTop: 6, fontSize: 9 },
   cellValue: { ...typography.footNote, color: colors.goldTop, marginTop: 1, fontSize: 9 },
   empty: { ...typography.sectionSub, textAlign: "center", marginTop: 60, width: "100%" },

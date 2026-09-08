@@ -22,7 +22,9 @@ export function OddsBarList({ sku, title }: { sku: PackSku | null; title: string
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${Math.max(percent, 1.5)}%`, backgroundColor: tier.colorHex }]} />
           </View>
-          <Text style={styles.tierName}>{tier.name}</Text>
+          <Text style={styles.tierName} numberOfLines={1}>
+            {tier.name}
+          </Text>
         </View>
       ))}
     </View>

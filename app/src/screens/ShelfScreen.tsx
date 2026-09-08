@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp, type CompositeNavigationProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, PackSku } from "@grailhaus/shared";
@@ -45,6 +47,7 @@ type Nav = CompositeNavigationProp<
  */
 export function ShelfScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { category } = useRoute<RouteProp<HomeStackParamList, "World">>().params;
   const session = useSessionViewModel();
   const shelf = useShelfViewModel(category);
@@ -66,7 +69,7 @@ export function ShelfScreen() {
           — a full-screen wash here would stay pinned behind the scrolled tier cards too. */}
       <LinearGradient colors={register.wash} style={styles.base} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.brand}>
           <View style={styles.brandChip}>
             <Image source={require("../../assets/icon.png")} style={styles.brandIcon} />
@@ -133,7 +136,7 @@ export function ShelfScreen() {
           <>
             <View style={styles.trustNote}>
               <View style={styles.trustCheck}>
-                <Text style={styles.trustCheckGlyph}>✓</Text>
+                <Ionicons name="checkmark" size={14} color="#8BF285" />
               </View>
               <Text style={styles.trustNoteText}>{shelfCopy.explorePacks.trustNote}</Text>
             </View>
@@ -288,7 +291,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  trustCheckGlyph: { color: "#8BF285", fontFamily: fonts.extrabold, fontSize: 13 },
   trustNoteText: { ...typography.packSub, flex: 1 },
   collectionLink: {
     ...typography.linkMuted,

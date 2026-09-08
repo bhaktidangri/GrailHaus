@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Category } from "@grailhaus/shared";
 import { HomeScreen } from "../screens/HomeScreen";
 import { ShelfScreen } from "../screens/ShelfScreen";
+import { DropsScreen } from "../screens/DropsScreen";
 
 /**
  * Home replaces the old flat "Shelf" tab with a two-level drill-down, per the
@@ -16,6 +17,8 @@ import { ShelfScreen } from "../screens/ShelfScreen";
 export type HomeStackParamList = {
   Home: undefined;
   World: { category: Category };
+  /** Was its own tab; now reached from Home's "Upcoming Drops" section — see RootTabs. */
+  Drops: undefined;
 };
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -25,6 +28,7 @@ export function HomeStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="World" component={ShelfScreen} />
+      <Stack.Screen name="Drops" component={DropsScreen} />
     </Stack.Navigator>
   );
 }

@@ -1,15 +1,40 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { accents, ink, typography } from "../theme/tokens";
+import type { RootTabParamList } from "./RootTabs";
+import { accents, fonts, ink } from "../theme/tokens";
 import { TAB_BAR_HEIGHT, useTabBarHidden } from "./tabBarVisibility";
 
-/** The mockup's floating pill nav: active tab gets a gradient chip and a
- * visible label; inactive tabs are just an icon-shaped outline. Slides down
- * and fades out while a screen is scrolled down, and back on scroll-up —
- * see tabBarVisibility.ts for the shared value driving this.
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** One glyph per tab (Ionicons' filled/outline pair — filled while active, outline at rest),
+ * matched to what each tab actually does rather than a generic placeholder: Home is the
+ * dashboard, Discover browses the shared cards+watches catalog, Explore is the evergreen pack
+ * shelf (a shopping bag reads as "browse to buy" — a gift box read closer to "rewards/promos",
+ * which isn't what this tab is), Portfolio is your holdings, Marketplace is peer resale — kept
+ * visually distinct from Explore's bag despite both being "a place to get things," since one is
+ * GrailHaus's own shop and the other is buying from other collectors. (Drops — the time-limited
+ * live releases — moved off the tab bar; see RootTabs.) */
+const TAB_ICON: Record<keyof RootTabParamList, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
+  Home: { active: "home", inactive: "home-outline" },
+  Discover: { active: "compass", inactive: "compass-outline" },
+  Explore: { active: "bag-handle", inactive: "bag-handle-outline" },
+  Portfolio: { active: "briefcase", inactive: "briefcase-outline" },
+  Marketplace: { active: "storefront", inactive: "storefront-outline" },
+};
+
+/** The floating pill nav: every tab shows its icon and its name at all times — the active one
+ * additionally gets a gradient chip behind it, so which tab you're on still reads at a glance
+ * without depending on label-visibility alone to say so.
+ *
+ * Slides down and fades out while a screen is scrolled down, and back on scroll-up — see
+ * tabBarVisibility.ts for the shared value driving this. A frosted-glass surface (BlurView) plus
+ * a per-tab spring press for a bit of tactile feedback (matching GlossyButton's press-spring
+ * elsewhere in the app) round out the rest of the surface.
  *
  * `position: "absolute"` here is load-bearing: react-navigation's
  * bottom-tabs otherwise lays this component out as a normal flex sibling
@@ -36,73 +61,121 @@ export function PillTabBar({ state, descriptors, navigation }: BottomTabBarProps
   }));
 
   return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[styles.wrap, { paddingBottom: bottomPad }, animatedStyle]}
-    >
-      <View style={styles.bar}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label = (options.tabBarLabel ?? options.title ?? route.name) as string;
-          const isFocused = state.index === index;
+    <Animated.View pointerEvents="box-none" style={[styles.wrap, { paddingBottom: bottomPad }, animatedStyle]}>
+      <View style={styles.barShadow}>
+        <BlurView intensity={62} tint="dark" style={styles.bar}>
+          <View style={styles.barTint} pointerEvents="none" />
+          {state.routes.map((route, index) => {
+            const { options } = descriptors[route.key];
+            const label = (options.tabBarLabel ?? options.title ?? route.name) as string;
+            const isFocused = state.index === index;
+            const icon = TAB_ICON[route.name as keyof RootTabParamList];
 
-          function onPress() {
-            const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-          }
+            function onPress() {
+              const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+            }
 
-          return (
-            <Pressable key={route.key} onPress={onPress} style={styles.tabWrap}>
-              {isFocused ? (
-                <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.tabActive}>
-                  <View style={styles.iconActive} />
-                  <Text style={styles.labelActive}>{label}</Text>
-                </LinearGradient>
-              ) : (
-                <View style={styles.tabInactive}>
-                  <View style={styles.iconInactive} />
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
+            return <TabSlot key={route.key} label={label} icon={icon} isFocused={isFocused} onPress={onPress} />;
+          })}
+        </BlurView>
       </View>
     </Animated.View>
   );
 }
 
+function TabSlot({
+  label,
+  icon,
+  isFocused,
+  onPress,
+}: {
+  label: string;
+  icon: { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap };
+  isFocused: boolean;
+  onPress: () => void;
+}) {
+  const press = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={() => (press.value = withSpring(0.9, { damping: 14, stiffness: 300 }))}
+      onPressOut={() => (press.value = withSpring(1, { damping: 12, stiffness: 220 }))}
+      style={[styles.tabWrap, pressStyle]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: isFocused }}
+    >
+      {isFocused ? (
+        <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.tabActive}>
+          <Ionicons name={icon.active} size={21} color={ink.text} />
+          <Text style={styles.labelActive} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            {label}
+          </Text>
+        </LinearGradient>
+      ) : (
+        <View style={styles.tabInactive}>
+          <Ionicons name={icon.inactive} size={20} color="rgba(255,255,255,0.58)" />
+          <Text style={styles.labelInactive} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            {label}
+          </Text>
+        </View>
+      )}
+    </AnimatedPressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16 },
+  wrap: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 18 },
+  // Shadow and blur can't share a layer in RN — a blurred/clipped view can't also cast a soft
+  // shadow (overflow:hidden clips it) — so the shadow lives on this wrapper and the blur/border/
+  // clip live on the BlurView itself.
+  barShadow: {
+    borderRadius: 26,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    elevation: 14,
+  },
   bar: {
     height: TAB_BAR_HEIGHT,
-    borderRadius: 999,
-    backgroundColor: ink.card,
+    borderRadius: 26,
+    overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: ink.cardBorder,
+    borderColor: "rgba(255,255,255,0.14)",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 7,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
+    paddingHorizontal: 6,
   },
-  tabWrap: { flex: 1 },
+  // BlurView's own tint washes out this app's near-black palette toward mid-grey — a thin dark
+  // veil over the blur keeps the glass effect while staying close to `ink.card`'s original depth.
+  barTint: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(8,4,16,0.92)" },
+  tabWrap: { flex: 1, paddingVertical: 5 },
   tabActive: {
-    height: 48,
-    borderRadius: 999,
-    flexDirection: "row",
+    height: TAB_BAR_HEIGHT - 10,
+    borderRadius: 20,
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 0,
+    gap: 3,
+    paddingHorizontal: 4,
+    shadowColor: accents.cards.glow,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  tabInactive: { height: 48, alignItems: "center", justifyContent: "center" },
-  iconActive: { width: 15, height: 15, borderRadius: 5, borderWidth: 2.2, borderColor: ink.text },
-  iconInactive: { width: 15, height: 15, borderRadius: 5, borderWidth: 2.2, borderColor: "rgba(255,255,255,0.45)" },
-  labelActive: typography.tabLabel,
+  tabInactive: {
+    height: TAB_BAR_HEIGHT - 10,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    paddingHorizontal: 4,
+  },
+  labelActive: { fontFamily: fonts.extrabold, fontSize: 9.5, letterSpacing: 0.1, color: ink.text },
+  labelInactive: { fontFamily: fonts.semibold, fontSize: 9.5, letterSpacing: 0.1, color: "rgba(255,255,255,0.5)" },
 });

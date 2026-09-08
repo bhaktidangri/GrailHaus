@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import {
   useNavigation,
   useRoute,
   type RouteProp,
   type CompositeNavigationProp,
 } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useDropDetailViewModel } from "../viewmodels/useDropDetailViewModel";
@@ -26,6 +28,14 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList>
 >;
 
+/** DropDetail sits on the root stack, a sibling of `Tabs` rather than a descendant of it — a
+ * plain `navigate("Home")` can't bubble into the tab tree from here (react-navigation only
+ * bubbles through actual ancestors) and silently no-ops. Same nested-navigate workaround used by
+ * RevealScreen/ItemForkScreen for the same root-stack-to-tab jump. */
+function rootNavigateHome(navigation: Nav) {
+  (navigation.navigate as (name: string, params?: object) => void)("Tabs", { screen: "Home" });
+}
+
 /** Fixed illustrative content for the "live" claims feed and the "closed"
  * next-drop teaser — the app has no claims log, viewer-count, sold-out-timer
  * or queued-drops backend, so these stay static placeholder copy straight
@@ -44,6 +54,7 @@ const PLACEHOLDER_NEXT_DROP = { name: "NEO GENESIS", meta: "Cards · 500 units",
 
 export function DropDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { packId } = useRoute<RouteProp<AppStackParamList, "DropDetail">>().params;
   const { drop } = useDropDetailViewModel(packId);
   const session = useSessionViewModel();
@@ -85,7 +96,22 @@ export function DropDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* Every other detail screen in the app has an explicit back button (see PackDetailScreen,
+          VaultDetailScreen, etc.) — this one previously relied solely on the OS swipe-back
+          gesture/hardware back, which is easy to miss and inconsistent with the rest of the app. */}
+      <Pressable
+        style={[styles.backButton, { top: insets.top + 12 }]}
+        onPress={() => navigation.goBack()}
+        hitSlop={12}
+      >
+        <Ionicons name="chevron-back" size={18} color="#fff" />
+      </Pressable>
+      <ScrollView
+        // Cleared below the floating back button above (insets.top + 12, 38pt tall) rather than
+        // just below the status bar, so the hero eyebrow/title row doesn't sit underneath it.
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.heroWrap}>
           <LinearGradient colors={[washColor, "transparent"]} style={StyleSheet.absoluteFill} />
 
@@ -138,9 +164,17 @@ export function DropDetailScreen() {
                 <Text style={styles.opensPrice}>${(sku.priceCents / 100).toLocaleString()}</Text>
                 <Text style={styles.opensMeta}>{maxStock} units · 1 per account</Text>
               </View>
-              <View style={styles.notifyButton}>
+              <Pressable
+                style={styles.notifyButton}
+                onPress={() =>
+                  Alert.alert(
+                    copy.notifyConfirmTitle,
+                    copy.notifyConfirmBody
+                  )
+                }
+              >
                 <Text style={styles.notifyLabel}>NOTIFY ME</Text>
-              </View>
+              </Pressable>
             </View>
           </View>
         )}
@@ -191,7 +225,7 @@ export function DropDetailScreen() {
                 </View>
                 <Text style={styles.nextDropEta}>{PLACEHOLDER_NEXT_DROP.eta}</Text>
               </View>
-              <Pressable style={styles.browseButton} onPress={() => navigation.navigate("Home")}>
+              <Pressable style={styles.browseButton} onPress={() => rootNavigateHome(navigation)}>
                 <Text style={styles.browseLabel}>BROWSE THE SHELF</Text>
               </Pressable>
             </View>
@@ -246,6 +280,19 @@ const PHASE_EYEBROW_STYLE = {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: "#0B0716" },
   scroll: { padding: 24, paddingTop: 63, paddingBottom: 40 },
+  backButton: {
+    position: "absolute",
+    left: 20,
+    zIndex: 1,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   heroWrap: { position: "relative" },
   eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveDot: {

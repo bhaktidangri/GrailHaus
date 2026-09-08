@@ -1,7 +1,6 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { withTiming } from "react-native-reanimated";
 import { HomeStack } from "./HomeStack";
-import { DropsScreen } from "../screens/DropsScreen";
 import { ExploreScreen } from "../screens/ExploreScreen";
 import { CollectionStack } from "./CollectionStack";
 import { MarketplaceStack } from "./MarketplaceStack";
@@ -10,10 +9,12 @@ import { PillTabBar } from "./PillTabBar";
 import { TabBarVisibilityProvider, useTabBarHidden } from "./tabBarVisibility";
 import { colors, typography } from "../theme/tokens";
 
+/** Drops used to be its own tab, but five items already crowds the floating pill bar (its
+ * reference design — rn/src/components/TabBar.js — was built for four) — see HomeStack for
+ * where DropsScreen lives now: pushed from Home's "Upcoming Drops" section, not a tab root. */
 export type RootTabParamList = {
   Home: undefined;
   Discover: undefined;
-  Drops: undefined;
   Explore: undefined;
   Portfolio: undefined;
   Marketplace: undefined;
@@ -51,7 +52,6 @@ function RootTabsInner() {
     >
       <Tab.Screen name="Home" component={HomeStack} options={{ headerShown: false }} />
       <Tab.Screen name="Discover" component={DiscoverStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Drops" component={DropsScreen} options={{ headerShown: false }} />
       <Tab.Screen name="Explore" component={ExploreScreen} options={{ headerShown: false }} />
       <Tab.Screen name="Portfolio" component={CollectionStack} options={{ headerShown: false }} />
       <Tab.Screen name="Marketplace" component={MarketplaceStack} options={{ headerShown: false }} />

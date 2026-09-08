@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthViewModel, type AuthStep } from "../viewmodels/useAuthViewModel";
 import { GlossyButton } from "../components/GlossyButton";
 import { ScreenBackground } from "../components/ScreenBackground";
@@ -40,7 +41,7 @@ export function AuthScreen({ onClose, initialStep }: { onClose?: () => void; ini
       <View style={styles.container}>
         {backTarget && (
           <Pressable style={styles.back} onPress={() => auth.goTo(backTarget)} hitSlop={12}>
-            <Text style={styles.backText}>‹</Text>
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </Pressable>
         )}
         {showClose && (
@@ -218,7 +219,7 @@ function UsernameStatusLine({ status }: { status: "idle" | "checking" | "availab
     status === "checking"
       ? authCopy.usernameChecking
       : status === "available"
-        ? `✓ ${authCopy.usernameAvailable}`
+        ? authCopy.usernameAvailable
         : status === "taken"
           ? authCopy.usernameTaken
           : authCopy.usernameInvalid;
@@ -230,7 +231,8 @@ function UsernameStatusLine({ status }: { status: "idle" | "checking" | "availab
         (status === "taken" || status === "invalid") && styles.usernameStatusBad,
       ]}
     >
-      {status === "checking" ? <ActivityIndicator size="small" color={colors.textMuted} /> : null} {text}
+      {status === "checking" ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+      {status === "available" ? <Ionicons name="checkmark-circle" size={14} color={colors.success} /> : null} {text}
     </Text>
   );
 }
@@ -239,7 +241,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.xl, paddingTop: spacing.xxl * 2 },
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   back: { position: "absolute", top: spacing.xl, left: spacing.xl, zIndex: 1 },
-  backText: { color: colors.textPrimary, fontSize: 28, lineHeight: 28 },
   close: { position: "absolute", top: spacing.xl, right: spacing.xl, zIndex: 1 },
   closeText: { color: colors.textMuted, ...typography.body },
 

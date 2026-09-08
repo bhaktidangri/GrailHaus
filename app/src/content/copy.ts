@@ -178,6 +178,7 @@ export const home = {
     title: "Upcoming Drops",
     units: (n: number) => `${n} unit${n === 1 ? "" : "s"}`,
     notify: "NOTIFY",
+    seeAll: "See all",
   },
   recentlyRevealed: {
     title: "Recently Revealed",
@@ -206,6 +207,8 @@ export const dropDetail = {
   whatIsInside: "WHAT IS INSIDE",
   claim: "CLAIM ONE",
   fairness: "If two of you tap at once, exactly one gets it. You are not charged for a loss.",
+  notifyConfirmTitle: "No push notifications yet",
+  notifyConfirmBody: "We can't alert you the moment this goes live — the countdown above is the most reliable way to catch it.",
 } as const;
 
 export const drops = {
@@ -267,6 +270,18 @@ export const auth = {
   passwordMismatch: "Passwords don't match.",
 } as const;
 
+export const account = {
+  title: "Account",
+  close: "Close",
+  balance: "BALANCE",
+  memberSince: (date: string) => `Collector since ${date}`,
+  signOut: "Sign Out",
+  signOutConfirmTitle: "Sign out of GrailHaus?",
+  signOutConfirmBody: "You can always sign back in with the same email.",
+  signOutConfirmCta: "Sign Out",
+  cancel: "Cancel",
+} as const;
+
 export const collection = {
   title: "My Collection",
   itemCount: (n: number, categories: number) => `${n} item${n === 1 ? "" : "s"} · ${categories} categor${categories === 1 ? "y" : "ies"}`,
@@ -275,11 +290,16 @@ export const collection = {
   watchesLabel: (pct: number) => `Watches ${pct}%`,
   binder: { eyebrow: "TRADING CARDS", title: "Collection Binder", cta: "OPEN BINDER" },
   vault: { eyebrow: "WATCHES", title: "The Vault", cta: "ENTER VAULT" },
+  topCards: "Your Top Cards",
+  topWatches: "Your Top Watches",
+  seeAllCount: (n: number) => `See all ${n} →`,
   cardsSummary: (n: number, sets: number, valueCents: number) =>
     `${n} card${n === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
   watchesSummary: (n: number, brands: number, valueCents: number) =>
     `${n} watch${n === 1 ? "" : "es"} · ${brands} brand${brands === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
+  emptyTitle: "Your collection is empty",
   empty: "Rip your first pack to start a collection.",
+  emptyCta: "Explore Packs",
   signInTitle: "Sign in to see your collection",
   signInBody: "Everything you pull gets tracked here — sign in to pick up where you left off.",
 } as const;

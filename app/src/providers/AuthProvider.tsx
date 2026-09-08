@@ -6,6 +6,7 @@ import { profileService } from "../services/profileService";
 import { reconcilePendingPurchase } from "../lib/pendingPurchase";
 import { useAuthStore } from "../state/authStore";
 import { AuthScreen } from "../screens/AuthScreen";
+import { AccountScreen } from "../screens/AccountScreen";
 
 /**
  * Root-level wiring: hydrates the auth store from the token persisted in
@@ -29,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const isSheetOpen = useAuthStore((s) => s.isSheetOpen);
   const closeSheet = useAuthStore((s) => s.closeSheet);
+  const isAccountSheetOpen = useAuthStore((s) => s.isAccountSheetOpen);
+  const closeAccountSheet = useAuthStore((s) => s.closeAccountSheet);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -70,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           onClose={needsUsername ? undefined : closeSheet}
           initialStep={needsUsername ? "claim-username" : undefined}
         />
+      </Modal>
+      <Modal visible={isAccountSheetOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeAccountSheet}>
+        <AccountScreen onClose={closeAccountSheet} />
       </Modal>
     </>
   );

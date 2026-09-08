@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import Svg, { Defs, RadialGradient, LinearGradient, Stop, Rect } from "react-native-svg";
 import { shadow, typography } from "../theme/tokens";
 
@@ -8,9 +9,14 @@ import { shadow, typography } from "../theme/tokens";
  * radial-gradient has no RN <style> equivalent, so the artwork is an SVG
  * RadialGradient with a specular sheen band and a foot-shadow layered over
  * it. Used for the onboarding hero pack and the title screen's drifting cards.
+ *
+ * `imageUrl` layers a real photo underneath that same sheen/foot-shadow instead of the flat
+ * gradient — the flat gradient becomes purely a fallback for callers with no real art (still
+ * every other caller today: onboarding, title screen, etc.), not something drawn over a photo.
  */
 export function PackFace({
   art,
+  imageUrl,
   width,
   height,
   radius = 16,
@@ -22,6 +28,9 @@ export function PackFace({
   children,
 }: {
   art?: string[];
+  /** A real photo (e.g. Pokémon TCG API artwork) — when present, replaces the flat gradient
+   * background entirely; the sheen/foot-shadow overlay still applies on top for cohesion. */
+  imageUrl?: string | null;
   width: number;
   height: number;
   radius?: number;
@@ -48,13 +57,24 @@ export function PackFace({
         glowColor && shadow.glow(glowColor),
       ]}
     >
+      {imageUrl ? (
+        <Image
+          source={imageUrl}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={150}
+          cachePolicy="memory-disk"
+        />
+      ) : null}
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         <Defs>
-          <RadialGradient id="face" cx="50%" cy="40%" rx="60%" ry="44%">
-            {stops.map((c, i) => (
-              <Stop key={i} offset={offs[i]} stopColor={c} stopOpacity="1" />
-            ))}
-          </RadialGradient>
+          {!imageUrl && (
+            <RadialGradient id="face" cx="50%" cy="40%" rx="60%" ry="44%">
+              {stops.map((c, i) => (
+                <Stop key={i} offset={offs[i]} stopColor={c} stopOpacity="1" />
+              ))}
+            </RadialGradient>
+          )}
           <LinearGradient id="sheen" x1="0" y1="0" x2="1" y2="0.55">
             <Stop offset="0.3" stopColor="#fff" stopOpacity="0" />
             <Stop offset="0.46" stopColor="#fff" stopOpacity="0.4" />
@@ -65,7 +85,7 @@ export function PackFace({
             <Stop offset="1" stopColor="#000" stopOpacity="0.5" />
           </LinearGradient>
         </Defs>
-        <Rect width={width} height={height} rx={radius} fill="url(#face)" />
+        {!imageUrl && <Rect width={width} height={height} rx={radius} fill="url(#face)" />}
         <Rect width={width} height={height} rx={radius} fill="url(#sheen)" />
         <Rect width={width} height={height} rx={radius} fill="url(#foot)" />
       </Svg>

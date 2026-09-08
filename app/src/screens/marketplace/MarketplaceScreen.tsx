@@ -1,7 +1,18 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, Listing, RarityTierLevel } from "@grailhaus/shared";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
@@ -57,7 +68,14 @@ function computePriceBands(listings: Listing[]): PriceBand[] {
  */
 export function MarketplaceScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
+  // A fixed per-card width rather than `flex: 1` — with `numColumns={2}` and an odd (or just
+  // sparse) result count, a flex:1 lone card in its row stretches to the full row width instead
+  // of sitting at half-width like every other card, which reads as broken rather than "just one
+  // result." Matches grid's 20px side padding + gridRow's 12px inter-column gap.
+  const { width: windowWidth } = useWindowDimensions();
+  const cardCellWidth = (windowWidth - 20 * 2 - 12) / 2;
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [category, setCategory] = useState<Category | null>(null);
   const vm = useMarketplaceViewModel(category ?? undefined);
@@ -155,7 +173,7 @@ export function MarketplaceScreen() {
       {/* Bounded to the fixed header+toggle+filter rows (never scrolls) rather than the whole
           screen — a full-screen wash here would stay pinned behind the grid's scrolled rows too. */}
       <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>{copy.title}</Text>
         {session.balanceCents != null && (
           <View style={styles.balancePill}>
@@ -229,7 +247,7 @@ export function MarketplaceScreen() {
           }
           renderItem={({ item: listing }: { item: Listing }) => (
             <Pressable
-              style={styles.card}
+              style={[styles.card, { width: cardCellWidth }]}
               onPress={() => navigation.navigate("ListingDetail", { listing })}
             >
               {listing.item.category === "watches" ? (
@@ -237,7 +255,13 @@ export function MarketplaceScreen() {
                   <WatchDial art={itemArtGradient(listing.item)} size={110} />
                 </View>
               ) : (
-                <CardFace gradient={itemArtGradient(listing.item)} width={cellWidth} height={132} style={styles.cellFace} />
+                <CardFace
+                  gradient={itemArtGradient(listing.item)}
+                  imageUrl={listing.item.textureUrl}
+                  width={cardCellWidth - 18}
+                  height={132}
+                  style={styles.cellFace}
+                />
               )}
               <Text style={styles.cardName} numberOfLines={1}>
                 {(listing.item.cardTitle ?? listing.item.watchName ?? listing.item.name).toUpperCase()}
@@ -433,8 +457,6 @@ function Badge({ n }: { n: number }) {
   );
 }
 
-const cellWidth = 160;
-
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: ink.groundDeep },
   base: { position: "absolute", top: 0, left: 0, right: 0, height: 320 },
@@ -515,7 +537,6 @@ const styles = StyleSheet.create({
   grid: { padding: 20, gap: 12 },
   gridRow: { gap: 12 },
   card: {
-    flex: 1,
     borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1.5,

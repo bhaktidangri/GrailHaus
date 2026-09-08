@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp, type CompositeNavigationProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { usePackDetailViewModel } from "../viewmodels/usePackDetailViewModel";
@@ -36,6 +38,7 @@ type Nav = CompositeNavigationProp<
  */
 export function PackDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { skuId } = useRoute<RouteProp<AppStackParamList, "PackDetail">>().params;
   const { sku } = usePackDetailViewModel(skuId);
   const session = useSessionViewModel();
@@ -77,9 +80,9 @@ export function PackDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
         <View style={styles.iconButton} />
@@ -154,14 +157,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerTier: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.4, color: "rgba(255,255,255,0.62)" },
 

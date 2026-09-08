@@ -11,7 +11,9 @@ import type { DiscoverGroup, DiscoverItem } from "../viewmodels/useDiscoverViewM
  * also links into it, not just Discover's own drill-down. */
 export type DiscoverStackParamList = {
   Discover: undefined;
-  DiscoverCategory: { category: Category };
+  /** `autoFocusSearch` — set when arriving from the Discover hub's own search bar, so the
+   * keyboard is already up rather than landing on an unfiltered browse list. */
+  DiscoverCategory: { category: Category; autoFocusSearch?: boolean };
   Versions: { category: Category; group: DiscoverGroup };
   /** The Discover hub's third door (cross-category) and each category hub's own
    * "Collections" facet both land here — see CollectionDetailScreen.tsx. */

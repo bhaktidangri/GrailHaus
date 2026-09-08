@@ -1,6 +1,8 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -24,6 +26,7 @@ type Route = RouteProp<DiscoverStackParamList, "Versions">;
  * name/brand, ordered rarest-last so the chase piece anchors the bottom of the list. */
 export function VersionsScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { category, group } = useRoute<Route>().params;
   const isWatch = category === "watches";
   const tabBarClearance = useTabBarClearance();
@@ -38,9 +41,9 @@ export function VersionsScreen() {
         colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
         style={styles.base}
       />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerLabel}>{copy.header.toUpperCase()}</Text>
         <View style={{ width: 36 }} />
@@ -50,7 +53,7 @@ export function VersionsScreen() {
         {isWatch ? (
           <WatchDial art={itemArtGradient(group.versions[0].detail)} size={58} />
         ) : (
-          <CardFace gradient={itemArtGradient(group.versions[0].detail)} width={48} height={67} />
+          <CardFace gradient={itemArtGradient(group.versions[0].detail)} imageUrl={group.versions[0].detail.textureUrl} width={48} height={67} />
         )}
         <View style={styles.titleInfo}>
           <Text style={styles.name}>{group.label}</Text>
@@ -71,7 +74,7 @@ export function VersionsScreen() {
             {isWatch ? (
               <WatchDial art={itemArtGradient(v.detail)} size={56} />
             ) : (
-              <CardFace gradient={itemArtGradient(v.detail)} width={56} height={78} />
+              <CardFace gradient={itemArtGradient(v.detail)} imageUrl={v.detail.textureUrl} width={56} height={78} />
             )}
             <View style={styles.rowInfo}>
               <View style={styles.rowBadges}>
@@ -120,14 +123,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   titleRow: { flexDirection: "row", gap: 14, alignItems: "center", paddingHorizontal: 20, paddingTop: 18 },

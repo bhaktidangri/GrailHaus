@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type CompositeNavigationProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { Category, Listing } from "@grailhaus/shared";
+import type { Category, Listing, RarityTierLevel, RecentPull } from "@grailhaus/shared";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useHomeViewModel } from "../viewmodels/useHomeViewModel";
+import { useRecentActivityViewModel } from "../viewmodels/useRecentActivityViewModel";
 import type { CollectionProgressSummary } from "../viewmodels/useHomeViewModel";
 import { useHideTabBarOnScroll, useTabBarClearance, useTabBarHidden } from "../navigation/tabBarVisibility";
 import { useAuthStore } from "../state/authStore";
@@ -53,16 +55,17 @@ type Nav = CompositeNavigationProp<
  *   dropped from the real rows entirely rather than faked: comp-price deltas ("-12% vs comp",
  *   needs market-average analytics per item) and "offers on yours" (this app only has fixed-
  *   price listings, per PRD §30-32 — there's no offer/bid system for that count to come from).
- * - Recently Revealed: fully placeholder (`SAMPLE_RECENT_PULLS`) — there's no endpoint of any
- *   kind for this. It needs a new "recent public pulls" activity feed (e.g. a puller's public
- *   username + item + tier + timestamp), which is also a product/privacy decision (is a pull
- *   public by default?), not just a missing field.
+ * - Recently Revealed: real — `GET /activity/recent` returns the most recent genuine pack pulls
+ *   (owner, item, timestamp), filtered to actual reveals rather than marketplace transfers (see
+ *   `useRecentActivityViewModel`). No sample fallback: with zero pulls yet, the section shows a
+ *   plain "nobody's pulled yet" empty state rather than fabricated rows.
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const home = useHomeViewModel();
+  const recentActivity = useRecentActivityViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const setNeedsOnboarding = useOnboardingStore((s) => s.setNeedsOnboarding);
   const scrollHandler = useHideTabBarOnScroll();
@@ -112,10 +115,11 @@ export function HomeScreen() {
           <Text style={styles.brandText}>{brand.name}</Text>
         </Pressable>
         <View style={styles.headerRight}>
-          <View style={styles.iconButton}>
-            <View style={styles.iconGlyph} />
-            <View style={styles.iconDot} />
-          </View>
+          {session.isSignedIn && (
+            <Pressable style={styles.iconButton} onPress={() => useAuthStore.getState().openAccountSheet()} hitSlop={8}>
+              <Ionicons name="person" size={16} color="rgba(255,255,255,0.85)" />
+            </Pressable>
+          )}
           {session.isSignedIn ? (
             session.balanceCents != null && (
               <View style={styles.balancePill}>
@@ -159,24 +163,35 @@ export function HomeScreen() {
           </View>
 
           {home.upcomingDrops.length > 0 && (
-            <Section title={copy.upcomingDrops.title}>
+            <Section
+              title={copy.upcomingDrops.title}
+              actionLabel={copy.upcomingDrops.seeAll}
+              onAction={() => navigation.navigate("Drops")}
+            >
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.upcomingRow}>
                 {home.upcomingDrops.map((d) => (
-                  <UpcomingDropCard key={d.sku.id} drop={d} />
+                  <UpcomingDropCard
+                    key={d.sku.id}
+                    drop={d}
+                    onPress={() => navigation.navigate("DropDetail", { packId: d.sku.id })}
+                  />
                 ))}
               </ScrollView>
             </Section>
           )}
 
           <Section title={copy.recentlyRevealed.title} sub={copy.recentlyRevealed.sub} actionLabel={copy.recentlyRevealed.action}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.revealedRow}>
-              {SAMPLE_RECENT_PULLS.map((pull) => (
-                <RecentPullCard key={pull.handle} pull={pull} />
-              ))}
-              <View style={styles.revealedMore}>
-                <Text style={styles.revealedMoreText}>+41</Text>
-              </View>
-            </ScrollView>
+            {recentActivity.pulls.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.revealedRow}>
+                {recentActivity.pulls.map((pull) => (
+                  <RecentPullCard key={pull.ownedItemId} pull={pullCardFromActivity(pull)} />
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={styles.revealedEmpty}>
+                {recentActivity.isLoading ? "Loading recent pulls…" : "Nobody's pulled yet — be the first."}
+              </Text>
+            )}
           </Section>
 
           <Section
@@ -308,12 +323,12 @@ function DoorCard({
   );
 }
 
-function UpcomingDropCard({ drop }: { drop: DropView }) {
+function UpcomingDropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
   const { sku } = drop;
   const accent = accents[sku.category];
 
   return (
-    <View style={styles.upcoming}>
+    <Pressable style={styles.upcoming} onPress={onPress}>
       <View style={styles.upcomingKickerRow}>
         <View style={[styles.upcomingDot, { backgroundColor: accent.top }]} />
         <Text style={styles.upcomingKicker}>{sku.category.toUpperCase()}</Text>
@@ -331,7 +346,7 @@ function UpcomingDropCard({ drop }: { drop: DropView }) {
           <Text style={[styles.notifyLabel, { color: accent.top }]}>{copy.upcomingDrops.notify}</Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -371,47 +386,53 @@ function Section({
 
 /**
  * SAMPLE DATA — visual placeholder only, kept as the fallback rendered when there's nothing
- * real yet. `SAMPLE_RECENT_PULLS` is permanent until a "recent public pulls" activity feed
- * endpoint exists (none is planned yet — see this file's top comment). `SAMPLE_COLLECTION` and
- * `SAMPLE_LISTINGS` are shown only before there's real data to replace them with (no session /
- * no owned items; an empty marketplace) — see `CollectionProgressCard` and `RealListingRow`
- * above for the real branches.
+ * real yet. `SAMPLE_COLLECTION` and `SAMPLE_LISTINGS` are shown only before there's real data to
+ * replace them with (no session / no owned items; an empty marketplace) — see
+ * `CollectionProgressCard` and `RealListingRow` above for the real branches. "Recently Revealed"
+ * has no sample fallback (see this file's top comment) — `RecentPullCard` below only ever renders
+ * real `/activity/recent` rows.
  */
-const SAMPLE_RECENT_PULLS: {
+type PullCardData = {
   handle: string;
   badge: "CHASE" | "GRAIL" | null;
   priceLabel: string;
   timeLabel: string;
-  art: [string, string];
+  art: string[];
   borderColor: string;
   glowColor?: string;
-}[] = [
-  {
-    handle: "@vaultrat",
-    badge: "CHASE",
-    priceLabel: "$4,120",
-    timeLabel: "2m",
-    art: ART_GRADIENT.black_label,
-    borderColor: "rgba(255,215,94,0.7)",
-    glowColor: "rgba(255,201,74,0.3)",
-  },
-  {
-    handle: "@toploader",
-    badge: null,
-    priceLabel: "$910",
-    timeLabel: "9m",
-    art: ART_GRADIENT.street_rip,
-    borderColor: "rgba(143,169,255,0.55)",
-  },
-  {
-    handle: "@heirloom",
-    badge: "GRAIL",
-    priceLabel: "$11,400",
-    timeLabel: "14m",
-    art: ART_GRADIENT.reserve,
-    borderColor: "rgba(242,196,107,0.5)",
-  },
-];
+  imageUrl?: string | null;
+};
+
+/** Coarse per-tier styling for a pull card — the real feed carries no tier name/color (`ItemDetail`
+ * only has the ordinal `rarityTierLevel`), so this mirrors the badge/border scheme the mockup's own
+ * sample rows used per tier rather than inventing new colors. */
+const TIER_PULL_STYLE: Record<RarityTierLevel, Pick<PullCardData, "badge" | "borderColor" | "glowColor">> = {
+  3: { badge: "GRAIL", borderColor: "rgba(242,196,107,0.5)" },
+  2: { badge: "CHASE", borderColor: "rgba(255,215,94,0.7)", glowColor: "rgba(255,201,74,0.3)" },
+  1: { badge: null, borderColor: "rgba(143,169,255,0.55)" },
+};
+
+function formatPullTimeAgo(iso: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function pullCardFromActivity(pull: RecentPull): PullCardData {
+  const item = pull.item;
+  const tierStyle = TIER_PULL_STYLE[item.rarityTierLevel];
+  return {
+    handle: pull.username ? `@${pull.username}` : "collector",
+    priceLabel: `$${(item.baseValueCents / 100).toLocaleString()}`,
+    timeLabel: formatPullTimeAgo(pull.acquiredAt),
+    art: itemArtGradient(item),
+    imageUrl: item.textureUrl,
+    ...tierStyle,
+  };
+}
 
 const SAMPLE_COLLECTION = {
   totalLabel: "$35,143",
@@ -451,12 +472,13 @@ const SAMPLE_LISTINGS: {
   },
 ];
 
-function RecentPullCard({ pull }: { pull: (typeof SAMPLE_RECENT_PULLS)[number] }) {
+function RecentPullCard({ pull }: { pull: PullCardData }) {
   return (
     <View style={styles.pullCard}>
       <View style={styles.pullArtWrap}>
         <PackFace
           art={pull.art}
+          imageUrl={pull.imageUrl}
           width={96}
           height={120}
           radius={12}
@@ -471,7 +493,9 @@ function RecentPullCard({ pull }: { pull: (typeof SAMPLE_RECENT_PULLS)[number] }
           </View>
         )}
       </View>
-      <Text style={styles.pullHandle}>{pull.handle}</Text>
+      <Text style={styles.pullHandle} numberOfLines={1}>
+        {pull.handle}
+      </Text>
       <Text style={styles.pullMeta}>
         {pull.priceLabel} · {pull.timeLabel}
       </Text>
@@ -603,7 +627,7 @@ function RealListingRow({ listing }: { listing: Listing }) {
       {item.category === "watches" ? (
         <WatchDial art={art} size={44} />
       ) : (
-        <PackFace art={art} width={42} height={58} radius={8} />
+        <PackFace art={art} imageUrl={item.textureUrl} width={42} height={58} radius={8} />
       )}
       <View style={styles.listingInfo}>
         <Text style={styles.listingName} numberOfLines={1}>
@@ -648,18 +672,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  iconGlyph: { width: 13, height: 13, borderRadius: 4, borderWidth: 2, borderColor: "rgba(255,255,255,0.7)" },
-  iconDot: {
-    position: "absolute",
-    right: -1,
-    top: -1,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.danger,
-    borderWidth: 1.5,
-    borderColor: ink.ground,
   },
   balancePill: {
     height: 34,
@@ -809,18 +821,7 @@ const styles = StyleSheet.create({
   pullBadgeText: { ...typography.tierPill, fontSize: 7, color: "#FFD75E" },
   pullHandle: { ...typography.footNote, color: ink.text, marginTop: 7 },
   pullMeta: { ...typography.footNote, marginTop: 1 },
-  revealedMore: {
-    width: 58,
-    height: 120,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.16)",
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  revealedMoreText: { ...typography.chipLabel, color: ink.textMuted },
+  revealedEmpty: { ...typography.footNote, color: ink.textMuted },
 
   collectionCard: {
     borderRadius: 20,

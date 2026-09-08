@@ -1,6 +1,8 @@
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -23,15 +25,16 @@ const CATEGORY_LABEL: Record<"cards" | "watches", string> = { cards: "Cards", wa
  */
 export function CollectionsScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const vm = useCollectionsViewModel();
   const tabBarClearance = useTabBarClearance();
 
   return (
     <View style={styles.fill}>
       <LinearGradient colors={["rgba(255,255,255,0.06)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerLabel}>{copy.title.toUpperCase()}</Text>
         <View style={{ width: 36 }} />
@@ -58,7 +61,7 @@ export function CollectionsScreen() {
                 {isWatch ? (
                   <WatchDial art={itemArtGradient(primary.detail)} size={52} />
                 ) : (
-                  <CardFace gradient={itemArtGradient(primary.detail)} width={44} height={61} />
+                  <CardFace gradient={itemArtGradient(primary.detail)} imageUrl={primary.detail.textureUrl} width={44} height={61} />
                 )}
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowName} numberOfLines={1}>
@@ -101,14 +104,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   body: { ...typography.sectionSub, paddingHorizontal: 20, paddingTop: 14 },

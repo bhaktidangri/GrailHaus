@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Canvas } from "@react-three/fiber/native";
+import type { DirectionalLight } from "three";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -15,7 +17,7 @@ import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { cardsConfig } from "../categories/cards.config";
 import { GestureLayer } from "../core/GestureLayer";
-import { CardMesh } from "../components/CardMesh";
+import { PackTearMesh } from "./reveal/PackTearMesh";
 import { playHapticTrack } from "../core/HapticsTrack";
 import { PackFace } from "../../components/PackFace";
 import { ProgressRing } from "../../components/ProgressRing";
@@ -57,6 +59,11 @@ export function CardFlowEngine({
   const [step, setStep] = useState<Step>("processing");
   const [visibleStatusRows, setVisibleStatusRows] = useState(0);
   const [cardIndex, setCardIndex] = useState(0);
+  const tearCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (tearCompleteTimer.current) clearTimeout(tearCompleteTimer.current);
+  }, []);
 
   // Same ordering rule as cardsConfig.revealOrder (commons first, rarest last) — reimplemented
   // here rather than called directly so `orderedItems` keeps its full `ItemDetail[]` typing
@@ -102,9 +109,17 @@ export function CardFlowEngine({
   }
 
   function handleTearComplete() {
-    setStep("card");
-    setCardIndex(0);
+    // GestureLayer's onComplete fires the instant the swipe is *recognized* — well before
+    // buildPackObject's own tear-off release (past q > 0.97) and its ballistic fall have played
+    // out. That fall isn't a quick drop: with this physics's gravity/drag/restitution
+    // constants, the torn strip typically needs two or three bounces to settle below the "at
+    // rest" threshold — a first pass at 1000ms cut away while it was still visibly mid-bounce,
+    // which read as "nothing lands." 2500ms comfortably covers a full multi-bounce settle.
     playHapticTrack(cardsConfig.hapticTrack("opening", false));
+    tearCompleteTimer.current = setTimeout(() => {
+      setStep("card");
+      setCardIndex(0);
+    }, 2500);
   }
 
   function handleAdvanceCard() {
@@ -245,6 +260,22 @@ function ReadyView({
 }
 
 function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplete: () => void }) {
+  const keyLightRef = useRef<DirectionalLight>(null);
+
+  // r3f's shadow pipeline is off by default at the Canvas level, and a directional light's own
+  // shadow camera defaults to a frustum sized for a whole outdoor scene — hopelessly wrong for
+  // a 0.068-unit-wide pack, so every shadow it casts would clip to nothing. Both need this
+  // explicit setup, matching the prototype's own PackScene.tsx exactly, or every castShadow/
+  // receiveShadow flag already set inside buildPackObject.ts silently does nothing.
+  useEffect(() => {
+    const light = keyLightRef.current;
+    if (!light) return;
+    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.bias = -0.0004;
+    Object.assign(light.shadow.camera, { left: -0.12, right: 0.12, top: 0.12, bottom: -0.12 });
+    light.shadow.camera.updateProjectionMatrix();
+  }, []);
+
   return (
     <View style={styles.fill}>
       <Text style={styles.introHeading}>{copy.introduction.heading(sku.itemCount)}</Text>
@@ -252,10 +283,21 @@ function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplet
       <View style={styles.tearCanvas}>
         <GestureLayer gesture={cardsConfig.gesture} onComplete={onTearComplete}>
           {(openProgress) => (
-            <Canvas camera={{ position: cardsConfig.camera.position, fov: cardsConfig.camera.fov }}>
-              <ambientLight intensity={0.6} />
-              <directionalLight position={[3, 4, 5]} intensity={1.1} />
-              <CardMesh tierColor={accents.cards.top} openProgress={openProgress} />
+            // Real-world-scale pack (~0.068 units wide, i.e. meters) needs a much closer
+            // camera and its own lighting recipe than the old placeholder's 1.4-unit plane —
+            // matched to the prototype's own PackScene.tsx setup (warm key + violet rim, no
+            // flat ambient wash), not cardsConfig's generic ambient+directional pair.
+            <Canvas shadows camera={{ position: [0, 0.01, 0.22], fov: 35 }}>
+              <hemisphereLight args={["#2a1b47", "#090610", 0.7]} />
+              <directionalLight
+                ref={keyLightRef}
+                color="#fff0d8"
+                intensity={3}
+                position={[0.16, 0.3, 0.28]}
+                castShadow
+              />
+              <directionalLight color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
+              <PackTearMesh openProgress={openProgress} />
             </Canvas>
           )}
         </GestureLayer>
@@ -331,6 +373,7 @@ function CardView({
           <Animated.View style={cardStyle}>
             <PackFace
               art={[color, "rgba(0,0,0,0.55)"]}
+              imageUrl={item.textureUrl}
               width={220}
               height={298}
               radius={16}
@@ -408,6 +451,7 @@ function FinalCardView({
         ) : (
           <PackFace
             art={[color, "rgba(0,0,0,0.6)"]}
+            imageUrl={item.textureUrl}
             width={236}
             height={326}
             radius={18}
@@ -478,8 +522,21 @@ function SummaryView({
             const tier = sku.rarityTiers.find((t) => t.level === item.rarityTierLevel);
             return (
               <View key={`${item.id}-${i}`} style={styles.resultTile}>
+                {item.textureUrl ? (
+                  <Image
+                    source={item.textureUrl}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    transition={150}
+                    cachePolicy="memory-disk"
+                  />
+                ) : null}
                 <LinearGradient
-                  colors={[`${tier?.colorHex ?? "#888"}CC`, "rgba(0,0,0,0.5)"]}
+                  colors={
+                    item.textureUrl
+                      ? ["transparent", "rgba(0,0,0,0.55)"]
+                      : [`${tier?.colorHex ?? "#888"}CC`, "rgba(0,0,0,0.5)"]
+                  }
                   style={StyleSheet.absoluteFill}
                 />
                 <Text style={styles.resultValue}>${(item.baseValueCents / 100).toFixed(0)}</Text>

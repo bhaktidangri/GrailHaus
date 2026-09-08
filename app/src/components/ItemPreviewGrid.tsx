@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { PackSku, RarityTierLevel } from "@grailhaus/shared";
 import { useTierOwnership } from "../viewmodels/useTierOwnership";
@@ -43,8 +44,23 @@ export function ItemPreviewGrid({
           return (
             <View key={item.id} style={styles.tile}>
               {owned ? (
-                <LinearGradient colors={[`${color}CC`, `${color}22`]} style={StyleSheet.absoluteFill} />
+                item.textureUrl ? (
+                  <>
+                    <Image
+                      source={item.textureUrl}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                    />
+                    <LinearGradient colors={["transparent", `${color}55`]} style={StyleSheet.absoluteFill} />
+                  </>
+                ) : (
+                  <LinearGradient colors={[`${color}CC`, `${color}22`]} style={StyleSheet.absoluteFill} />
+                )
               ) : (
+                // Deliberately never shows real art here, even if textureUrl exists — an unowned
+                // item stays a "?" on purpose, so this grid never spoils what a tier contains.
                 <Text style={styles.unknown}>?</Text>
               )}
             </View>

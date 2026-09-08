@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Listing } from "@grailhaus/shared";
 import { CardFace } from "../../components/CardFace";
@@ -21,6 +23,7 @@ type Route = RouteProp<MarketplaceStackParamList, "ListingDetail">;
 
 export function ListingDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { listing: initialListing } = useRoute<Route>().params;
   // Local copy, not the route param directly — a successful price edit updates this in place
   // (plus invalidates the shared ["listings"] query for Browse) rather than needing a
@@ -58,9 +61,9 @@ export function ListingDetailScreen() {
             style={StyleSheet.absoluteFill}
           />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
             <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-              <View style={styles.backChevron} />
+              <Ionicons name="chevron-back" size={18} color="#fff" />
             </Pressable>
             <Text style={styles.headerLabel}>LISTING</Text>
             <View style={{ width: 38 }} />
@@ -72,6 +75,7 @@ export function ListingDetailScreen() {
             ) : (
               <CardFace
                 gradient={itemArtGradient(item)}
+                imageUrl={item.textureUrl}
                 width={174}
                 height={243}
                 borderColor="rgba(255,215,94,0.75)"
@@ -268,14 +272,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   heroWrap: { alignItems: "center", paddingTop: 16 },

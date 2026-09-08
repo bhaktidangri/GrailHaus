@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
@@ -75,7 +76,7 @@ export function SellItemScreen() {
         <LinearGradient colors={GREEN_WASH} locations={[0, 0.4, 1]} style={styles.base} />
         <View style={styles.doneWrap}>
           <View style={styles.doneBadge}>
-            <View style={styles.checkmark} />
+            <Ionicons name="checkmark" size={28} color="#fff" />
           </View>
           <Text style={styles.doneTitle}>{copy.liveTitle}</Text>
           <Text style={styles.doneBody}>{copy.liveBody(listedPriceCents)}</Text>
@@ -95,7 +96,7 @@ export function SellItemScreen() {
       <LinearGradient colors={BLUE_WASH} locations={[0, 0.4, 1]} style={styles.base} />
       <View style={styles.header}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerLabel}>{copy.header.toUpperCase()}</Text>
         <View style={{ width: 38 }} />
@@ -105,7 +106,7 @@ export function SellItemScreen() {
         {item.category === "watches" ? (
           <WatchDial art={itemArtGradient(item)} size={58} />
         ) : (
-          <CardFace gradient={itemArtGradient(item)} width={58} height={81} />
+          <CardFace gradient={itemArtGradient(item)} imageUrl={item.textureUrl} width={58} height={81} />
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>
@@ -193,14 +194,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
-  },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   itemRow: { flexDirection: "row", gap: 14, alignItems: "center", paddingHorizontal: 22, paddingTop: 20 },
   itemInfo: { flex: 1, minWidth: 0 },
@@ -271,14 +264,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#63E85C",
     alignItems: "center",
     justifyContent: "center",
-  },
-  checkmark: {
-    width: 17,
-    height: 9,
-    borderLeftWidth: 3.4,
-    borderBottomWidth: 3.4,
-    borderColor: "#fff",
-    transform: [{ rotate: "-45deg" }, { translateY: -2 }],
   },
   doneTitle: { ...typography.pageHeading, fontSize: 26, marginTop: 20, color: "#8BF285" },
   doneBody: { ...typography.sectionSub, marginTop: 8, textAlign: "center" },

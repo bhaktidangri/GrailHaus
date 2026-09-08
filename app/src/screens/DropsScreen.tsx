@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useDropsViewModel, type DropPhase, type DropView } from "../viewmodels/useDropsViewModel";
 import { useHideTabBarOnScroll, useTabBarClearance } from "../navigation/tabBarVisibility";
@@ -29,6 +31,7 @@ const PHASE_CHROME: Record<DropPhase, { eyebrow: string; eyebrowColor: string; d
  * there's exactly one place a drop's purchase actually happens. */
 export function DropsScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { drops, isLoading, error } = useDropsViewModel();
   const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
@@ -38,8 +41,12 @@ export function DropsScreen() {
       {/* Bounded to the fixed header (never scrolls) rather than the whole screen — a
           full-screen wash here would stay pinned behind the FlatList's scrolled rows too. */}
       <LinearGradient colors={["rgba(255,92,122,0.2)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
+          <Ionicons name="chevron-back" size={18} color="#fff" />
+        </Pressable>
         <Text style={styles.title}>{copy.title}</Text>
+        <View style={{ width: 38 }} />
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -110,7 +117,23 @@ function DropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: ink.groundDeep },
   base: { position: "absolute", top: 0, left: 0, right: 0, height: 180 },
-  header: { paddingTop: 56, paddingHorizontal: 20 },
+  header: {
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: typography.pageHeading,
   list: { padding: 20, paddingTop: 16, gap: 14 },
   empty: { ...typography.sectionSub, textAlign: "center", marginTop: 32 },

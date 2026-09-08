@@ -14,12 +14,11 @@ export function CardMesh({
 }) {
   const meshRef = useRef<Mesh>(null);
 
-  useFrame((_state, delta) => {
+  useFrame(() => {
     if (!meshRef.current) return;
     const p = openProgress.value;
     meshRef.current.rotation.y = p * Math.PI * 0.5;
     meshRef.current.position.x = p * 0.6;
-    meshRef.current.rotation.z += delta * 0.05;
   });
 
   return (

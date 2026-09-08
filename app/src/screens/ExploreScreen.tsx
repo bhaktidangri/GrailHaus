@@ -2,6 +2,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, type CompositeNavigationProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { PackSku } from "@grailhaus/shared";
@@ -34,6 +35,7 @@ type Nav = CompositeNavigationProp<
  */
 export function ExploreScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const catalog = useExploreViewModel();
   const cardCatalog = useDiscoverViewModel("cards");
@@ -45,7 +47,7 @@ export function ExploreScreen() {
     <View style={styles.fill}>
       <LinearGradient colors={["rgba(177,75,255,0.16)", "transparent"]} style={styles.base} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.brand}>
           <View style={styles.brandChip}>
             <Image source={require("../../assets/icon.png")} style={styles.brandIcon} />
@@ -206,7 +208,7 @@ function CatalogCell({
       {category === "watches" ? (
         <WatchDial art={itemArtGradient(detail)} size={64} />
       ) : (
-        <CardFace gradient={itemArtGradient(detail)} width={64} height={89} />
+        <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={64} height={89} />
       )}
       {/* Cards: lead with the Pokémon identity (what you're browsing for), the print name
           (cardTitle) is the secondary line — same split ItemFork's own heading/subheading use,

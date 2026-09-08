@@ -1,6 +1,8 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
@@ -29,15 +31,16 @@ type Route = RouteProp<DiscoverStackParamList, "CollectionDetail">;
  */
 export function CollectionDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { title, items } = useRoute<Route>().params;
   const tabBarClearance = useTabBarClearance();
 
   return (
     <View style={styles.fill}>
       <LinearGradient colors={["rgba(255,255,255,0.06)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         <Text style={styles.headerLabel} numberOfLines={1}>
           {title.toUpperCase()}
@@ -66,7 +69,7 @@ function Cell({ item, onPress }: { item: DiscoverItem; onPress: () => void }) {
       {isWatch ? (
         <WatchDial art={itemArtGradient(detail)} size={64} />
       ) : (
-        <CardFace gradient={itemArtGradient(detail)} width={64} height={89} />
+        <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={64} height={89} />
       )}
       <Text style={styles.cellName} numberOfLines={1}>
         {isWatch ? (detail.watchName ?? detail.name) : (detail.pokemonName ?? detail.name)}
@@ -101,14 +104,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2, flex: 1 },
   subLabel: { ...typography.metaLine, paddingHorizontal: 20, paddingTop: 14 },

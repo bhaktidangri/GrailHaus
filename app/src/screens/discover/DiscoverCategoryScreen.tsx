@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RarityTierLevel } from "@grailhaus/shared";
 import { CardFace } from "../../components/CardFace";
@@ -36,7 +38,8 @@ interface RowGroup {
 
 export function DiscoverCategoryScreen() {
   const navigation = useNavigation<Nav>();
-  const { category } = useRoute<Route>().params;
+  const insets = useSafeAreaInsets();
+  const { category, autoFocusSearch } = useRoute<Route>().params;
   const vm = useDiscoverViewModel(category);
   const [query, setQuery] = useState("");
   const [facet, setFacet] = useState<Facet>("identity");
@@ -116,19 +119,20 @@ export function DiscoverCategoryScreen() {
         colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
         style={styles.base}
       />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         {facet === "identity" ? (
           <View style={[styles.searchBox, isWatch && styles.searchBoxWatch]}>
-            <View style={styles.searchDot} />
+            <Ionicons name="search" size={14} color="rgba(255,255,255,0.6)" />
             <TextInput
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
               placeholder={isWatch ? "Search brands, models" : "Search Pokémon, cards, sets"}
               placeholderTextColor="rgba(255,255,255,0.45)"
+              autoFocus={autoFocusSearch}
             />
           </View>
         ) : (
@@ -174,7 +178,7 @@ export function DiscoverCategoryScreen() {
                 {isWatch ? (
                   <WatchDial art={itemArtGradient(primary.detail)} size={54} />
                 ) : (
-                  <CardFace gradient={itemArtGradient(primary.detail)} width={44} height={61} />
+                  <CardFace gradient={itemArtGradient(primary.detail)} imageUrl={primary.detail.textureUrl} width={44} height={61} />
                 )}
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowName}>{group.label}</Text>
@@ -206,7 +210,7 @@ export function DiscoverCategoryScreen() {
               {isWatch ? (
                 <WatchDial art={itemArtGradient(group.art.detail)} size={54} />
               ) : (
-                <CardFace gradient={itemArtGradient(group.art.detail)} width={44} height={61} />
+                <CardFace gradient={itemArtGradient(group.art.detail)} imageUrl={group.art.detail.textureUrl} width={44} height={61} />
               )}
               <View style={styles.rowInfo}>
                 <Text style={styles.rowName}>{group.label}</Text>
@@ -262,14 +266,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
-  },
   headerTitle: { ...typography.title, fontSize: 16 },
   searchBox: {
     flex: 1,
@@ -284,7 +280,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchBoxWatch: { borderColor: "rgba(242,196,107,0.4)" },
-  searchDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: "rgba(255,255,255,0.6)" },
   searchInput: { flex: 1, color: "#fff", fontSize: 13.5, padding: 0 },
   facetRow: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingTop: 14 },
   chip: {

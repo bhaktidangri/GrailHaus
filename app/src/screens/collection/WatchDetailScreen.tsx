@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { WatchDial } from "../../components/WatchDial";
+import { ValueDriftChart } from "../../components/ValueDriftChart";
 import { itemArtGradient } from "../../content/cardArt";
-import { ink } from "../../theme/tokens";
+import { colors, ink } from "../../theme/tokens";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { itemDetail as copy } from "../../content/copy";
@@ -16,6 +19,7 @@ type Route = RouteProp<CollectionStackParamList, "WatchDetail">;
 
 export function WatchDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { owned } = useRoute<Route>().params;
   const item = owned.item;
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
@@ -51,9 +55,9 @@ export function WatchDetailScreen() {
         <View style={styles.washWrap}>
           <LinearGradient colors={["rgba(242,196,107,0.2)", "transparent"]} style={StyleSheet.absoluteFill} />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
             <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-              <View style={styles.backChevron} />
+              <Ionicons name="chevron-back" size={18} color="#F2C46B" />
             </Pressable>
             <Text style={styles.headerLabel}>IN YOUR VAULT</Text>
             <View style={{ width: 38 }} />
@@ -125,6 +129,12 @@ export function WatchDetailScreen() {
               Simulated range ${(item.minValueCents / 100).toLocaleString()} – $
               {(item.maxValueCents / 100).toLocaleString()}, ticking every 30 seconds.
             </Text>
+            <ValueDriftChart
+              item={{ id: item.id, category: item.category, baseValueCents: item.baseValueCents }}
+              minValueCents={item.minValueCents}
+              maxValueCents={item.maxValueCents}
+              accentColor={colors.watchesTop}
+            />
             <View style={styles.sheetNote}>
               <Text style={styles.sheetNoteText}>
                 This is a simulated appraisal, not a market comp — GrailHaus doesn't track sales history for this
@@ -161,14 +171,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(242,196,107,0.24)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#F2C46B",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { fontFamily: "Outfit_600SemiBold", fontSize: 10, letterSpacing: 2.4, color: "rgba(242,196,107,0.7)" },
   heroWrap: { alignItems: "center", paddingTop: 20 },

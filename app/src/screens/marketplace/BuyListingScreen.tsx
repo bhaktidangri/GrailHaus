@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CardFace } from "../../components/CardFace";
@@ -75,7 +76,7 @@ export function BuyListingScreen() {
         <LinearGradient colors={GREEN_WASH} locations={[0, 0.4, 1]} style={styles.base} />
         <View style={styles.centered}>
           <View style={styles.doneBadge}>
-            <View style={styles.checkmark} />
+            <Ionicons name="checkmark" size={28} color="#fff" />
           </View>
           <Text style={styles.successEyebrow}>{copy.successSub}</Text>
           <Text style={styles.successTitle}>{copy.successTitle}</Text>
@@ -112,7 +113,7 @@ export function BuyListingScreen() {
         {item.category === "watches" ? (
           <WatchDial art={itemArtGradient(item)} size={64} />
         ) : (
-          <CardFace gradient={itemArtGradient(item)} width={64} height={89} />
+          <CardFace gradient={itemArtGradient(item)} imageUrl={item.textureUrl} width={64} height={89} />
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>
@@ -224,14 +225,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#63E85C",
     alignItems: "center",
     justifyContent: "center",
-  },
-  checkmark: {
-    width: 17,
-    height: 9,
-    borderLeftWidth: 3.4,
-    borderBottomWidth: 3.4,
-    borderColor: "#fff",
-    transform: [{ rotate: "-45deg" }, { translateY: -2 }],
   },
   successEyebrow: { ...typography.eyebrow, color: "#8BF285", letterSpacing: 3.4, marginTop: 18 },
   successTitle: { ...typography.heroWordmark, fontSize: 30, marginTop: 8 },

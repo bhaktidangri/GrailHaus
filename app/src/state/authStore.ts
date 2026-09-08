@@ -6,6 +6,9 @@ interface AuthState {
   isReady: boolean;
   isSheetOpen: boolean;
   pendingAction: (() => void) | null;
+  /** The signed-in account sheet (profile + sign out) — separate from `isSheetOpen`,
+   * which is the signed-out sign-in/register sheet. */
+  isAccountSheetOpen: boolean;
   setToken: (token: string | null) => void;
   setReady: (ready: boolean) => void;
   /** Runs `action` immediately if signed in; otherwise opens the auth sheet and
@@ -14,6 +17,8 @@ interface AuthState {
   requireAuth: (action: () => void) => void;
   closeSheet: () => void;
   resolvePendingAction: () => void;
+  openAccountSheet: () => void;
+  closeAccountSheet: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -21,6 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isReady: false,
   isSheetOpen: false,
   pendingAction: null,
+  isAccountSheetOpen: false,
   setToken: (token) => set({ token }),
   setReady: (isReady) => set({ isReady }),
   requireAuth: (action) => {
@@ -36,4 +42,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isSheetOpen: false, pendingAction: null });
     action?.();
   },
+  openAccountSheet: () => set({ isAccountSheetOpen: true }),
+  closeAccountSheet: () => set({ isAccountSheetOpen: false }),
 }));

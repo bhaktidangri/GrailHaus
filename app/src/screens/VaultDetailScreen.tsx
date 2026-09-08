@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { PackItem } from "@grailhaus/shared";
 import { usePackDetailViewModel } from "../viewmodels/usePackDetailViewModel";
@@ -34,6 +36,7 @@ const FEATURED_COUNT = 3;
  */
 export function VaultDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { skuId } = useRoute<RouteProp<AppStackParamList, "VaultDetail">>().params;
   const { sku } = usePackDetailViewModel(skuId);
   const session = useSessionViewModel();
@@ -83,9 +86,9 @@ export function VaultDetailScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#F2C46B" />
         </Pressable>
         <Text style={styles.headerTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
         <View style={styles.iconButton} />
@@ -182,14 +185,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(242,196,107,0.24)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#F2C46B",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerTier: { fontFamily: "Outfit_600SemiBold", fontSize: 10, letterSpacing: 2.4, color: "rgba(242,196,107,0.7)" },
 

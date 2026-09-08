@@ -1,6 +1,8 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
@@ -19,6 +21,7 @@ type Nav = NativeStackNavigationProp<CollectionStackParamList, "Vault">;
  * only pieces held. */
 export function VaultScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const vm = useCollectionViewModel();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
   const rarityTiers = useRarityTiers("watches");
@@ -29,9 +32,9 @@ export function VaultScreen() {
       {/* Bounded to the fixed header+summary (never scrolls) rather than the whole screen —
           a full-screen wash here would stay pinned behind the list's scrolled rows too. */}
       <LinearGradient colors={["rgba(242,196,107,0.22)", "transparent"]} style={styles.base} />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-          <View style={styles.backChevron} />
+          <Ionicons name="chevron-back" size={18} color="#F2C46B" />
         </Pressable>
         <Text style={styles.headerLabel}>{copy.header}</Text>
         <View style={{ width: 38 }} />
@@ -89,14 +92,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(242,196,107,0.24)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#F2C46B",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { fontFamily: "Outfit_600SemiBold", fontSize: 10, letterSpacing: 3.4, color: "rgba(242,196,107,0.7)" },
   summary: { paddingHorizontal: 26, paddingTop: 26 },

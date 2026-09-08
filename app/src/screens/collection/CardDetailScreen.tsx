@@ -1,9 +1,12 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { CardFace } from "../../components/CardFace";
+import { ValueDriftChart } from "../../components/ValueDriftChart";
 import { itemArtGradient } from "../../content/cardArt";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
@@ -28,6 +31,7 @@ function splitTraits(traits: string | null): string[] {
 
 export function CardDetailScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { owned } = useRoute<Route>().params;
   const vm = useCollectionViewModel();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
@@ -65,9 +69,9 @@ export function CardDetailScreen() {
         <View style={styles.heroWrap}>
           <LinearGradient colors={["rgba(177,75,255,0.24)", "transparent"]} style={StyleSheet.absoluteFill} />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
             <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
-              <View style={styles.backChevron} />
+              <Ionicons name="chevron-back" size={18} color="#fff" />
             </Pressable>
             <Text style={styles.headerLabel}>
               {copy.owned}
@@ -77,7 +81,7 @@ export function CardDetailScreen() {
           </View>
 
           <View style={styles.heroRow}>
-            <CardFace gradient={itemArtGradient(item)} width={132} height={184} borderColor="rgba(255,215,94,0.78)" />
+            <CardFace gradient={itemArtGradient(item)} imageUrl={item.textureUrl} width={132} height={184} borderColor="rgba(255,215,94,0.78)" />
             <View style={styles.heroInfo}>
               <Text style={styles.name}>{(item.cardTitle ?? item.name).toUpperCase()}</Text>
               {item.pokemonName ? <Text style={styles.subName}>{item.pokemonName}</Text> : null}
@@ -113,6 +117,12 @@ export function CardDetailScreen() {
             <Text style={styles.sectionLabel}>{copy.estimatedValue}</Text>
             <Text style={styles.valueBig}>${(item.currentValueCents / 100).toLocaleString()}</Text>
             <Text style={styles.valueRangeText}>{copy.valueRange(item.minValueCents, item.maxValueCents)}</Text>
+            <ValueDriftChart
+              item={{ id: item.id, category: item.category, baseValueCents: item.baseValueCents }}
+              minValueCents={item.minValueCents}
+              maxValueCents={item.maxValueCents}
+              accentColor={colors.goldTop}
+            />
           </View>
         </View>
 
@@ -205,14 +215,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backChevron: {
-    width: 9,
-    height: 9,
-    borderLeftWidth: 2.2,
-    borderBottomWidth: 2.2,
-    borderColor: "#fff",
-    transform: [{ rotate: "45deg" }, { translateX: 1 }],
   },
   headerLabel: { ...typography.eyebrow, letterSpacing: 2.4 },
   heroRow: { flexDirection: "row", gap: 16, paddingHorizontal: 20, paddingTop: 18, alignItems: "flex-start" },

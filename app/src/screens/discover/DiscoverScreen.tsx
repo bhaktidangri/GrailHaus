@@ -1,6 +1,8 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
 import { useDiscoverHubViewModel } from "../../viewmodels/useDiscoverHubViewModel";
@@ -18,6 +20,7 @@ type Nav = NativeStackNavigationProp<DiscoverStackParamList, "Discover">;
  */
 export function DiscoverScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const hub = useDiscoverHubViewModel();
   const collections = useCollectionsViewModel();
@@ -29,7 +32,7 @@ export function DiscoverScreen() {
         locations={[0, 0.36, 1]}
         style={styles.base}
       />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.brandRow}>
           <Image source={require("../../../assets/logo.png")} style={styles.logo} resizeMode="contain" />
           <Text style={styles.title}>{copy.title}</Text>
@@ -45,8 +48,14 @@ export function DiscoverScreen() {
       <Text style={styles.headline}>{copy.headline}</Text>
       <Text style={styles.body}>{copy.body}</Text>
 
-      <Pressable style={styles.searchBar} onPress={() => navigation.navigate("DiscoverCategory", { category: "cards" })}>
-        <View style={styles.searchDot} />
+      {/* Lands on Cards' own real search (TextInput, filters by name/set) with the keyboard
+          already up, rather than pretending to search from here — this bar has no query of its
+          own to run across both categories at once. */}
+      <Pressable
+        style={styles.searchBar}
+        onPress={() => navigation.navigate("DiscoverCategory", { category: "cards", autoFocusSearch: true })}
+      >
+        <Ionicons name="search" size={15} color="rgba(255,255,255,0.55)" />
         <Text style={styles.searchPlaceholder}>{copy.searchPlaceholder}</Text>
       </Pressable>
 
@@ -126,7 +135,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     gap: 11,
   },
-  searchDot: { width: 15, height: 15, borderRadius: 8, borderWidth: 2, borderColor: "rgba(255,255,255,0.5)" },
   searchPlaceholder: { ...typography.body, fontSize: 13.5, color: "rgba(255,255,255,0.45)" },
   doors: { marginTop: 20, paddingHorizontal: 22, gap: 12 },
   door: { borderRadius: 20, padding: 17, overflow: "hidden" },
