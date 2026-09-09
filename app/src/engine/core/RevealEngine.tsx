@@ -5,6 +5,7 @@ import type { OwnedItem, PulledOwnedItem, RarityTier } from "@grailhaus/shared";
 import type { CategoryRevealConfig, RevealPhase } from "./types";
 import { GestureLayer } from "./GestureLayer";
 import { playHapticTrack } from "./HapticsTrack";
+import { usePackFlowStore } from "../../state/packFlowStore";
 import { radii, spacing, typography } from "../../theme/tokens";
 import { RarityBadge } from "../../components/RarityBadge";
 import { Price } from "../../components/Price";
@@ -69,9 +70,16 @@ export function RevealEngine({
   onKeep,
   onListForSale,
 }: RevealEngineProps) {
+  // True only for a flow reconstructed from disk after a process death mid-reveal (see
+  // lib/activeReveal.ts and state/packFlowStore.ts) — never a fresh purchase. Watches only ever
+  // pull one item, so there's no per-card beat to skip past here, just the single tear/lift
+  // gesture and its opening hold; landing directly on the summary is still the right call, since
+  // the alternative (re-showing an unopened box for an item that's already sitting in the user's
+  // portfolio) would look like re-gifting something they already unwrapped.
+  const resumedToSummary = usePackFlowStore((s) => s.resumedToSummary);
   const orderedItems = useMemo(() => config.revealOrder(items), [items, config]);
   const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<RevealPhase>("idle");
+  const [phase, setPhase] = useState<RevealPhase>(resumedToSummary ? "summary" : "idle");
   const [beatLabel, setBeatLabel] = useState<string | null>(null);
 
   const maxTierLevel = useMemo(() => Math.max(...rarityTiers.map((t) => t.level), 1), [rarityTiers]);

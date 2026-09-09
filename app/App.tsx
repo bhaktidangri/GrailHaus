@@ -15,6 +15,7 @@ import {
   Outfit_900Black,
 } from "@expo-google-fonts/outfit";
 import { AppNavigator } from "./src/navigation/AppNavigator";
+import { navigationRef, navigateToReveal } from "./src/navigation/navigationRef";
 import { TitleScreen } from "./src/screens/TitleScreen";
 import { OnboardingScreen } from "./src/screens/onboarding/OnboardingScreen";
 import { queryClient } from "./src/state/queryClient";
@@ -23,6 +24,7 @@ import { useAuthStore } from "./src/state/authStore";
 import { AuthProvider } from "./src/providers/AuthProvider";
 import { colors } from "./src/theme/tokens";
 import { getOnboardingComplete, setOnboardingComplete } from "./src/lib/onboarding";
+import { usePackFlowStore } from "./src/state/packFlowStore";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -98,7 +100,19 @@ export default function App() {
                 }}
               />
             ) : (
-              <NavigationContainer theme={navTheme}>
+              <NavigationContainer
+                ref={navigationRef}
+                theme={navTheme}
+                onReady={() => {
+                  // Covers the race where AuthProvider's boot-time reveal resume (see
+                  // providers/AuthProvider.tsx) finishes and populates packFlowStore *before*
+                  // this container exists to navigate on — `navigateToReveal` there was a no-op
+                  // in that case. `resumedToSummary` is only ever true for a disk-restored flow
+                  // (see state/packFlowStore.ts), never a normal fresh purchase, so this can't
+                  // accidentally hijack a purchase that's genuinely starting fresh right now.
+                  if (usePackFlowStore.getState().resumedToSummary) navigateToReveal();
+                }}
+              >
                 <AppNavigator />
               </NavigationContainer>
             )}

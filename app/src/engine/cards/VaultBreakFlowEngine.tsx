@@ -42,8 +42,11 @@ export function VaultBreakFlowEngine({
   isRipAgainWorking: boolean;
 }) {
   const setPhase = usePackFlowStore((s) => s.setPhase);
+  // See CardFlowEngine's own comment on this flag (state/packFlowStore.ts) — true only for a
+  // flow reconstructed from disk after a process death, never a fresh purchase.
+  const resumedToSummary = usePackFlowStore((s) => s.resumedToSummary);
   const { owned } = useCollectionViewModel();
-  const [step, setStep] = useState<Step>("processing");
+  const [step, setStep] = useState<Step>(resumedToSummary ? "summary" : "processing");
   const [visibleStatusRows, setVisibleStatusRows] = useState(0);
 
   // Same commons-first ordering as CardFlowEngine.orderedItems.
