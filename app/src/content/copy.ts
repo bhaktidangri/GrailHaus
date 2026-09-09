@@ -494,6 +494,17 @@ export const vaultFlow = {
   listForSale: "LIST FOR SALE",
 } as const;
 
+/** The Vault Break tier's own richer reveal (staged multi-card fan + inspection inside the 3D
+ * scene itself) — see engine/cards/vaultReveal/. Distinct from `vaultFlow` above, which is the
+ * watches category's reveal copy; the "vault" in "Vault Break" is a card pack tier name, not
+ * related to watches at all. */
+export const vaultBreak = {
+  orbit: "Orbit",
+  closeOrbit: "Close orbit",
+  reseal: "Reseal",
+  continueCta: "Continue",
+} as const;
+
 export const cardFlow = {
   processing: {
     title: "PURCHASE PROCESSING",

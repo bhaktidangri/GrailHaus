@@ -201,7 +201,7 @@ export function CardFlowEngine({
   );
 }
 
-function ProcessingView({ visibleRows, onComplete }: { visibleRows: number; onComplete: () => void }) {
+export function ProcessingView({ visibleRows, onComplete }: { visibleRows: number; onComplete: () => void }) {
   const rows = [
     { label: copy.processing.paymentSuccess, done: visibleRows >= 1 },
     { label: copy.processing.stockDecremented, done: visibleRows >= 2 },
@@ -227,7 +227,7 @@ function ProcessingView({ visibleRows, onComplete }: { visibleRows: number; onCo
   );
 }
 
-function ReadyView({
+export function ReadyView({
   sku,
   onBeginRip,
   onOpenLater,
@@ -310,7 +310,7 @@ function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplet
   );
 }
 
-function CardView({
+export function CardView({
   item,
   tier,
   index,
@@ -405,7 +405,7 @@ function CardView({
 
 const HOLD_DURATION_MS = 1400;
 
-function FinalCardView({
+export function FinalCardView({
   item,
   tier,
   holdCount,
@@ -481,7 +481,7 @@ function FinalCardView({
   );
 }
 
-function SummaryView({
+export function SummaryView({
   sku,
   items,
   priorCountById,
@@ -579,7 +579,7 @@ function SummaryView({
   );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: "#0b0b10", paddingTop: 56, paddingHorizontal: 20 },
   eyebrow: { fontFamily: fonts.extrabold, fontSize: 11, letterSpacing: 2, color: "rgba(255,255,255,0.62)" },
 

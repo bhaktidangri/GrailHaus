@@ -5,6 +5,7 @@ import { packsService } from "../services/packsService";
 import { marketplaceService } from "../services/marketplaceService";
 import { useDropsViewModel } from "./useDropsViewModel";
 import { useCollectionViewModel } from "./useCollectionViewModel";
+import { useStableValue } from "../hooks/useStableValue";
 
 export interface CategorySummary {
   tierCount: number;
@@ -34,6 +35,15 @@ const MARKETPLACE_HIGHLIGHTS_LIMIT = 3;
  * no endpoint provides yet (day-over-day portfolio delta, per-set completion counts, comp-price
  * deltas, offer counts). See HomeScreen.tsx's own top comment for the itemized list; this
  * viewmodel only ever returns real numbers, never invents the missing ones.
+ *
+ * `evergreenByCategory`/`featuredDrop`/`upcomingDrops` are wrapped in `useStableValue`: this
+ * hook shares its `["packs", "all"]` query with useDropsViewModel, which polls every 10s
+ * whenever a live/soon drop exists (so its stock/countdown stay fresh) — every poll hands back
+ * a new top-level array reference even when nothing this screen actually shows changed, and
+ * without stabilizing, that cascaded into the *whole* Home screen (Explore doors, Portfolio
+ * card, Marketplace section — none of which have anything to do with a live drop's stock)
+ * re-rendering every 10 seconds. `useStableValue` keeps the same reference unless the derived
+ * value is actually different, so an unrelated screen doesn't repaint just because a drop ticked.
  */
 export function useHomeViewModel() {
   const packsQuery = useQuery({
@@ -44,7 +54,7 @@ export function useHomeViewModel() {
   const collection = useCollectionViewModel();
   const listingsQuery = useQuery({ queryKey: ["listings", "all"], queryFn: () => marketplaceService.browse() });
 
-  const evergreenByCategory = useMemo<Record<Category, CategorySummary>>(() => {
+  const evergreenByCategoryRaw = useMemo<Record<Category, CategorySummary>>(() => {
     const evergreen = (packsQuery.data ?? []).filter((p) => p.goesLiveAt == null);
     const summarize = (category: Category): CategorySummary => {
       const packs = evergreen.filter((p) => p.category === category);
@@ -53,9 +63,12 @@ export function useHomeViewModel() {
     };
     return { cards: summarize("cards"), watches: summarize("watches") };
   }, [packsQuery.data]);
+  const evergreenByCategory = useStableValue(evergreenByCategoryRaw);
 
-  const featuredDrop = useMemo(() => drops.find((d) => d.phase === "live") ?? null, [drops]);
-  const upcomingDrops = useMemo(() => drops.filter((d) => d.phase === "soon"), [drops]);
+  const featuredDropRaw = useMemo(() => drops.find((d) => d.phase === "live") ?? null, [drops]);
+  const upcomingDropsRaw = useMemo(() => drops.filter((d) => d.phase === "soon"), [drops]);
+  const featuredDrop = useStableValue(featuredDropRaw);
+  const upcomingDrops = useStableValue(upcomingDropsRaw);
 
   const collectionProgress = useMemo<CollectionProgressSummary>(
     () => ({

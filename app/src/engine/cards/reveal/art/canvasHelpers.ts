@@ -17,6 +17,7 @@ import {
   TileMode,
   StrokeJoin,
   type SkCanvas,
+  type SkImage,
   type SkPaint,
   type SkPath,
   type SkShader,
@@ -28,6 +29,10 @@ export interface Surface2D {
   height: number;
   /** Reads the drawn pixels back as straight (unpremultiplied) RGBA8. */
   toRGBA(): Uint8Array;
+  /** Snapshots the surface as a displayable SkImage, for a flat on-screen
+   * <Canvas><Image image={...}/></Canvas> — the same drawing this surface
+   * otherwise feeds into a three.js DataTexture via toRGBA(). */
+  toImage(): SkImage;
 }
 
 export function makeSurface(width: number, height: number): Surface2D {
@@ -50,6 +55,12 @@ export function makeSurface(width: number, height: number): Surface2D {
       });
       if (!px) throw new Error('Skia readPixels failed');
       return px instanceof Uint8Array ? px : new Uint8Array(px.buffer);
+    },
+    toImage: () => {
+      surface.flush();
+      const img = surface.makeImageSnapshot();
+      if (!img) throw new Error('Skia makeImageSnapshot failed');
+      return img;
     },
   };
 }

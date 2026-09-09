@@ -5,6 +5,7 @@ import type { OwnedItem } from "@grailhaus/shared";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
+import { VaultBreakFlowEngine } from "../engine/cards/VaultBreakFlowEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
 import { reveal as revealCopy } from "../content/copy";
@@ -80,6 +81,24 @@ export function RevealScreen() {
   }
 
   if (flow.sku.category === "cards") {
+    // Vault Break is the one card tier with its own richer reveal (cards physically rise out of
+    // the torn pack and fan out in the 3D scene, with tap/drag/pinch/flip inspection) — every
+    // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow. See
+    // VaultBreakFlowEngine's own header for why this is scoped to just this tier.
+    if (flow.sku.tier === "vault_break") {
+      return (
+        <VaultBreakFlowEngine
+          key={flow.purchaseId ?? undefined}
+          sku={flow.sku}
+          items={flow.items}
+          onFinished={handleFinished}
+          onRipAgain={handleRipAgain}
+          onGoHome={handleGoHome}
+          onViewCollection={handleViewCollection}
+          isRipAgainWorking={flow.isPurchasing}
+        />
+      );
+    }
     return (
       <CardFlowEngine
         key={flow.purchaseId ?? undefined}
