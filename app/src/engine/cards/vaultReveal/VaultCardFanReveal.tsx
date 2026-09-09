@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { Canvas, Image as SkiaImage, type SkImage } from "@shopify/react-native-skia";
 import Animated, {
   Easing,
@@ -72,6 +73,7 @@ function computeFanSlots(total: number, cardW: number, screenW: number): FanSlot
 function FanCard({
   face,
   verso,
+  photoUrl,
   slot,
   cardW,
   cardH,
@@ -84,6 +86,7 @@ function FanCard({
 }: {
   face: SkImage;
   verso: SkImage;
+  photoUrl: string | null;
   slot: FanSlot;
   cardW: number;
   cardH: number;
@@ -151,19 +154,6 @@ function FanCard({
         containerStyle,
       ]}
     >
-      {isHero && revealed ? (
-        <View
-          style={[
-            styles.heroGlow,
-            {
-              width: cardW * 1.3,
-              height: cardH * 1.3,
-              marginLeft: -0.65 * cardW,
-              marginTop: -0.65 * cardH,
-            },
-          ]}
-        />
-      ) : null}
       <Pressable style={StyleSheet.absoluteFill} onPress={onPress} disabled={!revealed} hitSlop={4}>
         <Animated.View style={[styles.face, versoStyle]}>
           <Canvas style={StyleSheet.absoluteFill}>
@@ -171,9 +161,26 @@ function FanCard({
           </Canvas>
         </Animated.View>
         <Animated.View style={[styles.face, faceStyle]}>
-          <Canvas style={StyleSheet.absoluteFill}>
-            <SkiaImage image={face} x={0} y={0} width={cardW} height={cardH} fit="cover" />
-          </Canvas>
+          {photoUrl ? (
+            // Just the real card, nothing else — no ribbon, no value block, no serial. That info
+            // hasn't disappeared, it moved to the tap-to-inspect panel (DescriptionPanel) every
+            // revealed card already opens on press; here it would just be clutter over the actual
+            // card. CARD_ASPECT was already chosen to match a real trading card's aspect ratio, so
+            // "cover" fills the frame edge-to-edge with no visible crop.
+            <Image
+              source={photoUrl}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={150}
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            // No catalog texture for this item (rare) — fall back to the procedural placeholder
+            // art rather than showing nothing.
+            <Canvas style={StyleSheet.absoluteFill}>
+              <SkiaImage image={face} x={0} y={0} width={cardW} height={cardH} fit="cover" />
+            </Canvas>
+          )}
         </Animated.View>
       </Pressable>
     </Animated.View>
@@ -280,9 +287,11 @@ export function VaultCardFanReveal({
   const total = deck.length;
 
   const verso = useMemo(() => drawCardVersoImage(), []);
+  // Only ever actually shown for an item with no real catalog photo (rare) — every card with one
+  // shows that instead, full-bleed, no chrome (see FanCard below).
   const faces = useMemo(() => deck.map((card) => drawCardFaceImage(card)), [deck]);
 
-  const cardW = Math.min(150, width * 0.36);
+  const cardW = Math.min(168, width * 0.4);
   const cardH = cardW / CARD_ASPECT;
   const slots = useMemo(() => computeFanSlots(total, cardW, width), [total, cardW, width]);
 
@@ -367,6 +376,7 @@ export function VaultCardFanReveal({
             key={i}
             face={faces[i]}
             verso={verso}
+            photoUrl={items[i].textureUrl}
             slot={slots[i]}
             cardW={cardW}
             cardH={cardH}
@@ -428,13 +438,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(232,207,162,0.35)",
     backfaceVisibility: "hidden",
-  },
-  heroGlow: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    borderRadius: 999,
-    backgroundColor: "rgba(232,207,162,0.16)",
   },
   footer: { alignItems: "center", paddingBottom: 40, minHeight: 96, justifyContent: "flex-end", gap: spacing.md },
   hint: {

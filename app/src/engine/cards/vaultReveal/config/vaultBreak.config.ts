@@ -31,12 +31,12 @@ export const vaultBreakPersonality: VaultBreakPersonality = {
     hintInspect: "Tap a card to inspect",
   },
   material: { roughness: 0.19, metalness: 0.62, peel: 0.46 },
-  // releaseFrac lowered from the ported 0.84 — that required dragging 84% of the reachable
-  // distance from the grab point before the tear committed to finishing on release, which read
-  // as "nothing happens" for anything short of an almost-complete drag. 0.3 means a release
-  // past roughly a quarter of the way through commits to the full tear (a fast flick still
-  // completes it regardless of distance, via FLICK_THRESHOLD in useVaultInteraction.ts).
-  tear: { stretch: 0.05, releaseFrac: 0.3, springK: 40, damping: 0.72, glint: 0.72 },
+  // releaseFrac: a release past this fraction of the reachable drag distance commits to the full
+  // tear (spring.target = 1, see useVaultInteraction.ts); a release short of it springs the strip
+  // back to sealed (spring.target = 0) instead — the "revert to original state" half of the same
+  // check. 0.75 means the drag has to be genuinely most of the way through before it commits (a
+  // fast flick still completes it regardless of distance, via FLICK_THRESHOLD).
+  tear: { stretch: 0.05, releaseFrac: 0.75, springK: 40, damping: 0.72, glint: 0.72 },
   liner: { enabled: true, metalness: 0.95, roughness: 0.22 },
   riseY: 0.045,
   fan: {

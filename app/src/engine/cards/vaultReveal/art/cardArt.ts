@@ -170,6 +170,10 @@ function paintCardFace(canvas: SkCanvas, card: VaultCardData) {
     size: 7, bold: true, mono: true, letterSpacing: 2.5, fill: "rgba(244,236,224,0.48)",
   });
 
+  // Every pulled item that has a real catalog photo shows that instead of this raster entirely
+  // (see VaultCardFanReveal) — this whole face, abstract art window included, is now only the
+  // fallback for the rare item with no texture, so it stays the original full design rather than
+  // a stripped-down variant of it.
   const ax = 24, ay = 106, aw = CW - 48, ah = 186;
   cardWindowArt(canvas, ax, ay, aw, ah, card);
   canvas.drawPath(roundRectPath(ax, ay, aw, ah, 8), strokePaint("rgba(232,207,162,0.5)", 1));
@@ -216,8 +220,9 @@ export function drawCardFace(card: VaultCardData): PixelImage {
   return { data: surf.toRGBA(), width: CW, height: CH };
 }
 
-/** Same face art as drawCardFace, snapshotted as a displayable SkImage for
- * flat 2D rendering (VaultCardFanReveal) instead of a three.js texture. */
+/** Same face art as drawCardFace, snapshotted as a displayable SkImage for flat 2D rendering
+ * (VaultCardFanReveal) instead of a three.js texture — the fallback for a pulled item with no
+ * real catalog photo; an item that has one shows that instead of this raster entirely. */
 export function drawCardFaceImage(card: VaultCardData): SkImage {
   const surf = makeSurface(CW, CH);
   paintCardFace(surf.canvas, card);
