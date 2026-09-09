@@ -1,19 +1,37 @@
 # GrailHaus
 
-A React Native (Expo) port of the card-pack reveal from the Claude Design
-handoff (`grailhaus-pack.html` + `rip-pack.js` + `pack-art.js`) — a
-GPU-real, gesture-torn foil pack for the "Trading Cards" category of the
-GrailHaus trial spec (see `design-handoff/instructions.md` for the full
-40-hour brief this is one slice of).
+A React Native (Expo) port of two card-pack reveals from Claude Design
+handoffs — GPU-real, gesture-torn foil packs, one per tier:
+
+- **Street Rip** (Tier 1) — `grailhaus-pack.html` + `rip-pack.js` +
+  `pack-art.js`, the "Trading Cards" category of the GrailHaus trial spec
+  (see `design-handoff/instructions.md` for the full 40-hour brief this is
+  one slice of). `src/reveal/`.
+- **Vault Break** (Tier 2) — `grailhaus-vault-break.html` +
+  `rip-pack.js`/`reveal.js` + `vault-art.js`/`card-art.js`/`art-util.js`, a
+  later, separately-handed-off collector-luxury tier: a satin-violet pack,
+  a metallic inner liner, and — once torn open — a staged multi-phase card
+  reveal (stack → fan → a rarity "notice" moment for the Grail pull →
+  tap-to-inspect) instead of Tier 1's cards-rise-together ending.
+  `src/vault/`.
+
+Both run from one screen (`App.tsx` has a small tier switcher pill at the
+top — not part of either design handoff, just a reviewer convenience for
+having both in one build). Vault Break is the default tier on launch.
 
 ## Scope of this pass
 
-This patch implements **only Deliverable 1's card-pack reveal** — the 3D
-tear-open pack, gesture physics, and card reveal — as a standalone screen.
-It does not implement accounts, the shelf, purchases, drops, portfolio,
-marketplace, or the concurrency/economics work the full trial also asks
-for. That scope was agreed explicitly before writing any code, given how
-large the full brief is.
+Tier 1's scope note still applies unchanged (see the paragraph below this
+list — it predates Vault Break and nothing in it changed). Vault Break
+adds the second tier's pack-tear + staged reveal + post-reveal card
+inspection as its own standalone screen (`src/vault/VaultBreakScreen.tsx`)
+sharing Tier 1's texture/gesture *infrastructure* (Skia canvas helpers,
+the `noise()`/`makeDataTexture()` engine primitives) but not its
+`CategoryPersonality` config shape — see "Vault Break (Tier 2)" below for
+why. Neither tier implements accounts, the shelf, purchases, drops,
+portfolio, marketplace, or the concurrency/economics work the full trial
+also asks for; that scope was agreed explicitly before writing any code,
+given how large the full brief is.
 
 Run it:
 
@@ -183,13 +201,186 @@ clean rather than leaking by default.
   filling it in on a real mid-range Android is the first thing to do
   before trusting this feels right in the hand.
 
+## Vault Break (Tier 2)
+
+```
+src/vault/
+  config/
+    types.ts          VaultBreakPersonality — deliberately its own shape,
+                     not an extension of ../../reveal/config/types.ts's
+                     CategoryPersonality. Tier 1's shape is a palette/copy/
+                     timing swap over one shared tear-only engine; Vault
+                     Break adds a whole second engine stage (the staged
+                     reveal, a liner, post-reveal inspection) that shape
+                     has no room for without optional fields nothing else
+                     would use. Two tiers isn't yet a pattern worth a
+                     deeper shared hierarchy over — project/tiers.js
+                     itself keeps Tier 1 and Tier 2 as two config objects,
+                     not a type hierarchy, and this follows that.
+    vaultBreak.config.ts   the tier's numbers, carried over unchanged from
+                     project/tiers.js's 'vault-break' entry and
+                     project/card-art.js's vaultBreakDeck().
+  art/
+    artUtil.ts       ported from project/art-util.js — metalFill,
+                     hairlines, grooveLine, guilloche, microBlock,
+                     barcode, embossText — the shared drawing vocabulary
+                     vault-art.js and card-art.js both built on in the
+                     original. Layered on ../../reveal/art/canvasHelpers.ts
+                     rather than duplicating its Paint/Path/Shader
+                     plumbing.
+    vaultArt.ts      ported from project/vault-art.js — the pack front/
+                     back/liner/crimp-glint art.
+    cardArt.ts       ported from project/card-art.js — the six collector
+                     card faces + shared verso.
+  engine/
+    buildVaultPackObject.ts   ported from project/rip-pack.js's
+                     buildPack(), specialised to Vault Break's config:
+                     same tear/peel/gape deformation as Tier 1's
+                     buildPackObject.ts, plus the liner and the reveal
+                     wiring Tier 1 never needed. Reuses
+                     ../../reveal/engine/noise.ts and
+                     ../../reveal/engine/textures.ts as-is rather than
+                     forking them.
+    buildReveal.ts   ported from project/reveal.js — the phase machine
+                     (stack → hold → rise → separate → settle → notice →
+                     approach → reveal → present → ready), spring-driven
+                     per-card targets, and inspection (pick/hero-drag/
+                     zoom/flip). The only real change: `pick()` takes an
+                     already-cast `THREE.Ray` instead of an NDC point +
+                     camera, for the same reason as Tier 1's gesture hook
+                     (see below).
+  gesture/
+    useVaultInteraction.ts   the *whole* pointer state machine from
+                     grailhaus-vault-break.html's script — tear, then
+                     (once open) pick/drag/pinch/double-tap/orbit — as one
+                     hook, because the original is one coherent state
+                     machine keyed off `orbit` / `reveal.state.ready` /
+                     `progress`, not two. See "Gesture reinterpretation
+                     for touch" below for what changed reaching mobile.
+  haptics/
+    vaultHapticTrack.ts   the original's `navigator.vibrate(ms)` calls
+                     (6 / 5 / 38 / 8 / 20ms, at grab / tick / tear-commit /
+                     card-pick / collect) re-expressed as expo-haptics
+                     impact styles — same P0-not-P1 baseline as Tier 1's
+                     `hapticTrack.ts`.
+  scene/
+    VaultScene.tsx   r3f scene: the "private collector space" lighting
+                     rig (warm key + violet rim + champagne kick + dim
+                     hemi + a focused rarity spot — this replaces
+                     three-d-stage.js's neutral studio defaults, exactly
+                     as the original page's script does), the floor +
+                     back wall, the pack object, the interaction plane,
+                     and the per-frame camera/lighting choreography across
+                     the reveal's phases.
+  ui/
+    VaultVignette.tsx   the page's `#vign` CSS radial-gradient vignette,
+                     redrawn with Skia's declarative `<Canvas>` — same
+                     technique as Tier 1's VignetteBackground.tsx.
+  VaultBreakScreen.tsx   the screen: loads the logo, lays the kicker/
+                     title/meta, seam-drag hint, card-note, and Orbit/
+                     Reseal/Add-to-collection pills over the Canvas.
+```
+
+### Gesture reinterpretation for touch
+
+The original is mouse/keyboard/trackpad-shaped in three places that have
+no direct mobile equivalent. Each is called out here rather than left
+silent, matching this README's own standard for Tier 1:
+
+- **`wheel` → pinch.** Desktop zoom of the inspected card
+  (`reveal.zoomHero(e.deltaY * ...)`) becomes two-finger pinch-to-zoom,
+  tracked as a delta on the distance between two active pointers on the
+  interaction plane.
+- **`dblclick` → double-tap.** Flipping the inspected card
+  (`reveal.flipHero()`) becomes a same-card tap within 320ms of the
+  previous one, detected by hand since RN's pointer stream has no native
+  double-tap event.
+- **Free orbit → hand-rolled spherical drag + pinch-dolly.** The "Orbit"
+  pill originally handed control to three.js's `OrbitControls` addon,
+  which is DOM-only (drag listeners bound to a canvas element) and has no
+  React Native build. A small spherical-coordinates orbit
+  (`useVaultInteraction.ts`'s `orbitTheta`/`orbitPhi`/`orbitRadius`) drives
+  the camera instead when orbit mode is on, rotated by single-finger drag
+  and dollied by pinch — same two gestures OrbitControls exposed
+  (drag-to-rotate, pinch/wheel-to-zoom), just reimplemented for touch.
+
+One structural difference from `useTearGesture.ts` worth flagging:
+`pick()`'s ray comes from the *interaction plane's* pointer event, not a
+plane parented to the pack. `PackScene.tsx`'s tear plane is a child of
+`pack.group` on purpose (screen-space maths collapses to pack-local
+division). Vault Break's plane deliberately isn't — the pack leans during
+a tear reaction and the fan spreads cards sideways later, so a
+pack-parented plane would drag the touch target around under the user's
+finger. Sitting the plane in fixed world space keeps it predictable; the
+tear phase still recovers correct pack-local X/Y via
+`pack.group.worldToLocal()`, which accounts for any lean regardless of
+where the plane itself sits. See the comment above the plane in
+`VaultScene.tsx`.
+
+### The liner, and other things Tier 1 didn't need
+
+- **Inner liner.** `buildVaultPackObject.ts` builds the brushed-champagne
+  liner mesh (`vaultArt.ts`'s `drawLiner()`) and toggles its visibility
+  once the mouth gapes past 1.5%, exactly mirroring `rip-pack.js`'s own
+  `liner.visible = open > 0.015` line — Tier 1 has no liner at all
+  (`cfg.liner.enabled` was `false` for street-rip in the original
+  `tiers.js`, so `PackScene.tsx` never grew this code path).
+- **Foil pre-stretch.** Vault Break's foil resists for the first 5% of
+  drag before the tear front starts moving (`tear.stretch = 0.05` in the
+  config, `setStretch()` on the pack) — a "denser material" cue Tier 1's
+  `tear.stretch = 0` never exercises. Ported into
+  `useVaultInteraction.ts`'s tear-drag branch.
+- **The staged reveal itself.** This is the piece Tier 1's own README
+  explicitly cut ("No sequential per-card reveal / rare-pull slow-burn...
+  that's a different (larger) piece of work than 'the pack'") — Vault
+  Break's `buildReveal.ts` is that larger piece: a nine-phase sequence
+  with per-card critically-damped springs, a Grail that's deliberately
+  placed mid-fan and face-turned-away until the "notice" phase lights it,
+  and free-rotate/zoom/flip inspection once the sequence finishes.
+
+### Texture resolution & font
+
+Same reasoning as Tier 1 (see that section above): 640×960 for the front/
+back foil panels versus the prototype's 800×1200 browser-preview canvas,
+256×256 for the liner web, 512×32 for the crimp glint. Card faces are
+310×434 (native resolution in `cardArt.ts`, itself already half the
+prototype's 620×868 — not further scaled). Baked-texture type uses the
+same `Skia.FontMgr.System().matchFamilyStyle('Georgia', ...)` fallback as
+Tier 1, for the same reason (no bundled Cormorant Garamond TTF — a scope
+cut, not an oversight).
+
+### What's cut from this pass (Vault Break)
+
+- **No fallback 2D path**, same as Tier 1.
+- **No gyroscope-driven highlight**, same as Tier 1.
+- **No bundled Cormorant Garamond TTF**, same as Tier 1.
+- **Not run on a physical device or simulator.** Built and type-checked
+  (`npm run typecheck`, zero errors) in an environment without an iOS/
+  Android runtime. The pinch/double-tap/orbit gestures in particular are
+  reviewed-carefully-but-unverified-on-hardware — multi-touch pointer
+  tracking through r3f-native's event system is the piece of this patch
+  with the least precedent to lean on, and is the first thing worth
+  putting in front of a real device.
+- **One reproduced-but-inert original behavior, dropped rather than
+  faithfully ported:** the original's `#vign` vignette sets
+  `opacity = 1 + dim*0.5` during the rarity moment, but the element's
+  baseline CSS opacity is already 1 (unset in its rule), so pushing it
+  past 1 is clamped by the browser and was already a no-op there.
+  `VaultVignette.tsx` renders at a constant opacity instead of wiring up
+  an `Animated.Value` to reproduce a visual effect the original itself
+  didn't actually have.
+
 ## `design-handoff/`
 
 Reference only — not imported by the app:
 
 - `grailhaus-pack.html`, `rip-pack.js`, `pack-art.js`, `three-d-stage.js`
-  — the original Claude Design prototype this patch ports.
-- `chat1.md` — the design iteration history. Genuinely worth reading
+  — the original Tier 1 Claude Design prototype this patch ports.
+- `grailhaus-vault-break.html`, `vault-art.js`, `card-art.js`, `reveal.js`,
+  `art-util.js`, `tiers.js` — the original Tier 2 Claude Design prototype
+  (`rip-pack.js` above is shared by both tiers; `tiers.js` is the config
+  object that switches the shared engine between them).
+- `chat1.md` — Tier 1's design iteration history. Genuinely worth reading
   before touching the tear physics; several "obvious" choices in
   `useTearGesture.ts` and `buildPackObject.ts`'s deformation math exist
   because earlier, more naive versions were tried in that chat and
@@ -198,6 +389,7 @@ Reference only — not imported by the app:
   gravity instead of animating to a preset, why completion is judged
   against distance-still-reachable-from-grab-point rather than a fixed
   threshold).
+- `vault-chat1.md` — Tier 2's (much shorter) handoff conversation.
 - `instructions.md` — the full 40-hour trial brief this patch is one
   slice of.
 - `GrailHaus Product Requirements Document.md` — product spec the card
