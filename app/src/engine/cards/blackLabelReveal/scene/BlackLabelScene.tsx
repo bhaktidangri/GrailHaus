@@ -1,14 +1,23 @@
 // Black Label's 3D scene — forked from ../../vaultReveal/scene/VaultScene.tsx rather than
 // parameterized further, because the design's own lighting/fire choreography (the actual
 // Claude Design handoff's grailhaus-vault-break.html script) is genuinely a different render
-// loop, not a palette swap of Vault Break's: a crimson fill + "ember rim" + gold kick alongside
-// the shared key/hemi/spot, three point lights whose intensity rides the fire system's own
-// flicker, and a want-level state machine that ties fire intensity to tear progress and reveal
-// phase. Gesture handling, camera choreography's basic shape, and the pack/reveal engine
-// underneath are all identical to VaultScene's — only wired up here again because the lighting
-// and fire hooks live inside the same per-frame loop and splitting them into a shared component
-// with per-tier callbacks would have been more indirection than just forking the ~150 lines that
-// actually differ.
+// loop, not a palette swap of Vault Break's: a crimson fill + "ember rim" alongside the shared
+// key/hemi/spot, three point lights whose intensity rides the fire system's own flicker, and a
+// want-level state machine that ties fire intensity to tear progress and reveal phase. Gesture
+// handling, camera choreography's basic shape, and the pack/reveal engine underneath are all
+// identical to VaultScene's — only wired up here again because the lighting and fire hooks live
+// inside the same per-frame loop and splitting them into a shared component with per-tier
+// callbacks would have been more indirection than just forking the ~150 lines that actually
+// differ.
+//
+// Smoothness pass: the design's original rig also carried a "gold kick" directional light and a
+// dedicated "cardKey" light for the revealed card — both cut, matching Vault Break's own
+// precedent of trimming a light that measurably cost more than it bought (see that scene's
+// header). Every extra real-time light adds a term to the fragment shader of everything it
+// touches; on top of a tear-shell mesh and two full particle-based fire instances (see
+// ../art/fire.ts, also trimmed this pass), the 10-light original measured noticeably less smooth
+// than Vault Break's own tear. key/fill/rim/hemi/spot plus the fire-tied point lights carry the
+// same "crimson, molten, ember" read on their own.
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber/native";
@@ -61,6 +70,14 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
 ) {
   const pack = useMemo<BuiltVaultPack>(() => buildBlackLabelPackObject(personality, deck, logo), [personality, deck, logo]);
   const interaction = useVaultInteraction(pack, personality);
+  // grailCard is assigned once, at build time, from the deck this pack was built with — stable
+  // for this pack instance's whole lifetime, not something that appears mid-animation. The tear
+  // stage (BlackLabelTearStage.tsx) always builds with an empty deck, so this is always false
+  // there — which is exactly why fireLightRef/emberLightRef below are worth skipping entirely
+  // rather than just animating toward zero intensity: an unlit pointLight still costs a loop
+  // iteration in every lit material's fragment shader for as long as it's mounted, whether its
+  // intensity is 5 or 0 — the shader has no way to know at compile time that a uniform is zero.
+  const hasGrail = !!pack.reveal.grailCard;
 
   // ---- fire: the card's own fire is parented to whichever card isGrail; the sealed pack burns
   // at pack scale too, so heat is already in the room before anything opens (design header:
@@ -89,14 +106,12 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
   const keyRef = useRef<THREE.DirectionalLight>(null);
   const fillRef = useRef<THREE.DirectionalLight>(null);
   const emberRimRef = useRef<THREE.DirectionalLight>(null);
-  const kickRef = useRef<THREE.DirectionalLight>(null);
   const hemiRef = useRef<THREE.HemisphereLight>(null);
   const spotRef = useRef<THREE.SpotLight>(null);
   const spotTargetRef = useRef<THREE.Object3D>(null);
   const fireLightRef = useRef<THREE.PointLight>(null);
   const emberLightRef = useRef<THREE.PointLight>(null);
   const packLightRef = useRef<THREE.PointLight>(null);
-  const cardKeyRef = useRef<THREE.DirectionalLight>(null);
 
   const touching = useRef(0);
   const reframeNext = useRef(false);
@@ -195,9 +210,16 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
                 : ph === "reveal" ? 0.45 + st.emerge * 0.4
                   : 0.72;
     }
-    fire.setLevel(want);
+    // The card fire is parented to pack.reveal.grailCard (see the mount effect above) — with no
+    // grail card yet (the tear stage always passes an empty deck), fire.group is never attached
+    // to anything THREE actually traverses, so stepping it costs a full pass over every particle
+    // layer's uniforms for something that can't be seen. Skipped entirely until there's a grail
+    // card to attach to; this is exactly the JS-thread work Black Label's tear was paying that
+    // Vault Break's never did; see this file's "Smoothness pass" header note.
     const pixHeight = state.size.height * (state.viewport?.dpr ?? 1);
-    const fx = fire.step(dt, camera, pixHeight);
+    const grailForFire = pack.reveal.grailCard;
+    if (grailForFire) fire.setLevel(want);
+    const fx = grailForFire ? fire.step(dt, camera, pixHeight) : { level: 0, flick: 0, surge: 0 };
 
     // the sealed pack's own fire: strong while it's the subject, then hands the heat to the cards
     const packWant = !st.running && !st.ready
@@ -219,10 +241,7 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
         : st.running ? 1.3
           : 2.1 + touching.current * 0.3 + f.shown * 0.3;
     if (keyRef.current) keyRef.current.intensity += (phaseLight * (1 - dim * 0.34) - keyRef.current.intensity) * Math.min(1, dt * 2.4);
-    const cardWant = st.hero >= 0 ? 0.7 : st.ready ? 0.6 : st.running ? 0.45 : 0;
-    if (cardKeyRef.current) cardKeyRef.current.intensity += (cardWant - cardKeyRef.current.intensity) * Math.min(1, dt * 2.2);
     if (fillRef.current) fillRef.current.intensity += ((0.4 + fx.level * 0.9) - fillRef.current.intensity) * Math.min(1, dt * 3);
-    if (kickRef.current) kickRef.current.intensity += ((0.24 + f.shown * 0.2 + fx.level * 0.3) - kickRef.current.intensity) * Math.min(1, dt * 3);
     if (hemiRef.current) hemiRef.current.intensity += ((0.14 + fx.level * 0.16) - hemiRef.current.intensity) * Math.min(1, dt * 3);
     const spotWant = st.hero >= 0 ? 0.8 : dim > 0.05 ? 2.0 * dim : 0;
     if (spotRef.current) {
@@ -343,8 +362,6 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
       <directionalLight ref={keyRef} color={personality.lighting.key} intensity={2.1} position={[0.17, 0.3, 0.3]} castShadow />
       <directionalLight ref={fillRef} color={0x8c2408} intensity={0.9} position={[-0.3, 0.1, -0.2]} />
       <directionalLight ref={emberRimRef} color={personality.lighting.rim} intensity={1.15} position={[0.06, -0.16, 0.34]} />
-      <directionalLight ref={kickRef} color={0xd8b877} intensity={0.5} position={[-0.16, -0.08, 0.26]} />
-      <directionalLight ref={cardKeyRef} color={0xfff4e2} intensity={0} position={[0.05, 0.14, 0.42]} />
       <spotLight
         ref={spotRef}
         color={personality.lighting.spot}
@@ -356,8 +373,15 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
         position={[0.02, 0.16, 0.16]}
       />
       <object3D ref={spotTargetRef} position={[0, 0, 0]} />
-      <pointLight ref={fireLightRef} color={0xff6a18} intensity={0} distance={0.22} decay={2.2} />
-      <pointLight ref={emberLightRef} color={0xff9330} intensity={0} distance={0.2} decay={2.0} />
+      {/* Only mounted once there's a grail card for them to ride — see hasGrail's own comment
+          above. In the tear stage (always an empty deck) this is never true, so these two never
+          exist in the scene at all, rather than sitting at intensity 0. */}
+      {hasGrail && (
+        <>
+          <pointLight ref={fireLightRef} color={0xff6a18} intensity={0} distance={0.22} decay={2.2} />
+          <pointLight ref={emberLightRef} color={0xff9330} intensity={0} distance={0.2} decay={2.0} />
+        </>
+      )}
       <pointLight ref={packLightRef} color={0xff6a18} intensity={0} distance={0.18} decay={2.4} position={[0.035, -pack.size.H * 0.06, 0.055]} />
 
       <mesh rotation-x={-Math.PI / 2} position={[0, floorY - 0.0004, 0]} receiveShadow>

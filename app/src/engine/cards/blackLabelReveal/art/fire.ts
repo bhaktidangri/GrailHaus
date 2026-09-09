@@ -210,8 +210,14 @@ export function buildFire({ cardW, cardH, pack = false }: { cardW: number; cardH
     return [x, y, -0.0016 - Math.random() * 0.002];
   };
 
+  // Particle counts cut roughly a third from the ported original — this is a THREE.Points draw
+  // call per layer, and every one of them (regardless of on-screen opacity) still costs a full
+  // vertex+fragment pass per particle every frame; two full fire instances (card + pack) run at
+  // once for most of the tear (see BlackLabelScene.tsx), so the layer count multiplies fast. The
+  // cut targets fill-rate, not silhouette — each layer still reads as the same shape of flame,
+  // just fewer particles making it up.
   const skirt = layer({
-    count: pack ? 300 : 340, map: wisp,
+    count: pack ? 210 : 240, map: wisp,
     size: pack ? 0.0135 : 0.0062, life: pack ? 0.8 : 0.62,
     rise: pack ? 0.05 : 0.014, sway: pack ? 3.2 : 5.2,
     converge: pack ? -0.06 : 0.34,
@@ -219,52 +225,57 @@ export function buildFire({ cardW, cardH, pack = false }: { cardW: number; cardH
   });
   skirt.name = "fireSkirt";
 
-  const sheet = layer({
-    count: 220, map: wisp, size: pack ? 0.026 : 0.019, life: 1.35,
-    rise: pack ? 0.08 : 0.062, sway: 2.4,
+  // Pack instance also skips this one — the sealed-pack ambient fire reads fine as skirt +
+  // embers + smoke; the taller flame sheet is worth its draw call once a card is actually the
+  // subject (card instance), not for the whole duration of the tear.
+  const sheet = pack ? null : layer({
+    count: 160, map: wisp, size: 0.019, life: 1.35,
+    rise: 0.062, sway: 2.4,
     hot: 0xffd9a0, mid: 0xf2600f, cool: 0x4a0703,
-    emit: (u) => [
-      (u * 2 - 1) * hx * (pack ? 1.12 : 1.06),
-      -hy * (0.5 + Math.random() * 0.5),
-      pack ? -0.03 - Math.random() * 0.02 : -0.006 - Math.random() * 0.01,
-    ],
+    emit: (u) => [(u * 2 - 1) * hx * 1.06, -hy * (0.5 + Math.random() * 0.5), -0.006 - Math.random() * 0.01],
   });
-  sheet.name = "fireSheet";
+  if (sheet) sheet.name = "fireSheet";
 
-  const cracks = layer({
-    count: 90, map: wisp, size: 0.0034, life: 0.8, rise: 0.012, sway: 4.0,
+  // The pack instance forces this layer's uLevel to 0 below (no visible cracks on the sealed
+  // pack, only on cards) — so for `pack`, skip building/drawing it at all rather than paying a
+  // full draw call every frame for something permanently invisible.
+  const cracks = pack ? null : layer({
+    count: 60, map: wisp, size: 0.0034, life: 0.8, rise: 0.012, sway: 4.0,
     hot: 0xfff6e2, mid: 0xff9330, cool: 0x6d1004,
     emit: () => [(Math.random() * 2 - 1) * hx * 0.86, (Math.random() * 2 - 1) * hy * 0.88, 0.0012],
   });
-  cracks.name = "fireCracks";
+  if (cracks) cracks.name = "fireCracks";
 
   const embers = layer({
-    count: 160, map: dot, size: 0.0034, life: 3.4, rise: 0.14, sway: 1.1,
+    count: 110, map: dot, size: 0.0034, life: 3.4, rise: 0.14, sway: 1.1,
     hot: 0xffe7bd, mid: 0xff8a2a, cool: 0x8e2408,
     emit: () => [(Math.random() * 2 - 1) * hx * 1.5, -hy + Math.random() * cardH, (Math.random() - 0.5) * 0.03],
   });
   embers.name = "fireEmbers";
 
   const smoke = layer({
-    count: 44, map: puff, size: pack ? 0.04 : 0.055, life: 4.2, rise: 0.17, sway: 0.7,
+    count: 30, map: puff, size: pack ? 0.04 : 0.055, life: 4.2, rise: 0.17, sway: 0.7,
     hot: 0x3a2a20, mid: 0x241a14, cool: 0x0d0908,
     blending: THREE.NormalBlending, spin: 0.05, converge: 0,
     emit: () => [(Math.random() * 2 - 1) * hx * 1.2, hy * (pack ? 0.9 : 0.2) + Math.random() * 0.02, -0.012],
   });
   smoke.name = "fireSmoke";
 
-  const sparks = layer({
-    count: 130, map: dot, size: 0.0026, life: 1.1, rise: 0.3, sway: 2.0,
+  // Sparks read as a burst/energy-release accent — worth it on the hero card, skipped on the
+  // ambient sealed-pack fire for the same reason as `sheet` above.
+  const sparks = pack ? null : layer({
+    count: 90, map: dot, size: 0.0026, life: 1.1, rise: 0.3, sway: 2.0,
     hot: 0xffffff, mid: 0xffc46a, cool: 0xff5a12,
     emit: () => [(Math.random() * 2 - 1) * hx * 1.1, (Math.random() * 2 - 1) * hy, (Math.random() - 0.5) * 0.01],
   });
-  sparks.name = "fireSparks";
+  if (sparks) sparks.name = "fireSparks";
 
-  [smoke, sheet, embers, skirt, cracks, sparks].forEach((l) => {
+  const layers = [smoke, sheet, embers, skirt, cracks, sparks].filter((l): l is THREE.Points => l !== null);
+  layers.forEach((l) => {
     disposeGeo.push(l.geometry);
     disposeMat.push(l.material as THREE.Material);
   });
-  group.add(smoke, sheet, embers, skirt, cracks, sparks);
+  group.add(...layers);
 
   // Light sweep across the card face — a single additive band, driven only during the reveal beat.
   const sweepSurf = makeSurface(256, 8);
@@ -324,7 +335,7 @@ export function buildFire({ cardW, cardH, pack = false }: { cardW: number; cardH
     const surgeE = state.surge * state.surge;
     const projEl = (camera as THREE.PerspectiveCamera | null)?.projectionMatrix.elements[5];
     const pix = pixHeight * 0.5 * (projEl || 1);
-    [smoke, sheet, embers, skirt, cracks, sparks].forEach((l) => {
+    layers.forEach((l) => {
       const u = (l.material as THREE.ShaderMaterial).uniforms;
       u.uTime.value = state.t;
       u.uPix.value = pix;
@@ -333,11 +344,11 @@ export function buildFire({ cardW, cardH, pack = false }: { cardW: number; cardH
     const lv = state.level;
     const uOf = (m: THREE.Points) => (m.material as THREE.ShaderMaterial).uniforms;
     uOf(skirt).uLevel.value = lv * (0.6 + 0.24 * state.flick) * (1 + surgeE * 0.6);
-    uOf(sheet).uLevel.value = Math.pow(lv, 1.25) * (0.55 + 0.35 * state.flick) * (1 + surgeE);
-    uOf(cracks).uLevel.value = pack ? 0 : Math.pow(lv, 2.2) * 0.28 * (1 + surgeE * 0.6);
+    if (sheet) uOf(sheet).uLevel.value = Math.pow(lv, 1.25) * (0.55 + 0.35 * state.flick) * (1 + surgeE);
+    if (cracks) uOf(cracks).uLevel.value = Math.pow(lv, 2.2) * 0.28 * (1 + surgeE * 0.6);
     uOf(embers).uLevel.value = Math.pow(lv, 0.8) * 0.8;
     uOf(smoke).uLevel.value = Math.pow(lv, 1.1) * (pack ? 0.18 : 0.5);
-    uOf(sparks).uLevel.value = surgeE * 1.1 + lv * 0.05;
+    if (sparks) uOf(sparks).uLevel.value = surgeE * 1.1 + lv * 0.05;
 
     haloMat.opacity = Math.pow(lv, 1.5) * (pack ? 0.07 : 0.1) + surgeE * 0.22;
     halo.scale.setScalar(1 + surgeE * 0.35);

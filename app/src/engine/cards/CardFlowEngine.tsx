@@ -17,7 +17,10 @@ import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { cardsConfig } from "../categories/cards.config";
 import { GestureLayer } from "../core/GestureLayer";
+import { Renderer3DBoundary } from "../core/Renderer3DBoundary";
 import { PackTearMesh } from "./reveal/PackTearMesh";
+import { PackTear2D } from "./reveal/PackTear2D";
+import { cardPackPersonality } from "./reveal/config/cardPack.config";
 import { playHapticTrack } from "../core/HapticsTrack";
 import { PackFace } from "../../components/PackFace";
 import { ProgressRing } from "../../components/ProgressRing";
@@ -283,22 +286,34 @@ function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplet
       <View style={styles.tearCanvas}>
         <GestureLayer gesture={cardsConfig.gesture} onComplete={onTearComplete}>
           {(openProgress) => (
-            // Real-world-scale pack (~0.068 units wide, i.e. meters) needs a much closer
-            // camera and its own lighting recipe than the old placeholder's 1.4-unit plane —
-            // matched to the prototype's own PackScene.tsx setup (warm key + violet rim, no
-            // flat ambient wash), not cardsConfig's generic ambient+directional pair.
-            <Canvas shadows camera={{ position: [0, 0.01, 0.22], fov: 35 }}>
-              <hemisphereLight args={["#2a1b47", "#090610", 0.7]} />
-              <directionalLight
-                ref={keyLightRef}
-                color="#fff0d8"
-                intensity={3}
-                position={[0.16, 0.3, 0.28]}
-                castShadow
-              />
-              <directionalLight color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
-              <PackTearMesh openProgress={openProgress} />
-            </Canvas>
+            <Renderer3DBoundary
+              fallback={
+                <PackTear2D
+                  openProgress={openProgress}
+                  topColor={cardPackPersonality.palette.violet}
+                  bottomColor={cardPackPersonality.palette.violetDeep}
+                  wordmark={cardPackPersonality.copy.wordmark}
+                  badge={cardPackPersonality.copy.codeBadge}
+                />
+              }
+            >
+              {/* Real-world-scale pack (~0.068 units wide, i.e. meters) needs a much closer
+                  camera and its own lighting recipe than the old placeholder's 1.4-unit plane —
+                  matched to the prototype's own PackScene.tsx setup (warm key + violet rim, no
+                  flat ambient wash), not cardsConfig's generic ambient+directional pair. */}
+              <Canvas shadows camera={{ position: [0, 0.01, 0.22], fov: 35 }}>
+                <hemisphereLight args={["#2a1b47", "#090610", 0.7]} />
+                <directionalLight
+                  ref={keyLightRef}
+                  color="#fff0d8"
+                  intensity={3}
+                  position={[0.16, 0.3, 0.28]}
+                  castShadow
+                />
+                <directionalLight color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
+                <PackTearMesh openProgress={openProgress} />
+              </Canvas>
+            </Renderer3DBoundary>
           )}
         </GestureLayer>
       </View>
