@@ -6,6 +6,7 @@ import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
 import { VaultBreakFlowEngine } from "../engine/cards/VaultBreakFlowEngine";
+import { BlackLabelFlowEngine } from "../engine/cards/BlackLabelFlowEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
 import { reveal as revealCopy } from "../content/copy";
@@ -81,13 +82,29 @@ export function RevealScreen() {
   }
 
   if (flow.sku.category === "cards") {
-    // Vault Break is the one card tier with its own richer reveal (cards physically rise out of
-    // the torn pack and fan out in the 3D scene, with tap/drag/pinch/flip inspection) — every
-    // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow. See
-    // VaultBreakFlowEngine's own header for why this is scoped to just this tier.
+    // Vault Break and Black Label are the two card tiers with their own richer reveal (cards
+    // physically rise out of the torn pack and fan out, with a staged rarity moment and
+    // tap/drag/pinch/flip inspection) — every other tier keeps CardFlowEngine's tear + flat
+    // swipe-through-cards flow. See VaultBreakFlowEngine's own header for why this started
+    // scoped to just Vault Break, and BlackLabelFlowEngine's for why Black Label got the same
+    // treatment rather than a third, different flow.
     if (flow.sku.tier === "vault_break") {
       return (
         <VaultBreakFlowEngine
+          key={flow.purchaseId ?? undefined}
+          sku={flow.sku}
+          items={flow.items}
+          onFinished={handleFinished}
+          onRipAgain={handleRipAgain}
+          onGoHome={handleGoHome}
+          onViewCollection={handleViewCollection}
+          isRipAgainWorking={flow.isPurchasing}
+        />
+      );
+    }
+    if (flow.sku.tier === "black_label") {
+      return (
+        <BlackLabelFlowEngine
           key={flow.purchaseId ?? undefined}
           sku={flow.sku}
           items={flow.items}

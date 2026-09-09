@@ -45,12 +45,20 @@ function hashSeed(id: string): number {
   return Math.abs(h) || 1;
 }
 
-function serialFromId(id: string): string {
+function serialFromId(id: string, prefix: string): string {
   const compact = id.replace(/-/g, "").toUpperCase();
-  return `VB-${compact.slice(0, 8)}`;
+  return `${prefix}-${compact.slice(0, 8)}`;
 }
 
-export function adaptPulledItemsToVaultDeck(items: PulledOwnedItem[], sku: PackSku): VaultCardData[] {
+/** `serialPrefix` defaults to Vault Break's own "VB" — Black Label
+ * (../../blackLabelReveal/engine/adaptBlackLabelDeck.ts) calls this with "BL" instead. Every
+ * other field is real/derived data or a shared per-rarity styling choice (see the file header),
+ * so this stayed one function rather than forking per tier. */
+export function adaptPulledItemsToVaultDeck(
+  items: PulledOwnedItem[],
+  sku: PackSku,
+  serialPrefix = "VB"
+): VaultCardData[] {
   return items.map((item) => {
     const rarity = RARITY_BY_LEVEL[item.rarityTierLevel];
     const rarityLabel = sku.rarityTiers.find((t) => t.level === item.rarityTierLevel)?.name ?? rarity;
@@ -73,7 +81,7 @@ export function adaptPulledItemsToVaultDeck(items: PulledOwnedItem[], sku: PackS
       tint: TINT_BY_RARITY[rarity],
       glowRGB: GLOW_RGB_BY_RARITY[rarity],
       seed: hashSeed(item.ownedItemId),
-      serial: serialFromId(item.ownedItemId),
+      serial: serialFromId(item.ownedItemId, serialPrefix),
       held: "ACQUIRED TODAY",
       spark,
     };

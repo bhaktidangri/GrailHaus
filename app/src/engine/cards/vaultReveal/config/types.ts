@@ -1,10 +1,21 @@
-// Ported from card-pack-reveal-prototype/src/vault/config/types.ts — Tier 2 "Vault Break".
-// Kept as its own type module rather than folding into ../../reveal/config/types.ts: a
-// CategoryPersonality (Tier 1) is a palette/copy/timing swap over one shared tear-only engine,
-// but Vault Break adds a second engine stage the Tier 1 shape has no room for — a staged card
-// reveal (stack -> hold -> rise -> separate -> settle -> notice -> approach -> reveal -> present
-// -> ready) with its own per-card spring targets, a metallic inner liner, and post-reveal card
-// inspection (tap/drag/pinch/flip).
+// Ported from card-pack-reveal-prototype/src/vault/config/types.ts — originally just Tier 2
+// "Vault Break". Kept as its own type module rather than folding into
+// ../../reveal/config/types.ts: a CategoryPersonality (Tier 1) is a palette/copy/timing swap
+// over one shared tear-only engine, but this shape adds a second engine stage Tier 1 has no room
+// for — a staged card reveal (stack -> hold -> rise -> separate -> settle -> notice -> approach
+// -> reveal -> present -> ready) with its own per-card spring targets, a metallic inner liner,
+// and post-reveal card inspection (tap/drag/pinch/flip).
+//
+// `VaultBreakPersonality`'s `id` is now a union of both premium-tier ids it actually describes —
+// Vault Break AND Black Label (../../blackLabelReveal/config/blackLabel.config.ts) reuse this
+// exact shape and the engine/scene/gesture code built against it unchanged, since Black Label
+// turned out to need the identical staged-reveal machinery, just its own palette/copy/timing.
+// The name stays `VaultBreakPersonality` rather than a generic rename (a bigger, riskier diff
+// across every file that imports it) — read it as "premium 3D card-tier personality," not as
+// scoped to one tier, now that a second tier is using it. `lighting` is new for the same reason:
+// VaultScene.tsx's light colors were hardcoded JSX literals (a fixed warm-champagne/violet rig)
+// until Black Label needed its own onyx/bronze rig — pulling them into the personality was less
+// code than forking the scene component.
 //
 // One deliberate change from the prototype: `VaultBreakPersonality` no longer carries `deck`.
 // The prototype's own deck was six hardcoded fictional cards (fake names, fake ownership
@@ -115,8 +126,19 @@ export interface HapticTrackConfig {
   completeAt: number;
 }
 
+/** VaultScene.tsx's light rig colors — three.js 0xRRGGBB numeric colors, not CSS strings,
+ * matching how they're passed to <directionalLight color={...}>/<hemisphereLight args={...}>
+ * etc. directly. */
+export interface VaultLighting {
+  key: number;
+  rim: number;
+  hemiSky: number;
+  hemiGround: number;
+  spot: number;
+}
+
 export interface VaultBreakPersonality {
-  id: "vault-break";
+  id: "vault-break" | "black-label";
   size: VaultSize;
   seamFrac: number;
   flapFrac: number;
@@ -129,4 +151,5 @@ export interface VaultBreakPersonality {
   reveal: VaultRevealTiming;
   haptics: HapticTrackConfig;
   riseY: number;
+  lighting: VaultLighting;
 }
