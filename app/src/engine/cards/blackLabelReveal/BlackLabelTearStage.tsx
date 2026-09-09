@@ -22,8 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { SkImage } from "@shopify/react-native-skia";
 import { blackLabelPersonality } from "./config/blackLabel.config";
-import { VaultScene, type VaultStateSnapshot } from "../vaultReveal/scene/VaultScene";
-import { buildBlackLabelPackObject } from "./engine/buildBlackLabelPackObject";
+import { BlackLabelScene, type BlackLabelStateSnapshot } from "./scene/BlackLabelScene";
 import { loadLogoImage } from "../reveal/engine/textures";
 import { VaultVignette } from "../vaultReveal/ui/VaultVignette";
 import type { VaultCardData } from "../vaultReveal/config/types";
@@ -44,8 +43,9 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
   const { width, height } = useWindowDimensions();
   const [logo, setLogo] = useState<SkImage | null>(null);
   const [ready, setReady] = useState(false);
-  const [snapshot, setSnapshot] = useState<VaultStateSnapshot>({
-    phase: "idle", hero: -1, ready: false, running: false, dim: 0, shown: 0, heroLabel: null,
+  const [snapshot, setSnapshot] = useState<BlackLabelStateSnapshot>({
+    phase: "idle", hero: -1, ready: false, running: false, dim: 0, shown: 0,
+    fireLevel: 0, surge: 0, heroLabel: null,
   });
   const personality = blackLabelPersonality;
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,8 +56,10 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
   const kickerIn = useSharedValue(0);
   const titleIn = useSharedValue(0);
   const metaIn = useSharedValue(0);
-  // A slow, continuous breathing glow on the "Break" emphasis word — a small living/premium
-  // touch, cheap (pure opacity+scale on one Text node).
+  // A slow, continuous breathing glow on the title — the design's own warm text-shadow
+  // (`0 0 40px rgba(255,140,50,.28)`) held static, animated here instead so it reads as living
+  // firelight rather than a printed effect. Small living/premium touch, cheap (pure
+  // opacity+scale on one Text node).
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
@@ -97,12 +99,8 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
   }));
   const kickerRuleStyle = useAnimatedStyle(() => ({ width: 26 * kickerIn.value }));
   const titleStyle = useAnimatedStyle(() => ({
-    opacity: titleIn.value,
-    transform: [{ translateY: (1 - titleIn.value) * 10 }],
-  }));
-  const emphasisStyle = useAnimatedStyle(() => ({
-    opacity: 0.86 + shimmer.value * 0.14,
-    transform: [{ scale: 1 + shimmer.value * 0.015 }],
+    opacity: titleIn.value * (0.9 + shimmer.value * 0.1),
+    transform: [{ translateY: (1 - titleIn.value) * 10 }, { scale: 1 + shimmer.value * 0.012 }],
   }));
   const metaStyle = useAnimatedStyle(() => ({
     opacity: metaIn.value,
@@ -120,28 +118,34 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
   const hint = personality.copy.hintDrag;
   const hintOpacity = Math.max(0, 1 - snapshot.shown * 1.6);
 
+  // The design's #vign reads --fire/--surge off the render loop to intensify the ambient glow
+  // as the fire builds — approximated here with a plain opacity ramp on the same Skia vignette
+  // rather than threading a second live value through Skia's declarative <Canvas>, since a
+  // React-state-driven style (snapshot only updates on a real change, see BlackLabelScene's own
+  // throttling) is cheap enough not to need Reanimated for this one number.
+  const vignetteOpacity = Math.min(1, 0.82 + snapshot.fireLevel * 0.4 + snapshot.surge * 0.5);
+
   return (
     <View style={styles.root}>
-      <VaultVignette width={width} height={height} glowColor="rgba(180,140,60,0.20)" />
+      <View style={{ opacity: vignetteOpacity }}>
+        <VaultVignette width={width} height={height} glowColor="rgba(255,106,24,0.22)" />
+      </View>
 
-      {/* Camera starts pulled back to 0.34 (vs. the pack's resting 0.214) — `introDolly` on
-          VaultScene skips its usual instant snap-to-position on mount, so this eases smoothly
-          in over about a second instead of appearing already framed. A small cinematic touch
-          Tier 1's tear doesn't have, and free performance-wise — it's just where the camera
-          starts, not an extra render pass. */}
+      {/* Camera starts pulled back to 0.34 (vs. the pack's resting 0.218) — `introDolly` skips
+          the usual instant snap-to-position on mount, so this eases smoothly in over about a
+          second instead of appearing already framed. */}
       <Canvas
         style={styles.canvas}
         camera={{ position: [0, 0.006, 0.34], fov: 45, near: 0.01, far: 2 }}
         gl={{ antialias: false, alpha: true }}
       >
-        <VaultScene
+        <BlackLabelScene
           personality={personality}
           deck={EMPTY_DECK}
           logo={logo}
           orbit={false}
           onSnapshot={setSnapshot}
           introDolly
-          buildPack={buildBlackLabelPackObject}
         />
       </Canvas>
 
@@ -151,10 +155,8 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
             <Animated.View style={[styles.kickerRule, kickerRuleStyle]} />
             <Text style={styles.kicker}>{personality.copy.kicker}</Text>
           </Animated.View>
-          <Animated.Text style={[styles.title, titleStyle]}>
-            {personality.copy.title}
-            <Animated.Text style={[styles.titleEmphasis, emphasisStyle]}>{personality.copy.titleEmphasis}</Animated.Text>
-          </Animated.Text>
+          <Animated.Text style={[styles.title, titleStyle]}>{personality.copy.title}</Animated.Text>
+          <Animated.Text style={[styles.sub, titleStyle]}>Collectible cards</Animated.Text>
           <Animated.View style={[styles.metaRow, metaStyle]}>
             {personality.copy.meta.map((m) => (
               <View key={m} style={styles.metaChip}>
@@ -186,8 +188,15 @@ const styles = StyleSheet.create({
   kicker: {
     fontFamily: mono, fontSize: 10, letterSpacing: 3.4, color: "#8a6a2e", textTransform: "uppercase",
   },
-  title: { marginTop: 10, fontSize: 30, fontWeight: "500", color: "#f4ece0", alignSelf: "flex-start" },
-  titleEmphasis: { fontStyle: "italic", color: "#c9a24a" },
+  title: {
+    marginTop: 9, fontSize: 32, fontWeight: "300", letterSpacing: 6, textTransform: "uppercase",
+    color: "#f7e6bd", alignSelf: "flex-start",
+    textShadowColor: "rgba(255,140,50,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 18,
+  },
+  sub: {
+    marginTop: 6, fontFamily: mono, fontSize: 9, letterSpacing: 4, textTransform: "uppercase",
+    color: "rgba(242,236,226,0.44)", alignSelf: "flex-start",
+  },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14, alignSelf: "flex-start" },
   metaChip: {
     borderWidth: 1,

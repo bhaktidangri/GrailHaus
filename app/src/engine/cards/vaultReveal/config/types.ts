@@ -118,6 +118,26 @@ export interface VaultCardData {
   serial: string;
   held: string;
   spark: number[];
+
+  // Optional theme hooks — see art/cardArt.ts's header. Vault Break's real-data adapter
+  // (engine/adaptRealDeck.ts) leaves all of these undefined and gets the original look; Black
+  // Label's (../../blackLabelReveal/engine/adaptBlackLabelDeck.ts) sets them.
+  /** Card-stock background gradient, top/mid/bottom. */
+  stock?: [string, string, string];
+  /** Rarity-ribbon gradient, overriding the ordinal-rarity default. */
+  ribbon?: [string, string, string];
+  accent?: string;
+  accentRGB?: string;
+  /** Which abstract art window function fills the card's art window when no real catalog photo
+   * exists — 'vault' (default) or 'pyro'. */
+  windowArt?: "vault" | "pyro";
+  /** Replaces the held-since line with an italic pull-quote (Black Label's Grail card, per the
+   * design) — the two are mutually exclusive, not stacked. */
+  tagline?: string;
+  /** Shown as bordered chips in the flat-2D fan reveal's inspect sheet. */
+  traits?: string[];
+  /** Free-text category shown in the inspect sheet's meta line (e.g. "Fire"). */
+  type?: string;
 }
 
 export interface HapticTrackConfig {

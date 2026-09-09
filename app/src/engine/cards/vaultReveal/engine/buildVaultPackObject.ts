@@ -28,6 +28,10 @@ const REVEAL_PHASES_LINER_HIDDEN = new Set<RevealPhase>([
 export interface BuiltVaultPack {
   group: THREE.Group;
   size: { W: number; H: number; T: number };
+  /** Individual card width/height, same units as `size` — Black Label's fire
+   * (blackLabelReveal/art/fire.ts's buildFire) sizes itself off this, matching how the design's
+   * own script reads `pack.cardSize`/`reveal.cardSize`. */
+  cardSize: { w: number; h: number };
   seamY: number;
   reveal: BuiltReveal;
   setProgress: (p: number) => void;
@@ -505,5 +509,8 @@ export function buildVaultPackObject(
   };
 
   setProgress(0);
-  return { group, size: { W, H, T }, seamY, reveal, setProgress, setStretch, setTime, react, dispose };
+  return {
+    group, size: { W, H, T }, cardSize: { w: cw, h: ch }, seamY, reveal,
+    setProgress, setStretch, setTime, react, dispose,
+  };
 }
