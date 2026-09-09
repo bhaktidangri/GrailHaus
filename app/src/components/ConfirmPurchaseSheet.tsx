@@ -13,17 +13,21 @@ import { confirmPurchase as copy, packTile as packTileCopy } from "../content/co
  * The receipt-style confirm step between "tap a tier" and the real purchase
  * call — restates price and balance-after before the tap (never a surprise
  * charge), and states the expected-contents math so a buyer sees the house
- * edge before paying, not after. Single unit only: neither the Cards nor the
- * Watches journey mockups show a bulk option anywhere in this flow, and the
- * backend's `/purchase` always takes `quantity: 1` from this sheet now.
- * Replaces the old `BuySheet` (which had a 1/10 stepper for the shelf's
- * former inline bulk-buy buttons).
+ * edge before paying, not after. Bulk ripping (PRD §46): a 1/10 toggle is
+ * offered when the caller marks the sku `bulkEligible` (evergreen card tiers
+ * other than Vault Break — see PackDetailScreen for exactly where that's
+ * decided; watches and timed drops never set it, matching the "one case at a
+ * time" / "1 per account" rules those already have). `quantity` is otherwise
+ * always 1 and the sheet renders exactly as it always has.
  */
 export function ConfirmPurchaseSheet({
   visible,
   sku,
   balanceCents,
   isPurchasing,
+  quantity = 1,
+  bulkEligible = false,
+  onQuantityChange,
   onClose,
   onConfirm,
 }: {
@@ -31,6 +35,9 @@ export function ConfirmPurchaseSheet({
   sku: PackSku | null;
   balanceCents: number | null;
   isPurchasing: boolean;
+  quantity?: 1 | 10;
+  bulkEligible?: boolean;
+  onQuantityChange?: (quantity: 1 | 10) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -38,11 +45,12 @@ export function ConfirmPurchaseSheet({
 
   if (!sku) return null;
   const isWatches = sku.category === "watches";
-  const balanceAfter = balanceCents != null ? balanceCents - sku.priceCents : null;
+  const totalPriceCents = sku.priceCents * quantity;
+  const balanceAfter = balanceCents != null ? balanceCents - totalPriceCents : null;
   const insufficient = balanceAfter != null && balanceAfter < 0;
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
   const tone = isWatches ? accent.watches : accent.cards;
-  const priceLabel = `$${(sku.priceCents / 100).toFixed(2)}`;
+  const priceLabel = `$${(totalPriceCents / 100).toFixed(2)}`;
   const confirmLabel = isPurchasing ? copy.working : `${copy.pay} ${priceLabel}`;
 
   function handleConfirm() {
@@ -71,13 +79,38 @@ export function ConfirmPurchaseSheet({
             </View>
           </View>
 
+          {bulkEligible && onQuantityChange && (
+            <View style={styles.quantityToggle}>
+              {([1, 10] as const).map((q) => (
+                <Pressable
+                  key={q}
+                  onPress={() => onQuantityChange(q)}
+                  disabled={isPurchasing}
+                  style={[styles.quantityOption, quantity === q && styles.quantityOptionActive]}
+                >
+                  <Text style={[styles.quantityOptionLabel, quantity === q && styles.quantityOptionLabelActive]}>
+                    {q === 1 ? "1 PACK" : "10 PACKS"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
           <View style={styles.divider} />
 
           <View style={styles.breakdown}>
-            <Row label={isWatches ? copy.unlockPrice : copy.lineItem} value={priceLabel} />
+            <Row
+              label={isWatches ? copy.unlockPrice : quantity > 1 ? `${quantity} × pack` : copy.lineItem}
+              value={priceLabel}
+            />
             <Row
               label={copy.youReceive}
-              value={isWatches ? copy.oneWatch : packTileCopy.countLabel(sku.category, sku.itemCount)}
+              value={
+                isWatches
+                  ? copy.oneWatch
+                  : packTileCopy.countLabel(sku.category, sku.itemCount * quantity) +
+                    (quantity > 1 ? ` across ${quantity} packs` : "")
+              }
             />
             {balanceCents != null && <Row label={copy.balanceNow} value={`$${(balanceCents / 100).toFixed(2)}`} />}
             <View style={styles.divider} />
@@ -91,7 +124,7 @@ export function ConfirmPurchaseSheet({
           {ev && (
             <View style={styles.evNote}>
               <Text style={styles.evNoteText}>
-                {copy.evNote(ev.expectedCents, sku.priceCents, isWatches)}
+                {copy.evNote(ev.expectedCents * quantity, totalPriceCents, isWatches)}
               </Text>
             </View>
           )}
@@ -157,6 +190,26 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: spacing.md },
+  quantityToggle: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: spacing.lg,
+    padding: 4,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  quantityOption: {
+    flex: 1,
+    height: 40,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quantityOptionActive: { backgroundColor: "rgba(255,255,255,0.14)" },
+  quantityOptionLabel: { fontFamily: fonts.extrabold, fontSize: 12, letterSpacing: 0.8, color: "rgba(255,255,255,0.5)" },
+  quantityOptionLabelActive: { color: ink.text },
   itemInfo: { flex: 1, minWidth: 0 },
   itemTier: { fontFamily: fonts.extrabold, fontSize: 10, letterSpacing: 1.3, color: "rgba(255,255,255,0.55)" },
   itemName: { fontFamily: fonts.black, fontSize: 22, letterSpacing: -0.2, color: ink.text, marginTop: 4 },

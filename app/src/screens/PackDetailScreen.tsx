@@ -45,8 +45,21 @@ export function PackDetailScreen() {
   const flow = usePackFlowViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [quantity, setQuantity] = useState<1 | 10>(1);
   const isRippingRef = useRef(false);
   const tabBarClearance = useTabBarClearance();
+
+  // Bulk ripping (PRD §46) is offered here — the evergreen shelf's own detail screen — for every
+  // card tier except Vault Break, whose richer 3D tear+fan reveal isn't built to batch (see
+  // RevealScreen/VaultBreakFlowEngine). Never offered for watches (one case at a time) or timed
+  // drops (DropDetailScreen, a separate screen entirely — "1 per account" is the whole point of
+  // a drop's scarcity, so a bulk buy there would undercut its own mechanic).
+  const bulkEligible = sku?.category === "cards" && sku.tier !== "vault_break";
+
+  function handleOpenSheet() {
+    setQuantity(1);
+    setSheetOpen(true);
+  }
 
   function handleConfirm() {
     if (!sku) return;
@@ -54,7 +67,7 @@ export function PackDetailScreen() {
       if (isRippingRef.current) return;
       isRippingRef.current = true;
       try {
-        const result = await flow.startFlow(sku);
+        const result = await flow.startFlow(sku, bulkEligible ? quantity : 1);
         if (result.ok) {
           setSheetOpen(false);
           navigation.navigate("Reveal");
@@ -111,7 +124,7 @@ export function PackDetailScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
-        <Pressable onPress={() => setSheetOpen(true)} style={styles.ripButtonWrap}>
+        <Pressable onPress={handleOpenSheet} style={styles.ripButtonWrap}>
           <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.ripButton}>
             <Text style={styles.ripLabel}>{copy.ripNow}</Text>
             <View style={styles.ripPricePill}>
@@ -119,6 +132,7 @@ export function PackDetailScreen() {
             </View>
           </LinearGradient>
         </Pressable>
+        {bulkEligible && <Text style={styles.bulkHint}>Or rip a 10-pack — tap RIP NOW to choose</Text>}
       </View>
 
       <ConfirmPurchaseSheet
@@ -126,6 +140,9 @@ export function PackDetailScreen() {
         sku={sheetOpen ? sku : null}
         balanceCents={session.balanceCents}
         isPurchasing={flow.isPurchasing}
+        quantity={quantity}
+        bulkEligible={bulkEligible}
+        onQuantityChange={setQuantity}
         onClose={() => setSheetOpen(false)}
         onConfirm={handleConfirm}
       />
@@ -166,8 +183,9 @@ const styles = StyleSheet.create({
   body: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 20, color: "rgba(255,255,255,0.6)" },
   statRow: { flexDirection: "row", gap: 10 },
 
-  footer: { padding: 20, paddingTop: 0 },
-  ripButtonWrap: { borderRadius: 18 },
+  footer: { padding: 20, paddingTop: 0, gap: 10, alignItems: "center" },
+  bulkHint: { fontFamily: fonts.semibold, fontSize: 11.5, color: "rgba(255,255,255,0.45)" },
+  ripButtonWrap: { borderRadius: 18, alignSelf: "stretch" },
   ripButton: {
     height: 62,
     borderRadius: 18,

@@ -6,6 +6,7 @@ import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
 import { VaultBreakFlowEngine } from "../engine/cards/VaultBreakFlowEngine";
+import { BatchSummaryScreen } from "../engine/cards/BatchSummaryScreen";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
 import { reveal as revealCopy } from "../content/copy";
@@ -50,12 +51,13 @@ export function RevealScreen() {
     rootNavigate("Tabs", { screen: "Portfolio" });
   }
 
-  /** A genuinely new POST /purchase for the same SKU — not a client-side re-roll of the pack
-   * that's already on screen. Keeps the summary showing on failure (sold out, insufficient
-   * funds) rather than clearing the flow out from under the user. */
-  async function handleRipAgain() {
+  /** A genuinely new POST /purchase for the same SKU — not a client-side re-roll of the pack(s)
+   * that were already on screen. Keeps the summary showing on failure (sold out, insufficient
+   * funds) rather than clearing the flow out from under the user. Reused for both "Rip Another"
+   * (single) and the batch summary's "Rip 10 More" — `quantity` is the only thing that differs. */
+  async function handleRipAgain(quantity: 1 | 10 = 1) {
     if (!flow.sku) return;
-    const result = await flow.startFlow(flow.sku);
+    const result = await flow.startFlow(flow.sku, quantity);
     if (!result.ok) Alert.alert("Couldn't rip again", result.error);
   }
 
@@ -69,7 +71,35 @@ export function RevealScreen() {
     rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "SellItem", params: { owned } } });
   }
 
-  if (!flow.isActive || !flow.config || !flow.items || !flow.sku) {
+  if (!flow.isActive || !flow.config || !flow.sku) {
+    return (
+      <ScreenBackground>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>{revealCopy.emptyTitle}</Text>
+          <Text style={styles.emptyNote}>{revealCopy.emptyNote}</Text>
+        </View>
+      </ScreenBackground>
+    );
+  }
+
+  // The terminal screen for a bulk (10-pack) rip — every pack in `flow.packs` has either been
+  // shown or was explicitly skipped past (see usePackFlowViewModel.skipToResults), and every
+  // one of their contents is still exactly what the purchase produced. Also what a device that
+  // died between the last pack finishing and this screen being dismissed resumes directly onto.
+  if (flow.isBatchSummary) {
+    return (
+      <BatchSummaryScreen
+        sku={flow.sku}
+        packs={flow.packs}
+        isRipAgainWorking={flow.isPurchasing}
+        onRipAgain={() => handleRipAgain(10)}
+        onGoHome={handleGoHome}
+        onViewCollection={handleViewCollection}
+      />
+    );
+  }
+
+  if (!flow.items) {
     return (
       <ScreenBackground>
         <View style={styles.empty}>
@@ -83,8 +113,9 @@ export function RevealScreen() {
   if (flow.sku.category === "cards") {
     // Vault Break is the one card tier with its own richer reveal (cards physically rise out of
     // the torn pack and fan out in the 3D scene, with tap/drag/pinch/flip inspection) — every
-    // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow. See
-    // VaultBreakFlowEngine's own header for why this is scoped to just this tier.
+    // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow, and is the only
+    // one bulk-eligible (see ConfirmPurchaseSheet/PackDetailScreen) — Vault Break's own richer
+    // engine isn't built to batch, so it's always a single pack here.
     if (flow.sku.tier === "vault_break") {
       return (
         <VaultBreakFlowEngine
@@ -92,20 +123,28 @@ export function RevealScreen() {
           sku={flow.sku}
           items={flow.items}
           onFinished={handleFinished}
-          onRipAgain={handleRipAgain}
+          onRipAgain={() => handleRipAgain(1)}
           onGoHome={handleGoHome}
           onViewCollection={handleViewCollection}
           isRipAgainWorking={flow.isPurchasing}
         />
       );
     }
+    // Keyed by purchase id + pack index (not purchase id alone) so advancing from one pack of a
+    // batch to the next always mounts a fresh instance — a batch's ten packs share one
+    // purchaseId (one atomic purchase produced all of them), so without the index every pack
+    // after the first would reuse pack one's already-`"summary"`-phase component instance
+    // instead of starting its own tear from scratch.
     return (
       <CardFlowEngine
-        key={flow.purchaseId ?? undefined}
+        key={`${flow.purchaseId ?? "none"}-${flow.currentPackIndex}`}
         sku={flow.sku}
         items={flow.items}
+        batchContext={flow.isBatch ? { index: flow.currentPackIndex, total: flow.quantity } : undefined}
+        onNextPack={flow.isBatch ? () => flow.advanceBatch() : undefined}
+        onSkipToResults={flow.isBatch ? flow.skipToResults : undefined}
         onFinished={handleFinished}
-        onRipAgain={handleRipAgain}
+        onRipAgain={() => handleRipAgain(1)}
         onGoHome={handleGoHome}
         onViewCollection={handleViewCollection}
         isRipAgainWorking={flow.isPurchasing}

@@ -30,16 +30,40 @@ type Step = "processing" | "ready" | "introduction" | "card" | "final" | "summar
 
 const PROCESSING_DURATION_MS = 2000;
 
+/** Which pack of a bulk (10-pack) batch this instance is showing, 1-based `index`/`total` for
+ * display. Undefined for a plain single-pack purchase. See RevealScreen for how this is derived
+ * from `usePackFlowStore`'s `packs`/`currentPackIndex`, and CardFlowEngine's own header for what
+ * it changes here (skips the processing narration after pack one, swaps the summary's terminal
+ * three-button footer for a single "next pack" advance). */
+export interface BatchContext {
+  index: number; // 0-based
+  total: number;
+}
+
 /**
  * The Cards journey's post-payment flow: Processing → Ready → Introduction →
  * per-card 2D swipe reveal → hold-to-reveal on the final (rarest) card →
  * Pack Complete summary. Replaces `RevealEngine`'s cards branch. Keeps the
  * 3D `CardMesh` + `GestureLayer` for exactly one beat — the pack tear in
  * Introduction — everything else here is flat 2D per the newer mockup.
+ *
+ * Also the engine a bulk (10-pack) batch runs, one pack at a time — `batchContext`/`onNextPack`
+ * are the only things that change for that case (see RevealScreen, which mounts a fresh instance
+ * of this per pack, keyed by purchase id + pack index). Nothing about the reveal itself — gesture
+ * physics, pacing, haptics, tension choreography — is a "batch mode": each pack still tears,
+ * fans through its own cards, and holds on its own rare pull exactly like a standalone purchase
+ * would. The only two concessions to not making ten of these back to back feel like a chore: the
+ * "Processing" narration (payment/stock/contents) only plays once, before pack one — replaying
+ * "Payment successful" ten times narrates nothing new after the first — and each pack's own
+ * summary hands off to the next pack (or the batch's terminal summary) with one tap instead of
+ * the three-way choice a standalone purchase's summary offers.
  */
 export function CardFlowEngine({
   sku,
   items,
+  batchContext,
+  onNextPack,
+  onSkipToResults,
   onFinished,
   onRipAgain,
   onGoHome,
@@ -48,6 +72,13 @@ export function CardFlowEngine({
 }: {
   sku: PackSku;
   items: ItemDetail[];
+  batchContext?: BatchContext;
+  onNextPack?: () => void;
+  /** Batch-mode agency: jump straight to the terminal batch summary from anywhere in this
+   * pack's own flow, without watching the rest of it (or any later pack) play out. Every pack's
+   * contents are already pulled and persisted regardless — this only ever skips animation, never
+   * content. Undefined outside batch mode. */
+  onSkipToResults?: () => void;
   onFinished: () => void;
   onRipAgain: () => void;
   onGoHome: () => void;
@@ -55,8 +86,20 @@ export function CardFlowEngine({
   isRipAgainWorking: boolean;
 }) {
   const setPhase = usePackFlowStore((s) => s.setPhase);
+  // True only when this flow was reconstructed from disk after a process death or lost network
+  // response (see lib/activeReveal.ts) — never on a normal fresh purchase, and never on a normal
+  // advance to the next pack of a batch. Read once at mount (a flow engine is always freshly
+  // mounted per pack — keyed by purchase id + pack index in RevealScreen) so a resumed session
+  // lands directly on its summary instead of replaying the intro/tear/per-card beats the user
+  // already missed. The pulled contents are identical either way.
+  const resumedToSummary = usePackFlowStore((s) => s.resumedToSummary);
   const { owned } = useCollectionViewModel();
-  const [step, setStep] = useState<Step>("processing");
+  // Every pack after the first in a batch skips straight past the processing narration — the
+  // one purchase behind the whole batch already cleared, once, before pack one ever mounted.
+  const skipProcessing = (batchContext?.index ?? 0) > 0;
+  const [step, setStep] = useState<Step>(
+    resumedToSummary ? "summary" : skipProcessing ? "ready" : "processing"
+  );
   const [visibleStatusRows, setVisibleStatusRows] = useState(0);
   const [cardIndex, setCardIndex] = useState(0);
   const tearCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +188,15 @@ export function CardFlowEngine({
   }
 
   if (step === "ready") {
-    return <ReadyView sku={sku} onBeginRip={handleBeginRip} onOpenLater={handleOpenLater} />;
+    return (
+      <ReadyView
+        sku={sku}
+        batchContext={batchContext}
+        onBeginRip={handleBeginRip}
+        onOpenLater={handleOpenLater}
+        onSkipToResults={batchContext ? onSkipToResults : undefined}
+      />
+    );
   }
 
   if (step === "introduction") {
@@ -193,6 +244,8 @@ export function CardFlowEngine({
       sku={sku}
       items={orderedItems}
       priorCountById={priorCountById}
+      batchContext={batchContext}
+      onNextPack={onNextPack}
       onRipAgain={onRipAgain}
       onGoHome={onGoHome}
       onViewCollection={onViewCollection}
@@ -229,18 +282,24 @@ export function ProcessingView({ visibleRows, onComplete }: { visibleRows: numbe
 
 export function ReadyView({
   sku,
+  batchContext,
   onBeginRip,
   onOpenLater,
+  onSkipToResults,
 }: {
   sku: PackSku;
+  batchContext?: BatchContext;
   onBeginRip: () => void;
   onOpenLater: () => void;
+  onSkipToResults?: () => void;
 }) {
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
   return (
     <View style={styles.fill}>
       <View style={styles.readyCenter}>
-        <Text style={styles.eyebrow}>{copy.ready.title}</Text>
+        <Text style={styles.eyebrow}>
+          {batchContext ? `PACK ${batchContext.index + 1} OF ${batchContext.total}` : copy.ready.title}
+        </Text>
         <Text style={styles.readyHeading}>{copy.ready.heading}</Text>
         <PackFace art={art} width={206} height={286} radius={16} crimp label={sku.name} />
         <StatBox label={copy.ready.insideLabel} value={copy.ready.insideValue(sku.itemCount)} bordered={false} />
@@ -251,9 +310,19 @@ export function ReadyView({
             <Text style={styles.primaryButtonLabel}>{copy.ready.beginRip}</Text>
           </LinearGradient>
         </Pressable>
-        <Pressable onPress={onOpenLater}>
-          <Text style={styles.openLaterLink}>{copy.ready.openLater}</Text>
-        </Pressable>
+        {onSkipToResults ? (
+          // Batch mode: "open later" doesn't have a coherent meaning mid-batch (there's no
+          // per-pack "sealed" state to leave a batch pack in once purchase has already happened
+          // for the whole ten) — "Skip to results" is the equivalent agency instead, jumping
+          // straight to the terminal batch summary without losing any pack's contents.
+          <Pressable onPress={onSkipToResults}>
+            <Text style={styles.openLaterLink}>Skip to results</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={onOpenLater}>
+            <Text style={styles.openLaterLink}>{copy.ready.openLater}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -485,6 +554,8 @@ export function SummaryView({
   sku,
   items,
   priorCountById,
+  batchContext,
+  onNextPack,
   onRipAgain,
   onGoHome,
   onViewCollection,
@@ -493,6 +564,8 @@ export function SummaryView({
   sku: PackSku;
   items: ItemDetail[];
   priorCountById: Map<string, number>;
+  batchContext?: BatchContext;
+  onNextPack?: () => void;
   onRipAgain: () => void;
   onGoHome: () => void;
   onViewCollection: () => void;
@@ -503,11 +576,14 @@ export function SummaryView({
   const newCount = items.filter((item) => (priorCountById.get(item.id) ?? 0) === 0).length;
   const duplicateCount = items.length - newCount;
   const tierLabel = TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase();
+  const isLastOfBatch = batchContext != null && batchContext.index === batchContext.total - 1;
 
   return (
     <View style={styles.fill}>
       <View style={styles.summaryHeader}>
-        <Text style={styles.eyebrow}>{copy.summary.title}</Text>
+        <Text style={styles.eyebrow}>
+          {batchContext ? `PACK ${batchContext.index + 1} OF ${batchContext.total}` : copy.summary.title}
+        </Text>
       </View>
       <View style={styles.summaryScroll}>
         <Text style={[styles.profit, { color: profitCents >= 0 ? "#8BF285" : "#F0554A" }]}>
@@ -556,25 +632,41 @@ export function SummaryView({
         <Text style={styles.addedNote}>{copy.summary.addedToCollection}</Text>
       </View>
 
-      <View style={styles.footer}>
-        <Pressable onPress={onRipAgain} disabled={isRipAgainWorking}>
-          <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.primaryButton}>
-            {isRipAgainWorking ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonLabel}>{copy.summary.ripAgain(tierLabel)}</Text>
-            )}
-          </LinearGradient>
-        </Pressable>
-        <View style={styles.secondaryRow}>
-          <Pressable onPress={onViewCollection} disabled={isRipAgainWorking} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonLabel}>{copy.summary.viewCollection}</Text>
-          </Pressable>
-          <Pressable onPress={onGoHome} disabled={isRipAgainWorking} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonLabel}>{copy.summary.backToHome}</Text>
+      {batchContext ? (
+        // Bulk pacing (see CardFlowEngine's header): one tap hands off to the next pack, or — on
+        // the batch's last pack — straight to the terminal batch summary. No secondary actions
+        // here on purpose; "bail out early" agency lives in the batch HUD's "Skip to Results"
+        // control (see RevealScreen), not duplicated on every single pack's own recap.
+        <View style={styles.footer}>
+          <Pressable onPress={onNextPack} disabled={isRipAgainWorking}>
+            <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonLabel}>
+                {isLastOfBatch ? "SEE FULL RESULTS" : `NEXT PACK (${batchContext.index + 2}/${batchContext.total})`}
+              </Text>
+            </LinearGradient>
           </Pressable>
         </View>
-      </View>
+      ) : (
+        <View style={styles.footer}>
+          <Pressable onPress={onRipAgain} disabled={isRipAgainWorking}>
+            <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.primaryButton}>
+              {isRipAgainWorking ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonLabel}>{copy.summary.ripAgain(tierLabel)}</Text>
+              )}
+            </LinearGradient>
+          </Pressable>
+          <View style={styles.secondaryRow}>
+            <Pressable onPress={onViewCollection} disabled={isRipAgainWorking} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonLabel}>{copy.summary.viewCollection}</Text>
+            </Pressable>
+            <Pressable onPress={onGoHome} disabled={isRipAgainWorking} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonLabel}>{copy.summary.backToHome}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
