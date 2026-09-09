@@ -69,16 +69,22 @@ export interface VaultSceneProps {
    * appearing already framed. Only affects the *first* reframe; a later orbit-exit still snaps
    * back instantly as before. */
   introDolly?: boolean;
+  /** Swaps which art gets baked onto the pack shell/cards — defaults to Vault Break's own
+   * buildVaultPackObject. Black Label (../../blackLabelReveal/scene's own thin wrapper) passes
+   * buildBlackLabelPackObject instead; everything else about this scene — lighting rig
+   * *behavior* (not color, see `personality.lighting`), camera choreography, gesture handling —
+   * is shared, so this stayed one component with a swappable builder rather than a fork. */
+  buildPack?: (personality: VaultBreakPersonality, deck: VaultCardData[], logo: SkImage | null) => BuiltVaultPack;
 }
 
 const CENTER_Y = 0;
 const BASE_Z = 0.214;
 
 export const VaultScene = memo(forwardRef<VaultSceneHandle, VaultSceneProps>(function VaultScene(
-  { personality, deck, logo, orbit, onSnapshot, introDolly },
+  { personality, deck, logo, orbit, onSnapshot, introDolly, buildPack = buildVaultPackObject },
   ref
 ) {
-  const pack = useMemo<BuiltVaultPack>(() => buildVaultPackObject(personality, deck, logo), [personality, deck, logo]);
+  const pack = useMemo<BuiltVaultPack>(() => buildPack(personality, deck, logo), [buildPack, personality, deck, logo]);
   const interaction = useVaultInteraction(pack, personality);
 
   const keyRef = useRef<THREE.DirectionalLight>(null);
@@ -306,12 +312,12 @@ export const VaultScene = memo(forwardRef<VaultSceneHandle, VaultSceneProps>(fun
 
   return (
     <>
-      <hemisphereLight ref={hemiRef} args={[0x231540, 0x05030a, 0.95]} />
-      <directionalLight ref={keyRef} color={0xfff3dc} intensity={3.5} position={[0.17, 0.3, 0.3]} />
-      <directionalLight ref={rimRef} color={0x7d4ce0} intensity={2.1} position={[-0.3, 0.12, -0.22]} />
+      <hemisphereLight ref={hemiRef} args={[personality.lighting.hemiSky, personality.lighting.hemiGround, 0.95]} />
+      <directionalLight ref={keyRef} color={personality.lighting.key} intensity={3.5} position={[0.17, 0.3, 0.3]} />
+      <directionalLight ref={rimRef} color={personality.lighting.rim} intensity={2.1} position={[-0.3, 0.12, -0.22]} />
       <spotLight
         ref={spotRef}
-        color={0xfff2d8}
+        color={personality.lighting.spot}
         intensity={0.7}
         distance={0.6}
         angle={0.5}

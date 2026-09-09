@@ -37,6 +37,9 @@ export interface RevealState {
   grailShown: boolean;
   running: boolean;
   started: boolean;
+  /** 0..1 progress through just the 'approach'/'reveal' phases, 0 elsewhere — see step()'s own
+   * comment on where this is written. */
+  emerge: number;
 }
 
 export interface BuildRevealOpts {
@@ -128,7 +131,7 @@ export function buildReveal(opts: BuildRevealOpts) {
   // ---- phase machine ----------------------------------------------------
   const state: RevealState = {
     phase: "idle", dim: 0, focus: new THREE.Vector3(0, restY, 0),
-    hero: -1, ready: false, grailShown: false, running: false, started: false,
+    hero: -1, ready: false, grailShown: false, running: false, started: false, emerge: 0,
   };
   const seq: [RevealPhase, number][] = grailIdx >= 0
     ? [["stack", timing.stack], ["hold", timing.hold], ["rise", timing.rise],
@@ -252,6 +255,13 @@ export function buildReveal(opts: BuildRevealOpts) {
             : state.phase === "ready" ? 0.34 : 0;
     state.dim += (dimTarget - state.dim) * Math.min(1, dt * 3.4);
 
+    // 0..1 progress through just the approach/reveal beats — Black Label's fire
+    // (blackLabelReveal/scene/BlackLabelScene.tsx) ramps its want-level against this so the
+    // burn visibly builds through those two phases instead of stepping between fixed levels.
+    state.emerge = state.phase === "approach" ? ease(clamp(phaseT / timing.approach))
+      : state.phase === "reveal" ? ease(clamp(phaseT / timing.reveal))
+        : 0;
+
     cards.forEach((c) => {
       target(c, tmp);
       const k = c.index === state.hero ? 52 : 34, damp = 2 * Math.sqrt(k) * 0.82;
@@ -326,7 +336,7 @@ export function buildReveal(opts: BuildRevealOpts) {
 
   const reset = () => {
     state.phase = "idle"; state.running = false; state.started = false; state.ready = false;
-    state.hero = -1; state.grailShown = false; state.dim = 0;
+    state.hero = -1; state.grailShown = false; state.dim = 0; state.emerge = 0;
     si = -1; phaseT = 0;
     cards.forEach((c) => {
       c.p.set(0, restY, (c.slot - (n - 1) / 2) * 0.0002);
@@ -345,6 +355,11 @@ export function buildReveal(opts: BuildRevealOpts) {
     group, cards, state, start, step, pick, setHero, dragHero, endDrag,
     zoomHero, flipHero, reset, dispose, spreadWidth,
     get heroCard() { return state.hero >= 0 ? cards[state.hero] : null; },
+    /** Black Label's fire (BlackLabelScene.tsx) parents itself to whichever card isGrail — a
+     * lookup, not a stored index, since deck order (and so which card is the Grail) never
+     * changes after buildReveal() is constructed. Null for a Grail-less deck (see grailIdx above
+     * — cardCount < the slot table's assumptions, or a pull with no Grail-rarity item). */
+    get grailCard() { return cards.find((c) => c.isGrail) ?? null; },
   };
 }
 

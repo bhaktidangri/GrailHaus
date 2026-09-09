@@ -13,8 +13,9 @@ import * as THREE from "three";
 import type { SkImage } from "@shopify/react-native-skia";
 import { noise } from "../../reveal/engine/noise";
 import { makeDataTexture } from "../../reveal/engine/textures";
-import { drawFront, drawBack, drawLiner, drawShine } from "../art/vaultArt";
-import { drawCardFace, drawCardVerso } from "../art/cardArt";
+import * as defaultArt from "../art/vaultArt";
+import * as defaultCardArt from "../art/cardArt";
+import type { PixelImage, VaultFaceInput } from "../art/vaultArt";
 import { buildReveal, type BuiltReveal, type RevealPhase } from "./buildReveal";
 import type { VaultBreakPersonality, VaultCardData } from "../config/types";
 
@@ -27,6 +28,10 @@ const REVEAL_PHASES_LINER_HIDDEN = new Set<RevealPhase>([
 export interface BuiltVaultPack {
   group: THREE.Group;
   size: { W: number; H: number; T: number };
+  /** Individual card width/height, same units as `size` — Black Label's fire
+   * (blackLabelReveal/art/fire.ts's buildFire) sizes itself off this, matching how the design's
+   * own script reads `pack.cardSize`/`reveal.cardSize`. */
+  cardSize: { w: number; h: number };
   seamY: number;
   reveal: BuiltReveal;
   setProgress: (p: number) => void;
@@ -44,7 +49,29 @@ interface SheetData {
   sign?: number;
 }
 
-export function buildVaultPackObject(personality: VaultBreakPersonality, deck: VaultCardData[], logo: SkImage | null): BuiltVaultPack {
+export interface VaultArtModule {
+  drawFront: (input: VaultFaceInput) => PixelImage;
+  drawBack: (input: VaultFaceInput) => PixelImage;
+  drawLiner: (width?: number, height?: number) => PixelImage;
+  drawShine: (width?: number, height?: number) => PixelImage;
+}
+export interface VaultCardArtModule {
+  drawCardFace: (card: VaultCardData) => PixelImage;
+  drawCardVerso: () => PixelImage;
+}
+
+/** `art`/`cardArt` default to Vault Break's own art module — Black Label
+ * (../../blackLabelReveal/engine/buildBlackLabelPackObject.ts) is the only other caller, and
+ * passes its own bronze-on-onyx variants (../../blackLabelReveal/art/); every other behavior in
+ * this function is identical between the two tiers, so this stayed one function with a swappable
+ * art layer rather than becoming two near-duplicate ones. */
+export function buildVaultPackObject(
+  personality: VaultBreakPersonality,
+  deck: VaultCardData[],
+  logo: SkImage | null,
+  art: VaultArtModule = defaultArt,
+  cardArt: VaultCardArtModule = defaultCardArt
+): BuiltVaultPack {
   const { size, seamFrac, flapFrac, material, tear, liner: linerCfg, fan, reveal: revealTiming, riseY } = personality;
   const { width: W, height: H, thickness: T } = size;
   const seamY = H / 2 - seamFrac * H;
@@ -57,9 +84,9 @@ export function buildVaultPackObject(personality: VaultBreakPersonality, deck: V
   // canvases were 800×1200 — a phone shows this pack at a fraction of that width), 256×256 for
   // the liner web, 512×32 for the crimp glint. Card faces/versos are native-resolution in
   // art/cardArt.ts already (see that file's own note).
-  const frontPixels = drawFront({ width: 640, height: 960, seamFrac, flapFrac, logo });
-  const backPixels = drawBack({ width: 640, height: 960, seamFrac, flapFrac, logo: null });
-  const shinePixels = drawShine(512, 32);
+  const frontPixels = art.drawFront({ width: 640, height: 960, seamFrac, flapFrac, logo });
+  const backPixels = art.drawBack({ width: 640, height: 960, seamFrac, flapFrac, logo: null });
+  const shinePixels = art.drawShine(512, 32);
 
   const frontTex = makeDataTexture(frontPixels);
   const backTex = makeDataTexture(backPixels);
@@ -157,7 +184,7 @@ export function buildVaultPackObject(personality: VaultBreakPersonality, deck: V
   let linerFront: LinerMesh | null = null;
   let linerBack: LinerMesh | null = null;
   if (linerCfg.enabled) {
-    const linerTex = makeDataTexture(drawLiner(256, 256));
+    const linerTex = makeDataTexture(art.drawLiner(256, 256));
     disposeTex.push(linerTex);
     const lmat = new THREE.MeshStandardMaterial({
       name: "innerLiner", map: linerTex, metalness: linerCfg.metalness, roughness: linerCfg.roughness,
@@ -195,11 +222,11 @@ export function buildVaultPackObject(personality: VaultBreakPersonality, deck: V
   const ch = H * 0.6, cw = ch * (620 / 868);
   const cardRestY = -H / 2 + flapFrac * H * 1.4 + ch / 2;
   const faceTexes = deck.map((c) => {
-    const tex = makeDataTexture(drawCardFace(c));
+    const tex = makeDataTexture(cardArt.drawCardFace(c));
     disposeTex.push(tex);
     return tex;
   });
-  const versoTex = makeDataTexture(drawCardVerso());
+  const versoTex = makeDataTexture(cardArt.drawCardVerso());
   disposeTex.push(versoTex);
   const reveal = buildReveal({
     deck, faceTexes, versoTex, cardW: cw, cardH: ch, restY: cardRestY, packT: T, fan, timing: revealTiming, riseY,
@@ -482,5 +509,8 @@ export function buildVaultPackObject(personality: VaultBreakPersonality, deck: V
   };
 
   setProgress(0);
-  return { group, size: { W, H, T }, seamY, reveal, setProgress, setStretch, setTime, react, dispose };
+  return {
+    group, size: { W, H, T }, cardSize: { w: cw, h: ch }, seamY, reveal,
+    setProgress, setStretch, setTime, react, dispose,
+  };
 }

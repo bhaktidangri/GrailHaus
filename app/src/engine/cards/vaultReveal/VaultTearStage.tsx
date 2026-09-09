@@ -36,6 +36,9 @@ import { VaultScene, type VaultStateSnapshot } from "./scene/VaultScene";
 import { loadLogoImage } from "../reveal/engine/textures";
 import { VaultVignette } from "./ui/VaultVignette";
 import type { VaultCardData } from "./config/types";
+import { GestureLayer } from "../../core/GestureLayer";
+import { Renderer3DBoundary } from "../../core/Renderer3DBoundary";
+import { PackTear2D } from "../reveal/PackTear2D";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LOGO_ASSET = require("../../../../assets/logo.png");
@@ -48,6 +51,16 @@ const EMPTY_DECK: VaultCardData[] = [];
 // handleTearComplete comment): cutting away right when the tear is merely *recognized* catches
 // the ballistic-fall physics still visibly mid-bounce.
 const SETTLE_DELAY_MS = 2500;
+
+// Vault Break's real 3D tear runs its own bespoke pointer state machine (useVaultInteraction —
+// tear + orbit/pinch/flip inspection) tightly coupled to the 3D scene's refs, not the shared
+// GestureLayer every other tier's tear uses. Extracting that into something a flat 2D fallback
+// could drive isn't a small job, and the fallback's job is to still feel good, not to replicate
+// every mechanic — so on a device where the 3D scene degrades, this tier's tear gesture becomes
+// the same generic GestureLayer physics Street Rip and Black Label already use (1:1 tracking,
+// reversible, velocity-aware, interruptible), just with Vault Break's own branding on the foil. A
+// documented scope cut, not an oversight.
+const VAULT_2D_GESTURE = { mode: "tear" as const, velocityThreshold: 900, travelDistance: 200 };
 
 export function VaultTearStage({ onTearComplete }: { onTearComplete: () => void }) {
   const { width, height } = useWindowDimensions();
@@ -89,6 +102,15 @@ export function VaultTearStage({ onTearComplete }: { onTearComplete: () => void 
       settleTimer.current = setTimeout(onTearComplete, SETTLE_DELAY_MS);
     }
   }, [snapshot.shown, onTearComplete]);
+
+  // Same settle-then-advance shape as the 3D path above, just triggered by GestureLayer's
+  // onComplete instead of the 3D scene's own snapshot — shares firedRef/settleTimer so only one
+  // of the two paths can ever actually fire (only one is ever mounted at a time).
+  function handleFallbackTearComplete() {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    settleTimer.current = setTimeout(onTearComplete, SETTLE_DELAY_MS);
+  }
 
   useEffect(() => {
     if (!ready) return;
@@ -138,13 +160,29 @@ export function VaultTearStage({ onTearComplete }: { onTearComplete: () => void 
           in over about a second instead of appearing already framed. A small cinematic touch
           Tier 1's tear doesn't have, and free performance-wise — it's just where the camera
           starts, not an extra render pass. */}
-      <Canvas
-        style={styles.canvas}
-        camera={{ position: [0, 0.006, 0.34], fov: 45, near: 0.01, far: 2 }}
-        gl={{ antialias: false, alpha: true }}
+      <Renderer3DBoundary
+        fallback={
+          <GestureLayer gesture={VAULT_2D_GESTURE} onComplete={handleFallbackTearComplete}>
+            {(openProgress) => (
+              <PackTear2D
+                openProgress={openProgress}
+                topColor={personality.palette.violet}
+                bottomColor={personality.palette.plum}
+                wordmark="GRAILHAUS"
+                badge={personality.copy.kicker}
+              />
+            )}
+          </GestureLayer>
+        }
       >
-        <VaultScene personality={personality} deck={EMPTY_DECK} logo={logo} orbit={false} onSnapshot={setSnapshot} introDolly />
-      </Canvas>
+        <Canvas
+          style={styles.canvas}
+          camera={{ position: [0, 0.006, 0.34], fov: 45, near: 0.01, far: 2 }}
+          gl={{ antialias: false, alpha: true }}
+        >
+          <VaultScene personality={personality} deck={EMPTY_DECK} logo={logo} orbit={false} onSnapshot={setSnapshot} introDolly />
+        </Canvas>
+      </Renderer3DBoundary>
 
       <View pointerEvents="none" style={styles.frame}>
         <View>

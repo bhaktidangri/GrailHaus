@@ -7,6 +7,7 @@ import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
 import { VaultBreakFlowEngine } from "../engine/cards/VaultBreakFlowEngine";
 import { BatchSummaryScreen } from "../engine/cards/BatchSummaryScreen";
+import { BlackLabelFlowEngine } from "../engine/cards/BlackLabelFlowEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
 import { reveal as revealCopy } from "../content/copy";
@@ -116,9 +117,30 @@ export function RevealScreen() {
     // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow, and is the only
     // one bulk-eligible (see ConfirmPurchaseSheet/PackDetailScreen) — Vault Break's own richer
     // engine isn't built to batch, so it's always a single pack here.
+
+    // Vault Break and Black Label are the two card tiers with their own richer reveal (cards
+    // physically rise out of the torn pack and fan out, with a staged rarity moment and
+    // tap/drag/pinch/flip inspection) — every other tier keeps CardFlowEngine's tear + flat
+    // swipe-through-cards flow. See VaultBreakFlowEngine's own header for why this started
+    // scoped to just Vault Break, and BlackLabelFlowEngine's for why Black Label got the same
+    // treatment rather than a third, different flow.
     if (flow.sku.tier === "vault_break") {
       return (
         <VaultBreakFlowEngine
+          key={flow.purchaseId ?? undefined}
+          sku={flow.sku}
+          items={flow.items}
+          onFinished={handleFinished}
+          onRipAgain={() => handleRipAgain(1)}
+          onGoHome={handleGoHome}
+          onViewCollection={handleViewCollection}
+          isRipAgainWorking={flow.isPurchasing}
+        />
+      );
+    }
+    if (flow.sku.tier === "black_label") {
+      return (
+        <BlackLabelFlowEngine
           key={flow.purchaseId ?? undefined}
           sku={flow.sku}
           items={flow.items}
@@ -135,6 +157,7 @@ export function RevealScreen() {
     // purchaseId (one atomic purchase produced all of them), so without the index every pack
     // after the first would reuse pack one's already-`"summary"`-phase component instance
     // instead of starting its own tear from scratch.
+
     return (
       <CardFlowEngine
         key={`${flow.purchaseId ?? "none"}-${flow.currentPackIndex}`}

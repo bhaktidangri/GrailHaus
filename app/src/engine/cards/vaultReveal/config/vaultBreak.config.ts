@@ -48,4 +48,7 @@ export const vaultBreakPersonality: VaultBreakPersonality = {
     notice: 2.3, approach: 1.7, reveal: 1.5, present: 1.9,
   },
   haptics: { tickCount: 16, giveAt: 0.05, completeAt: 0.97 },
+  // Carried over unchanged from VaultScene.tsx's previously-hardcoded JSX light colors —
+  // see config/types.ts's VaultLighting doc comment for why these moved here.
+  lighting: { key: 0xfff3dc, rim: 0x7d4ce0, hemiSky: 0x231540, hemiGround: 0x05030a, spot: 0xfff2d8 },
 };
