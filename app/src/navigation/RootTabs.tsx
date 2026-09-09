@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { withTiming } from "react-native-reanimated";
 import { HomeStack } from "./HomeStack";
-import { ExploreScreen } from "../screens/ExploreScreen";
+// import { ExploreScreen } from "../screens/ExploreScreen";
 import { CollectionStack } from "./CollectionStack";
 import { MarketplaceStack } from "./MarketplaceStack";
 import { DiscoverStack } from "./DiscoverStack";
@@ -15,7 +15,10 @@ import { colors, typography } from "../theme/tokens";
 export type RootTabParamList = {
   Home: undefined;
   Discover: undefined;
-  Explore: undefined;
+  /** Explore is parked: it browsed the same catalog Discover does, so keeping both was
+   * redundant shelf space in a four-slot bar. Screen and view model still exist — uncomment
+   * the route below (plus PillTabBar's icon entry) to bring the tab back. */
+  // Explore: undefined;
   Portfolio: undefined;
   Marketplace: undefined;
 };
@@ -52,7 +55,7 @@ function RootTabsInner() {
     >
       <Tab.Screen name="Home" component={HomeStack} options={{ headerShown: false }} />
       <Tab.Screen name="Discover" component={DiscoverStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Explore" component={ExploreScreen} options={{ headerShown: false }} />
+      {/* <Tab.Screen name="Explore" component={ExploreScreen} options={{ headerShown: false }} /> */}
       <Tab.Screen name="Portfolio" component={CollectionStack} options={{ headerShown: false }} />
       <Tab.Screen name="Marketplace" component={MarketplaceStack} options={{ headerShown: false }} />
     </Tab.Navigator>

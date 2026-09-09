@@ -6,6 +6,7 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { WatchDial } from "../../components/WatchDial";
+import { PositionCard } from "../../components/PositionCard";
 import { ValueDriftChart } from "../../components/ValueDriftChart";
 import { itemArtGradient } from "../../content/cardArt";
 import { colors, ink } from "../../theme/tokens";
@@ -90,6 +91,11 @@ export function WatchDetailScreen() {
               </View>
             ))}
           </View>
+        </View>
+
+        {/* Position first, appraisal second — see the same note on CardDetailScreen. */}
+        <View style={styles.section}>
+          <PositionCard owned={owned} register="watches" />
         </View>
 
         <View style={styles.section}>

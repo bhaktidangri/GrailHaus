@@ -13,16 +13,15 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** One glyph per tab (Ionicons' filled/outline pair — filled while active, outline at rest),
  * matched to what each tab actually does rather than a generic placeholder: Home is the
- * dashboard, Discover browses the shared cards+watches catalog, Explore is the evergreen pack
- * shelf (a shopping bag reads as "browse to buy" — a gift box read closer to "rewards/promos",
- * which isn't what this tab is), Portfolio is your holdings, Marketplace is peer resale — kept
- * visually distinct from Explore's bag despite both being "a place to get things," since one is
- * GrailHaus's own shop and the other is buying from other collectors. (Drops — the time-limited
- * live releases — moved off the tab bar; see RootTabs.) */
+ * dashboard, Discover browses the shared cards+watches catalog, Portfolio is your holdings,
+ * Marketplace is peer resale. (Drops — the time-limited live releases — moved off the tab bar,
+ * and Explore is parked as redundant with Discover; see RootTabs for both.) */
 const TAB_ICON: Record<keyof RootTabParamList, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
   Home: { active: "home", inactive: "home-outline" },
   Discover: { active: "compass", inactive: "compass-outline" },
-  Explore: { active: "bag-handle", inactive: "bag-handle-outline" },
+  // Explore's bag stayed visually distinct from Marketplace's storefront — GrailHaus's own
+  // shop vs. buying from other collectors — if the tab is ever restored.
+  // Explore: { active: "bag-handle", inactive: "bag-handle-outline" },
   Portfolio: { active: "briefcase", inactive: "briefcase-outline" },
   Marketplace: { active: "storefront", inactive: "storefront-outline" },
 };

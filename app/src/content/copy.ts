@@ -283,16 +283,13 @@ export const account = {
 } as const;
 
 export const collection = {
-  title: "My Collection",
+  title: "Portfolio",
   itemCount: (n: number, categories: number) => `${n} item${n === 1 ? "" : "s"} · ${categories} categor${categories === 1 ? "y" : "ies"}`,
   totalValue: "TOTAL VALUE",
   cardsLabel: (pct: number) => `Cards ${pct}%`,
   watchesLabel: (pct: number) => `Watches ${pct}%`,
   binder: { eyebrow: "TRADING CARDS", title: "Collection Binder", cta: "OPEN BINDER" },
   vault: { eyebrow: "WATCHES", title: "The Vault", cta: "ENTER VAULT" },
-  topCards: "Your Top Cards",
-  topWatches: "Your Top Watches",
-  seeAllCount: (n: number) => `See all ${n} →`,
   cardsSummary: (n: number, sets: number, valueCents: number) =>
     `${n} card${n === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"} · $${(valueCents / 100).toLocaleString()}`,
   watchesSummary: (n: number, brands: number, valueCents: number) =>
@@ -300,8 +297,61 @@ export const collection = {
   emptyTitle: "Your collection is empty",
   empty: "Rip your first pack to start a collection.",
   emptyCta: "Explore Packs",
-  signInTitle: "Sign in to see your collection",
+  signInTitle: "Sign in to see your portfolio",
   signInBody: "Everything you pull gets tracked here — sign in to pick up where you left off.",
+
+  /**
+   * The portfolio-as-tracker surface. Wording is deliberately plain-financial ("cost", "unrealized",
+   * "net of fees") rather than gamified: the numbers are real consequences of real spending, and
+   * dressing them up as "loot value" would make the one screen a collector uses to decide whether
+   * to sell the least trustworthy one in the app.
+   */
+  tracker: {
+    portfolioValue: "PORTFOLIO VALUE",
+    heroSub: (holdings: string, wallet: string) => `${holdings} held · ${wallet} wallet`,
+    unrealizedLabel: "Unrealized",
+    allTimeLabel: (realized: string) => `${realized} realized`,
+    window: "LAST 6 HOURS",
+    liveNote: "Reprices every 30s",
+    holdingsStat: "HOLDINGS",
+    holdingsSub: (n: number, listed: number) =>
+      listed > 0 ? `${n} piece${n === 1 ? "" : "s"} · ${listed} listed` : `${n} piece${n === 1 ? "" : "s"}`,
+    walletStat: "WALLET",
+    walletSub: "Spendable balance",
+    investedStat: "INVESTED",
+    investedSub: (packs: number, buys: number) =>
+      buys > 0 ? `${packs} pack${packs === 1 ? "" : "s"} · ${buys} bought` : `${packs} pack${packs === 1 ? "" : "s"}`,
+    salesStat: "SALES",
+    salesSub: (n: number, fees: string) => (n === 0 ? "Nothing sold yet" : `${n} sold · ${fees} fees`),
+    costStat: "COST BASIS",
+    costSub: (priced: number, total: number) =>
+      priced === total ? "What you paid for what you hold" : `${priced} of ${total} priced`,
+    realizedStat: "REALIZED P&L",
+    realizedSub: "Settled, after fees",
+    allocation: "ALLOCATION",
+    holdingsTitle: "Holdings",
+    holdingsCount: (n: number) => `${n}`,
+    filterAll: "All",
+    filterCards: "Cards",
+    filterWatches: "Watches",
+    sortValue: "Value",
+    sortPnl: "P&L",
+    sortRecent: "Recent",
+    sortLabel: "SORT",
+    listed: (price: string) => `LISTED ${price}`,
+    viaMarketplace: "Bought",
+    viaPack: "Pulled",
+    costLine: (cost: string) => `Cost ${cost}`,
+    unpricedLine: "Cost unknown",
+    actionDetails: "Details",
+    actionSell: "List",
+    actionListed: "Listed",
+    emptyFiltered: "Nothing in this category yet.",
+    topMover: "TOP MOVER",
+    binderCta: "Binder",
+    vaultCta: "Vault",
+    worldSummary: (n: number, value: string) => `${n} piece${n === 1 ? "" : "s"} · ${value}`,
+  },
 } as const;
 
 export const binder = {
@@ -337,6 +387,20 @@ export const itemDetail = {
     `Ranges $${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
   acquired: (date: string) => `Acquired ${date}`,
   ownershipHistory: "OWNERSHIP HISTORY",
+  /** The per-copy position block. Distinct from `estimatedValue` above, which is what the item is
+   * worth to anyone — this is what it's worth *to you*, against what you actually paid for it. */
+  position: {
+    label: "YOUR POSITION",
+    cost: "COST",
+    valueNow: "VALUE NOW",
+    pnl: "P&L",
+    unknownCost: "—",
+    viaPack: (date: string) => `Pulled ${date}`,
+    viaMarketplace: (date: string) => `Bought ${date}`,
+    held: (days: number) => (days === 0 ? "Today" : `Held ${days}d`),
+    listedAt: (price: string) => `Listed at ${price}`,
+    unpricedNote: "No purchase record for this copy, so there's nothing to measure against.",
+  },
   keep: "KEEP",
   sell: "SELL",
   viewCollection: (name: string) => `VIEW COLLECTION · ${name.toUpperCase()}`,

@@ -225,13 +225,27 @@ function SummaryView({
   const best = items.reduce((a, b) => (b.baseValueCents > a.baseValueCents ? b : a), items[0]);
   const bestTier = best ? resolveTier(rarityTiers, best.rarityTierLevel) : null;
 
+  // Synthesized locally rather than read back from `/me/portfolio` — the purchase response
+  // already carries everything the two terminal actions need, and a round trip here would put a
+  // spinner between the reveal and "List for Sale".
+  //
+  // `costBasisCents` is this copy's share of what the pack cost, which is exactly how the server
+  // derives it too (portfolio.repository.ts) — floored here because the server hands the
+  // sub-cent remainder to specific rows in id order, which this side can't know. The
+  // authoritative figure lands with the next portfolio read; the two differ by at most a cent,
+  // and only for packs whose price doesn't divide evenly.
+  const acquiredAt = new Date().toISOString();
   const bestOwned: OwnedItem | null = best
     ? {
         ownedItemId: best.ownedItemId,
         item: best,
         packId,
         purchaseId,
-        acquiredAt: new Date().toISOString(),
+        acquiredAt,
+        heldSinceAt: acquiredAt,
+        costBasisCents: packPriceCents != null ? Math.floor(packPriceCents / items.length) : null,
+        acquiredVia: "pack",
+        activeListing: null,
       }
     : null;
 
