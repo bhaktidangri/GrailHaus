@@ -15,6 +15,7 @@ import { portfolioRoutes } from "./modules/portfolio/portfolio.routes.js";
 import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes.js";
 import { packsAdminRoutes } from "./modules/packs/packs.admin.routes.js";
 import { activityRoutes } from "./modules/activity/activity.routes.js";
+import { categoriesRoutes } from "./modules/categories/categories.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -37,6 +38,7 @@ export async function buildApp() {
   await app.register(packsRoutes);
   await app.register(itemsRoutes);
   await app.register(activityRoutes);
+  await app.register(categoriesRoutes);
 
   // Requires a valid app session (see modules/auth — not Supabase).
   await app.register(profileRoutes);

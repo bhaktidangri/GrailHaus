@@ -114,7 +114,10 @@ export function MarketplaceScreen() {
   const identityOptions = useMemo(() => {
     const map = new Map<string, number>();
     for (const l of scopedListings) {
-      const key = l.item.category === "watches" ? l.item.brand : l.item.pokemonName;
+      // Flat fallback chain instead of a category check — exactly one of these two is ever set
+      // per real cards/watches item; a category with neither (e.g. handbags) has no meaningful
+      // "identity" grouping and is skipped below by the `if (!key) continue`, same as today.
+      const key = l.item.pokemonName ?? l.item.brand;
       if (!key) continue;
       map.set(key, (map.get(key) ?? 0) + 1);
     }
@@ -143,7 +146,7 @@ export function MarketplaceScreen() {
       if (rarityFilter != null && l.item.rarityTierLevel !== rarityFilter) return false;
       if (collectionFilter != null && (l.item.collection ?? "Uncategorized") !== collectionFilter) return false;
       if (identityFilter != null) {
-        const identity = l.item.category === "watches" ? l.item.brand : l.item.pokemonName;
+        const identity = l.item.pokemonName ?? l.item.brand;
         if (identity !== identityFilter) return false;
       }
       if (activePriceBand) {
@@ -250,11 +253,10 @@ export function MarketplaceScreen() {
               style={[styles.card, { width: cardCellWidth }]}
               onPress={() => navigation.navigate("ListingDetail", { listing })}
             >
-              {listing.item.category === "watches" ? (
-                <View style={styles.watchCardFace}>
-                  <WatchDial art={itemArtGradient(listing.item)} size={110} />
-                </View>
-              ) : (
+              {/* Cards keeps its own rectangular card-face art; every other category (watches,
+                  and anything added after, e.g. handbags) shares the watch-dial treatment as a
+                  generic fallback — same rule as the rest of this pass. */}
+              {listing.item.category === "cards" ? (
                 <CardFace
                   gradient={itemArtGradient(listing.item)}
                   imageUrl={listing.item.textureUrl}
@@ -262,6 +264,10 @@ export function MarketplaceScreen() {
                   height={132}
                   style={styles.cellFace}
                 />
+              ) : (
+                <View style={styles.watchCardFace}>
+                  <WatchDial art={itemArtGradient(listing.item)} size={110} />
+                </View>
               )}
               <Text style={styles.cardName} numberOfLines={1}>
                 {(listing.item.cardTitle ?? listing.item.watchName ?? listing.item.name).toUpperCase()}

@@ -4,6 +4,8 @@ import { Canvas } from "@react-three/fiber/native";
 import type { OwnedItem, PulledOwnedItem, RarityTier } from "@grailhaus/shared";
 import type { CategoryRevealConfig, RevealPhase } from "./types";
 import { GestureLayer } from "./GestureLayer";
+import { TiltLights } from "./TiltLights";
+import { useDeviceTilt } from "./useDeviceTilt";
 import { playHapticTrack } from "./HapticsTrack";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { radii, spacing, typography } from "../../theme/tokens";
@@ -77,6 +79,7 @@ export function RevealEngine({
   // the alternative (re-showing an unopened box for an item that's already sitting in the user's
   // portfolio) would look like re-gifting something they already unwrapped.
   const resumedToSummary = usePackFlowStore((s) => s.resumedToSummary);
+  const tilt = useDeviceTilt();
   const orderedItems = useMemo(() => config.revealOrder(items), [items, config]);
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<RevealPhase>(resumedToSummary ? "summary" : "idle");
@@ -168,25 +171,20 @@ export function RevealEngine({
       <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")}>
         {(openProgress) => (
           <Canvas camera={{ position: config.camera.position, fov: config.camera.fov }}>
-            {config.lighting.map((light, i) =>
-              light.kind === "ambient" ? (
-                <ambientLight key={i} intensity={light.intensity} color={light.color} />
-              ) : (
-                <directionalLight
-                  key={i}
-                  position={light.position ?? [0, 0, 0]}
-                  intensity={light.intensity}
-                  color={light.color}
-                />
-              )
-            )}
+            <TiltLights lighting={config.lighting} tilt={tilt} />
             {config.buildMesh(current, { openProgress, tierColor: currentTier.colorHex })}
           </Canvas>
         )}
       </GestureLayer>
 
       {phase === "idle" && (
-        <View style={styles.idleFooter}>
+        // pointerEvents="none": this absolutely-positioned footer floats on top of the
+        // GestureLayer's view (a separate sibling, not a descendant of its GestureDetector) —
+        // without this, a touch starting on the hint text itself (the single most natural place
+        // to start the swipe) gets captured by this plain View's native hit-test first and never
+        // reaches the gesture recognizer at all, making the whole screen feel completely
+        // unresponsive. Purely decorative, never needs to receive touches itself.
+        <View style={styles.idleFooter} pointerEvents="none">
           <Text style={styles.hint}>{hintLabel}</Text>
           <View style={styles.dragHandle} />
         </View>

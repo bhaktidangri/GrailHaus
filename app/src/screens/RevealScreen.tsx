@@ -163,6 +163,7 @@ export function RevealScreen() {
         key={`${flow.purchaseId ?? "none"}-${flow.currentPackIndex}`}
         sku={flow.sku}
         items={flow.items}
+        config={flow.config}
         batchContext={flow.isBatch ? { index: flow.currentPackIndex, total: flow.quantity } : undefined}
         onNextPack={flow.isBatch ? () => flow.advanceBatch() : undefined}
         onSkipToResults={flow.isBatch ? flow.skipToResults : undefined}

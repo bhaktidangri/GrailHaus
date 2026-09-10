@@ -17,7 +17,7 @@ import { ItemPreviewGrid } from "../components/ItemPreviewGrid";
 import { ExpectedValueNote } from "../components/ExpectedValueNote";
 import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
 import { itemArtGradient } from "../content/cardArt";
-import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
+import { ART_GRADIENT, tierLabel } from "../components/PackTile";
 import { accents, ink } from "../theme/tokens";
 import { vaultDetail as copy } from "../content/copy";
 import type { AppStackParamList } from "../navigation/AppNavigator";
@@ -27,12 +27,14 @@ type Nav = NativeStackNavigationProp<AppStackParamList, "VaultDetail">;
 const FEATURED_COUNT = 3;
 
 /**
- * Watches' equivalent of PackDetailScreen — the "Vault Experience" the mockup's watches journey
- * fast-forwarded past until now (Shelf bought straight off a `ConfirmPurchaseSheet`, no detail
- * screen in between; see ShelfScreen's own comment on that interim state, now replaced by this).
- * Same real data sources as Cards' detail screen (`useTierOdds`/`useTierOwnership`/
- * `useExpectedValue` via the shared components below) — a watch tier publishes its odds and EV
- * exactly like a card tier does, just registered in the dark, quiet vault language instead.
+ * The "Vault Experience" detail screen shared by every non-cards category — watches originally,
+ * now also handbags and anything else ShelfScreen routes here (any category whose packs are a
+ * single sealed item per pull, not cards' multi-item tear). Same real data sources as Cards'
+ * detail screen (`useTierOdds`/`useTierOwnership`/`useExpectedValue` via the shared components
+ * below) — any category's tier publishes its odds and EV exactly like a card tier does, just
+ * registered in the dark, quiet vault language instead. The art (WatchDial's sphere/orb) and
+ * accent color are a shared placeholder for every non-cards category, same as the Home doors and
+ * Shelf's own register — there's no per-category 3D icon pipeline for this decorative glyph.
  */
 export function VaultDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -90,7 +92,7 @@ export function VaultDetailScreen() {
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <Ionicons name="chevron-back" size={18} color="#F2C46B" />
         </Pressable>
-        <Text style={styles.headerTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.headerTier}>{tierLabel(sku)}</Text>
         <View style={styles.iconButton} />
       </View>
 
@@ -104,7 +106,7 @@ export function VaultDetailScreen() {
 
         <View style={styles.statRow}>
           <Stat label={copy.price} value={`$${(sku.priceCents / 100).toLocaleString()}`} />
-          <Stat label={copy.receive} value={copy.oneWatch} />
+          <Stat label={copy.receive} value={copy.oneItem} />
           <Stat label={copy.valueRange} value={`$${formatCompact(valueRange.min)} – $${formatCompact(valueRange.max)}`} />
         </View>
 
@@ -112,7 +114,7 @@ export function VaultDetailScreen() {
 
         {featured.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{copy.featuredWatches}</Text>
+            <Text style={styles.sectionLabel}>{copy.featuredItems}</Text>
             <View style={styles.featuredList}>
               {featured.map((item) => (
                 <View key={item.id} style={styles.featuredRow}>
@@ -128,7 +130,11 @@ export function VaultDetailScreen() {
         )}
 
         <ItemPreviewGrid sku={sku} title={copy.collectionPreview} />
-        <ExpectedValueNote sku={sku} linkLabel={copy.fullOdds} accentColor={accents.watches.top} />
+        <ExpectedValueNote
+          sku={sku}
+          linkLabel={copy.fullOdds}
+          accentColor={(accents[sku.category as keyof typeof accents] ?? accents.watches).top}
+        />
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>

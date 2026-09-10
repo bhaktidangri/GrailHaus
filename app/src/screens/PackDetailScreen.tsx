@@ -17,7 +17,7 @@ import { OddsBarList } from "../components/OddsBarList";
 import { ItemPreviewGrid } from "../components/ItemPreviewGrid";
 import { ExpectedValueNote } from "../components/ExpectedValueNote";
 import { ConfirmPurchaseSheet } from "../components/ConfirmPurchaseSheet";
-import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
+import { ART_GRADIENT, tierLabel } from "../components/PackTile";
 import { accents, fonts, ink, spacing } from "../theme/tokens";
 import { packDetail as copy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
@@ -97,7 +97,7 @@ export function PackDetailScreen() {
         <Pressable style={styles.iconButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
-        <Text style={styles.headerTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.headerTier}>{tierLabel(sku)}</Text>
         <View style={styles.iconButton} />
       </View>
 

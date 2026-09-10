@@ -62,19 +62,24 @@ export function CollectionDetailScreen() {
 
 function Cell({ item, onPress }: { item: DiscoverItem; onPress: () => void }) {
   const detail = item.detail;
-  const isWatch = detail.category === "watches";
+  // Cards keeps its own rectangular card-face art; everything else shares the watch-dial
+  // treatment as a generic fallback — same rule as the rest of this pass.
+  const isCards = detail.category === "cards";
 
   return (
     <Pressable onPress={onPress} style={styles.cell}>
-      {isWatch ? (
-        <WatchDial art={itemArtGradient(detail)} size={64} />
-      ) : (
+      {isCards ? (
         <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={64} height={89} />
+      ) : (
+        <WatchDial art={itemArtGradient(detail)} size={64} />
       )}
+      {/* Flat fallback chain instead of a category check — exactly one of pokemonName/watchName
+          is ever set per real item, and both fall through to the generic catalog name for a
+          category with neither (e.g. handbags). */}
       <Text style={styles.cellName} numberOfLines={1}>
-        {isWatch ? (detail.watchName ?? detail.name) : (detail.pokemonName ?? detail.name)}
+        {detail.pokemonName ?? detail.watchName ?? detail.name}
       </Text>
-      {!isWatch && detail.cardTitle && (
+      {detail.cardTitle && (
         <Text style={styles.cellSub} numberOfLines={1}>
           {detail.cardTitle}
         </Text>

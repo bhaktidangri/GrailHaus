@@ -133,7 +133,7 @@ export async function getOwnershipCounts(
  * dashboard) and reshapes it into what `resolveItems` expects. Falls back to whatever rows
  * exist per category — if a category has no rows yet, the caller's own default kicks in. */
 export async function getOwnershipWeightTable(client: Queryable): Promise<Partial<OwnershipWeightTable>> {
-  const { rows } = await client.query<{ category: "cards" | "watches"; copies_owned: number; weight_percent: string }>(
+  const { rows } = await client.query<{ category: string; copies_owned: number; weight_percent: string }>(
     "select category, copies_owned, weight_percent from public.ownership_weight_tiers order by category, copies_owned"
   );
   const byCategory = new Map<string, { copies: number; weight: number }[]>();
@@ -152,7 +152,7 @@ export async function getOwnershipWeightTable(client: Queryable): Promise<Partia
       byCopies: sorted.slice(0, -1).map((e) => e.weight),
       floor: floorEntry.weight,
     };
-    table[category as "cards" | "watches"] = curve;
+    table[category] = curve;
   }
   return table;
 }

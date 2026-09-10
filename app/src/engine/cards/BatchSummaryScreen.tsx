@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { ItemDetail, PackSku, PulledOwnedItem } from "@grailhaus/shared";
 import { StatBox } from "../../components/StatBox";
-import { TIER_LABEL } from "../../components/PackTile";
+import { tierLabel } from "../../components/PackTile";
 import { accents, fonts, ink, spacing } from "../../theme/tokens";
 
 /**
@@ -44,7 +44,7 @@ export function BatchSummaryScreen({
     null
   );
   const bestTier = best ? sku.rarityTiers.find((t) => t.level === best.rarityTierLevel) : null;
-  const tierLabel = TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase();
+  const tierLabelText = tierLabel(sku);
 
   return (
     <View style={styles.fill}>
@@ -135,7 +135,7 @@ export function BatchSummaryScreen({
             {isRipAgainWorking ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryButtonLabel}>RIP 10 MORE {tierLabel.toUpperCase()}</Text>
+              <Text style={styles.primaryButtonLabel}>RIP 10 MORE {tierLabelText.toUpperCase()}</Text>
             )}
           </LinearGradient>
         </Pressable>

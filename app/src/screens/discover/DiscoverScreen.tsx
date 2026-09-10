@@ -13,10 +13,24 @@ import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
 
 type Nav = NativeStackNavigationProp<DiscoverStackParamList, "Discover">;
 
+/** Darkens a `#rrggbb` hex color toward black by `amount` (0-1) — same helper as
+ * CategorySwitch.tsx, used here to synthesize each door's two-stop gradient from a category's
+ * single admin-configured accent color. */
+function darken(hex: string, amount: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amount)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amount)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amount)));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
 /**
- * Discover is the only surface where cards and watches sit side by side (mockup 17a) — one
- * shared neutral dark field, the two worlds as equals. Real counts throughout: item and tier
- * counts come straight off `/packs`, "listed now" off `/listings`.
+ * Discover is the surface where every category sits side by side (mockup 17a's cards/watches
+ * pairing, generalized) — one shared neutral dark field, every world as equals. Real counts
+ * throughout: item and tier counts come straight off `/packs`, "listed now" off `/listings`.
+ * One door per category in the categories table (useDiscoverHubViewModel), not a hardcoded
+ * cards/watches pair — a category added via the admin dashboard gets its own door here with no
+ * app change.
  */
 export function DiscoverScreen() {
   const navigation = useNavigation<Nav>();
@@ -60,25 +74,23 @@ export function DiscoverScreen() {
       </Pressable>
 
       <View style={styles.doors}>
-        <Pressable style={styles.door} onPress={() => navigation.navigate("DiscoverCategory", { category: "cards" })}>
-          <LinearGradient colors={["rgba(177,75,255,0.24)", "rgba(91,31,214,0.1)"]} style={StyleSheet.absoluteFill} />
-          <View style={[styles.doorBorder, { borderColor: "rgba(177,75,255,0.5)" }]} />
-          <Text style={styles.doorEyebrow}>{copy.cardsDoor.eyebrow}</Text>
-          <Text style={styles.doorTitle}>{copy.cardsDoor.title}</Text>
-          <Text style={styles.doorSummary}>
-            {copy.doorSummary(hub.cards.itemCount, hub.cards.tierCount, hub.cards.listedNow)}
-          </Text>
-        </Pressable>
-
-        <Pressable style={styles.door} onPress={() => navigation.navigate("DiscoverCategory", { category: "watches" })}>
-          <LinearGradient colors={["rgba(242,196,107,0.2)", "rgba(122,90,34,0.08)"]} style={StyleSheet.absoluteFill} />
-          <View style={[styles.doorBorder, { borderColor: "rgba(242,196,107,0.46)" }]} />
-          <Text style={[styles.doorEyebrow, { color: "#F2C46B" }]}>{copy.watchesDoor.eyebrow}</Text>
-          <Text style={styles.doorTitle}>{copy.watchesDoor.title}</Text>
-          <Text style={styles.doorSummary}>
-            {copy.doorSummary(hub.watches.itemCount, hub.watches.tierCount, hub.watches.listedNow)}
-          </Text>
-        </Pressable>
+        {hub.byCategory.map((c) => {
+          const top = c.paletteAccent;
+          const bottom = darken(c.paletteAccent, 0.55);
+          return (
+            <Pressable
+              key={c.categoryId}
+              style={styles.door}
+              onPress={() => navigation.navigate("DiscoverCategory", { category: c.categoryId })}
+            >
+              <LinearGradient colors={[`${top}3D`, `${bottom}1A`]} style={StyleSheet.absoluteFill} />
+              <View style={[styles.doorBorder, { borderColor: `${top}80` }]} />
+              <Text style={[styles.doorEyebrow, { color: top }]}>{c.label.toUpperCase()}</Text>
+              <Text style={styles.doorTitle}>{c.label} Discovery</Text>
+              <Text style={styles.doorSummary}>{copy.doorSummary(c.itemCount, c.tierCount, c.listedNow)}</Text>
+            </Pressable>
+          );
+        })}
 
         <Pressable style={styles.door} onPress={() => navigation.navigate("Collections")}>
           <LinearGradient colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.04)"]} style={StyleSheet.absoluteFill} />

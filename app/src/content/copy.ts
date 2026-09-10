@@ -91,8 +91,12 @@ export const shelf = {
 } as const;
 
 export const packTile = {
-  countLabel: (category: "cards" | "watches", itemCount: number) =>
-    category === "cards" ? `${itemCount} card${itemCount === 1 ? "" : "s"}` : "1 watch",
+  // "cards" gets its own phrasing (item count varies, 5-7 per pack); every other category
+  // (watches today, a genuinely new one like handbags tomorrow) always pulls exactly 1 item per
+  // pack, so a generic singular reads correctly without needing a per-category noun in the
+  // backend-driven categories table.
+  countLabel: (category: string, itemCount: number) =>
+    category === "cards" ? `${itemCount} card${itemCount === 1 ? "" : "s"}` : `${itemCount} item${itemCount === 1 ? "" : "s"}`,
   buyOne: "BUY 1",
   buyTen: "×10",
 } as const;
@@ -100,30 +104,28 @@ export const packTile = {
 export const explore = {
   eyebrow: "EXPLORE",
   heading: "The whole catalog.",
-  sub: "Every evergreen tier, cards and watches, in one place.",
+  sub: "Every evergreen tier, every category, in one place.",
   signIn: "Sign in",
-  sectionCards: "Trading Cards",
-  sectionWatches: "Watches",
-  allCards: (count: number) => `All Cards (${count})`,
-  allWatches: (count: number) => `All Watches (${count})`,
+  allOf: (label: string, count: number) => `All ${label} (${count})`,
   emptySection: (label: string) => `No ${label.toLowerCase()} available right now.`,
   serverUnreachable: (message: string) => `Server unreachable: ${message}`,
 } as const;
 
 export const confirmPurchase = {
   eyebrowCards: "CONFIRM PURCHASE",
-  eyebrowWatches: "CONFIRM UNLOCK",
+  // "Vault" style — every category except cards (watches, handbags, anything added after).
+  eyebrowVault: "CONFIRM UNLOCK",
   lineItem: "1 × pack",
   unlockPrice: "Unlock price",
   youReceive: "You receive",
-  oneWatch: "One watch, sealed",
+  oneItem: "One item, sealed",
   balanceNow: "Balance now",
   balanceAfter: "Balance after",
-  evNote: (expectedCents: number, priceCents: number, isWatches: boolean) =>
+  evNote: (expectedCents: number, priceCents: number, isVault: boolean) =>
     `Expected contents are $${(expectedCents / 100).toFixed(2)} against a $${(priceCents / 100).toFixed(2)} ${
-      isWatches ? "unlock" : "price"
-    }. Most ${isWatches ? "unlocks" : "packs"} return less than they cost. ${
-      isWatches
+      isVault ? "unlock" : "price"
+    }. Most ${isVault ? "unlocks" : "packs"} return less than they cost. ${
+      isVault
         ? "The reference is decided on our server the instant you pay."
         : "Buy the moment, not the return."
     }`,
@@ -145,14 +147,17 @@ export const packDetail = {
   ripNow: "RIP NOW",
 } as const;
 
+/** Shared by every "vault" (single-item-per-pull) category — watches, handbags, and anything
+ * added after. Cards keeps its own PackDetailScreen/copy.packDetail; nothing here should name a
+ * specific category. */
 export const vaultDetail = {
-  body: "One watch, sealed until you unlock it. Odds and expected value are published below — nobody unlocks without knowing the downside.",
+  body: "One item, sealed until you unlock it. Odds and expected value are published below — nobody unlocks without knowing the downside.",
   price: "PRICE",
   receive: "YOU RECEIVE",
-  oneWatch: "One watch",
+  oneItem: "One item",
   valueRange: "VALUE RANGE",
   rarityPossibilities: "RARITY POSSIBILITIES",
-  featuredWatches: "FEATURED WATCHES",
+  featuredItems: "FEATURED ITEMS",
   collectionPreview: "COLLECTION PREVIEW",
   fullOdds: "Full odds ›",
   unlockVault: "UNLOCK VAULT",
@@ -161,7 +166,7 @@ export const vaultDetail = {
 export const home = {
   door: {
     eyebrow: "EXPLORE",
-    shortLabel: { cards: "Cards", watches: "Watches" } as const,
+    shortLabel: { cards: "Cards", watches: "Watches" } as Record<string, string>,
     tiersLabel: (n: number) => `${n} tier${n === 1 ? "" : "s"}`,
     fromPrice: (cents: number) => `from $${(cents / 100).toLocaleString()}`,
     comingSoon: "Coming soon",
@@ -196,8 +201,10 @@ export const home = {
 } as const;
 
 export const dropDetail = {
-  body: (sku: { category: "cards" | "watches"; itemCount: number; maxStock: number | null }) => {
-    const unit = sku.category === "cards" ? `${sku.itemCount} card${sku.itemCount === 1 ? "" : "s"}` : "one watch";
+  body: (sku: { category: string; itemCount: number; maxStock: number | null }) => {
+    // "cards" gets its own count phrasing; every other category (watches today, any new one
+    // added later) always claims exactly one item per box.
+    const unit = sku.category === "cards" ? `${sku.itemCount} card${sku.itemCount === 1 ? "" : "s"}` : `one ${sku.category.replace(/s$/, "")}`;
     const boxes = sku.maxStock != null ? `${sku.maxStock} box${sku.maxStock === 1 ? "" : "es"}. ` : "";
     return `${boxes}Each holds ${unit}, sealed until you claim it. Nothing restocks.`;
   },
@@ -429,13 +436,14 @@ export const discover = {
   headline: "Find the thing\nyou already want.",
   body: "Search the catalogue, then choose how to get it — chase it in a pack, or buy the exact one from someone who has it.",
   searchPlaceholder: "Search cards, watches, sets, brands",
-  cardsDoor: { eyebrow: "CARDS", title: "Card Discovery" },
-  watchesDoor: { eyebrow: "WATCHES", title: "Watch Discovery" },
+  // Per-category doors are built from each category's own admin-configured label now (see
+  // DiscoverScreen.tsx), not a hardcoded cards/watches pair — this eyebrow/title pair is
+  // synthesized inline instead of living here.
   collectionsDoor: { eyebrow: "COLLECTIONS", title: "Browse Collections" },
   doorSummary: (items: number, tiers: number, listed: number) =>
     `${items} items · ${tiers} tier${tiers === 1 ? "" : "s"} · ${listed} listed now`,
   collectionsDoorSummary: (collections: number, items: number) =>
-    `${collections} collection${collections === 1 ? "" : "s"} · ${items} items · spans both worlds`,
+    `${collections} collection${collections === 1 ? "" : "s"} · ${items} items · across every category`,
 } as const;
 
 export const discoverCategory = {
@@ -447,7 +455,9 @@ export const discoverCategory = {
       ? `$${(minCents / 100).toLocaleString()}`
       : `$${(minCents / 100).toLocaleString()} – $${(maxCents / 100).toLocaleString()}`,
   empty: "Nothing matches yet.",
-  facetIdentity: { cards: "Pokémon", watches: "Brands" } as const,
+  // Any category not listed (e.g. one added via the admin dashboard) falls back to the generic
+  // "Identity" at the call site rather than showing "undefined".
+  facetIdentity: { cards: "Pokémon", watches: "Brands" } as Record<string, string>,
   facetCollections: "Collections",
   facetRarities: "Rarities",
   itemCount: (n: number) => `${n} item${n === 1 ? "" : "s"}`,
@@ -503,7 +513,7 @@ export const marketplace = {
   facetRarity: "Rarity",
   facetCollection: "Collection",
   facetPrice: "Price",
-  facetIdentity: { cards: "Pokémon", watches: "Brand" } as const,
+  facetIdentity: { cards: "Pokémon", watches: "Brand" } as Record<string, string>,
   clearFilters: "CLEAR ALL",
   applyFilters: "SHOW RESULTS",
   pickCategoryFirst: "Pick Cards or Watches to filter by this.",

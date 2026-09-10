@@ -10,6 +10,7 @@ import type { Category, Listing, RarityTierLevel, RecentPull } from "@grailhaus/
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useHomeViewModel } from "../viewmodels/useHomeViewModel";
+import { useCategoriesViewModel } from "../viewmodels/useCategoriesViewModel";
 import { useRecentActivityViewModel } from "../viewmodels/useRecentActivityViewModel";
 import type { CollectionProgressSummary } from "../viewmodels/useHomeViewModel";
 import { useHideTabBarOnScroll, useTabBarClearance, useTabBarHidden } from "../navigation/tabBarVisibility";
@@ -19,11 +20,11 @@ import { resetOnboarding } from "../lib/onboarding";
 import { PackFace } from "../components/PackFace";
 import { WatchDial } from "../components/WatchDial";
 import { Countdown } from "../components/Countdown";
-import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
+import { ART_GRADIENT, tierLabel } from "../components/PackTile";
 import { itemArtGradient } from "../content/cardArt";
 import type { DropView } from "../viewmodels/useDropsViewModel";
 import { accents, colors, ink, spacing, typography } from "../theme/tokens";
-import { brand, shelf as shelfCopy, home as copy } from "../content/copy";
+import { brand, shelf as shelfCopy, home as copy, packTile as packTileCopy } from "../content/copy";
 import type { RootTabParamList } from "../navigation/RootTabs";
 import type { HomeStackParamList } from "../navigation/HomeStack";
 import type { AppStackParamList } from "../navigation/AppNavigator";
@@ -65,6 +66,7 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const home = useHomeViewModel();
+  const { categories } = useCategoriesViewModel();
   const recentActivity = useRecentActivityViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const setNeedsOnboarding = useOnboardingStore((s) => s.setNeedsOnboarding);
@@ -149,18 +151,17 @@ export function HomeScreen() {
             />
           )}
 
-          <View style={styles.doors}>
-            <DoorCard
-              category="cards"
-              summary={home.evergreenByCategory.cards}
-              onPress={() => navigation.navigate("World", { category: "cards" })}
-            />
-            <DoorCard
-              category="watches"
-              summary={home.evergreenByCategory.watches}
-              onPress={() => navigation.navigate("World", { category: "watches" })}
-            />
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.doors}>
+            {categories.map((c) => (
+              <DoorCard
+                key={c.id}
+                category={c.id}
+                label={c.label}
+                summary={home.evergreenByCategory[c.id] ?? { tierCount: 0, fromPriceCents: null }}
+                onPress={() => navigation.navigate("World", { category: c.id })}
+              />
+            ))}
+          </ScrollView>
 
           {home.upcomingDrops.length > 0 && (
             <Section
@@ -253,11 +254,11 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
         </View>
 
         <Text style={styles.featuredKicker}>
-          {sku.category.toUpperCase()} · {TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}
+          {sku.category.toUpperCase()} · {tierLabel(sku)}
         </Text>
         <Text style={styles.featuredName}>{sku.name}</Text>
         <Text style={styles.featuredSub}>
-          {sku.itemCount} {sku.category === "cards" ? "cards" : "watch"} · ${(sku.priceCents / 100).toLocaleString()}
+          {packTileCopy.countLabel(sku.category, sku.itemCount)} · ${(sku.priceCents / 100).toLocaleString()}
         </Text>
 
         {remaining != null && max != null && (
@@ -290,14 +291,21 @@ function FeaturedDropCard({ drop, onPress }: { drop: DropView; onPress: () => vo
 
 function DoorCard({
   category,
+  label,
   summary,
   onPress,
 }: {
-  category: Category;
+  category: string;
+  label: string;
   summary: { tierCount: number; fromPriceCents: number | null };
   onPress: () => void;
 }) {
-  const accent = accents[category];
+  // Every category from the categories table gets a door now — cards keeps its own pack-tear
+  // art, everything else (watches, and any category added after, e.g. handbags) shares the
+  // watch-dial icon treatment as a generic fallback, same as its accent color already does.
+  // There's no per-category 3D icon asset pipeline for this small decorative glyph — the door's
+  // label/price/tier-count are always real, only this icon is a shared placeholder.
+  const accent = accents[category as keyof typeof accents] ?? accents.cards;
   const art = category === "cards" ? ART_GRADIENT.vault_break : ART_GRADIENT.obsidian_vault;
 
   return (
@@ -313,7 +321,7 @@ function DoorCard({
         )}
       </View>
       <Text style={[styles.doorEyebrow, { color: accent.top }]}>{copy.door.eyebrow}</Text>
-      <Text style={styles.doorName}>{copy.door.shortLabel[category]}</Text>
+      <Text style={styles.doorName}>{label}</Text>
       <Text style={styles.doorSub}>
         {summary.tierCount > 0
           ? `${copy.door.tiersLabel(summary.tierCount)} · ${copy.door.fromPrice(summary.fromPriceCents ?? 0)}`
@@ -325,7 +333,7 @@ function DoorCard({
 
 function UpcomingDropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
   const { sku } = drop;
-  const accent = accents[sku.category];
+  const accent = accents[sku.category as keyof typeof accents] ?? accents.cards;
 
   return (
     <Pressable style={styles.upcoming} onPress={onPress}>
@@ -559,35 +567,32 @@ function CollectionProgressCard({ progress }: { progress: CollectionProgressSumm
         </View>
       </View>
       <View style={styles.collectionDivider} />
+      {/* One row per category actually held — real label and share, off `byCategory` — instead
+          of two hardcoded Cards/Watches rows, so a third category (e.g. handbags) shows up here
+          with its own name and never gets silently folded into (or dropped from) the split. */}
       <View style={{ gap: spacing.md }}>
-        <View>
-          <View style={styles.setRow}>
-            <Text style={styles.setName}>Cards</Text>
-            <Text style={styles.setProgress}>{progress.cardsSharePercent}%</Text>
-          </View>
-          <View style={styles.setTrack}>
-            <LinearGradient
-              colors={[accents.cards.top, accents.cards.bottom]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.setFill, { width: `${progress.cardsSharePercent}%` }]}
-            />
-          </View>
-        </View>
-        <View>
-          <View style={styles.setRow}>
-            <Text style={styles.setName}>Watches</Text>
-            <Text style={styles.setProgress}>{progress.watchesSharePercent}%</Text>
-          </View>
-          <View style={styles.setTrack}>
-            <LinearGradient
-              colors={[accents.watches.top, accents.watches.bottom]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.setFill, { width: `${progress.watchesSharePercent}%` }]}
-            />
-          </View>
-        </View>
+        {progress.byCategory.map((c) => {
+          // Cards/watches get their own accent color; any other category (e.g. handbags) shares
+          // watches' as a generic fallback — same "cards is special, everything else shares
+          // watches' treatment" rule as DoorCard's own accent lookup above.
+          const accent = accents[c.categoryId as keyof typeof accents] ?? accents.watches;
+          return (
+            <View key={c.categoryId}>
+              <View style={styles.setRow}>
+                <Text style={styles.setName}>{c.label}</Text>
+                <Text style={styles.setProgress}>{c.sharePercent}%</Text>
+              </View>
+              <View style={styles.setTrack}>
+                <LinearGradient
+                  colors={[accent.top, accent.bottom]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.setFill, { width: `${c.sharePercent}%` }]}
+                />
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -596,10 +601,12 @@ function CollectionProgressCard({ progress }: { progress: CollectionProgressSumm
 function ListingRow({ listing }: { listing: (typeof SAMPLE_LISTINGS)[number] }) {
   return (
     <View style={styles.listingRow}>
-      {listing.category === "watches" ? (
-        <WatchDial art={listing.art} size={44} />
-      ) : (
+      {/* Cards keeps its own pack-face art; every other category shares the watch-dial
+          treatment, same fallback rule as DoorCard/RealListingRow below. */}
+      {listing.category === "cards" ? (
         <PackFace art={listing.art} width={42} height={58} radius={8} />
+      ) : (
+        <WatchDial art={listing.art} size={44} />
       )}
       <View style={styles.listingInfo}>
         <Text style={styles.listingName}>{listing.name}</Text>
@@ -624,10 +631,11 @@ function RealListingRow({ listing }: { listing: Listing }) {
 
   return (
     <View style={styles.listingRow}>
-      {item.category === "watches" ? (
-        <WatchDial art={art} size={44} />
-      ) : (
+      {/* Same cards-special/else-shared-watch-dial fallback as the rest of this file. */}
+      {item.category === "cards" ? (
         <PackFace art={art} imageUrl={item.textureUrl} width={42} height={58} radius={8} />
+      ) : (
+        <WatchDial art={art} size={44} />
       )}
       <View style={styles.listingInfo}>
         <Text style={styles.listingName} numberOfLines={1}>
@@ -762,7 +770,7 @@ const styles = StyleSheet.create({
 
   doors: { flexDirection: "row", gap: spacing.md },
   door: {
-    flex: 1,
+    width: 168,
     minHeight: 118,
     borderRadius: 20,
     borderWidth: 2,

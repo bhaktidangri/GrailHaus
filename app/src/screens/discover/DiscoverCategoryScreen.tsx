@@ -11,6 +11,7 @@ import { WatchDial } from "../../components/WatchDial";
 import { itemArtGradient } from "../../content/cardArt";
 import { useDiscoverViewModel, type DiscoverGroup, type DiscoverItem } from "../../viewmodels/useDiscoverViewModel";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
+import { useCategoriesViewModel } from "../../viewmodels/useCategoriesViewModel";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { colors, ink, typography } from "../../theme/tokens";
 import { discoverCategory as copy } from "../../content/copy";
@@ -43,7 +44,12 @@ export function DiscoverCategoryScreen() {
   const vm = useDiscoverViewModel(category);
   const [query, setQuery] = useState("");
   const [facet, setFacet] = useState<Facet>("identity");
-  const isWatch = category === "watches";
+  // Cards gets its own bespoke visual register (wash/border color, icon shape); everything else
+  // (watches, and any category added after, e.g. handbags) shares the other register as a
+  // generic fallback — same "cards is special, else shared" rule used throughout this pass.
+  const isCards = category === "cards";
+  const { byId: categoriesById } = useCategoriesViewModel();
+  const categoryLabel = categoriesById.get(category)?.label ?? category;
   const tabBarClearance = useTabBarClearance();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
   const rarityTiers = useRarityTiers(category);
@@ -116,7 +122,7 @@ export function DiscoverCategoryScreen() {
       {/* Bounded to the fixed header+facet+results row (never scrolls) rather than the whole
           screen — a full-screen wash here would stay pinned behind the list's scrolled rows too. */}
       <LinearGradient
-        colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+        colors={[isCards ? "rgba(177,75,255,0.24)" : "rgba(242,196,107,0.2)", "transparent"]}
         style={styles.base}
       />
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -124,39 +130,48 @@ export function DiscoverCategoryScreen() {
           <Ionicons name="chevron-back" size={18} color="#fff" />
         </Pressable>
         {facet === "identity" ? (
-          <View style={[styles.searchBox, isWatch && styles.searchBoxWatch]}>
+          <View style={[styles.searchBox, !isCards && styles.searchBoxWatch]}>
             <Ionicons name="search" size={14} color="rgba(255,255,255,0.6)" />
             <TextInput
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder={isWatch ? "Search brands, models" : "Search Pokémon, cards, sets"}
+              // Cards/watches keep their own tailored placeholder copy; any other category (e.g.
+              // handbags) gets a generic one built off its real label rather than a hardcoded
+              // "Search brands, models" that wouldn't make sense for it.
+              placeholder={
+                category === "cards"
+                  ? "Search Pokémon, cards, sets"
+                  : category === "watches"
+                    ? "Search brands, models"
+                    : `Search ${categoryLabel}`
+              }
               placeholderTextColor="rgba(255,255,255,0.45)"
               autoFocus={autoFocusSearch}
             />
           </View>
         ) : (
-          <Text style={styles.headerTitle}>{isWatch ? "Watch Discovery" : "Card Discovery"}</Text>
+          <Text style={styles.headerTitle}>{categoryLabel} Discovery</Text>
         )}
       </View>
 
       <View style={styles.facetRow}>
         <FacetChip
-          label={copy.facetIdentity[category]}
+          label={copy.facetIdentity[category] ?? "Identity"}
           active={facet === "identity"}
-          isWatch={isWatch}
+          isCards={isCards}
           onPress={() => setFacet("identity")}
         />
         <FacetChip
           label={copy.facetCollections}
           active={facet === "collections"}
-          isWatch={isWatch}
+          isCards={isCards}
           onPress={() => setFacet("collections")}
         />
         <FacetChip
           label={copy.facetRarities}
           active={facet === "rarities"}
-          isWatch={isWatch}
+          isCards={isCards}
           onPress={() => setFacet("rarities")}
         />
       </View>
@@ -175,10 +190,10 @@ export function DiscoverCategoryScreen() {
             const primary = group.versions[0];
             return (
               <Pressable style={styles.row} onPress={() => handleIdentityPress(group)}>
-                {isWatch ? (
-                  <WatchDial art={itemArtGradient(primary.detail)} size={54} />
-                ) : (
+                {isCards ? (
                   <CardFace gradient={itemArtGradient(primary.detail)} imageUrl={primary.detail.textureUrl} width={44} height={61} />
+                ) : (
+                  <WatchDial art={itemArtGradient(primary.detail)} size={54} />
                 )}
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowName}>{group.label}</Text>
@@ -207,10 +222,10 @@ export function DiscoverCategoryScreen() {
           ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
           renderItem={({ item: group }: { item: RowGroup }) => (
             <Pressable style={styles.row} onPress={() => handleGroupPress(group)}>
-              {isWatch ? (
-                <WatchDial art={itemArtGradient(group.art.detail)} size={54} />
-              ) : (
+              {isCards ? (
                 <CardFace gradient={itemArtGradient(group.art.detail)} imageUrl={group.art.detail.textureUrl} width={44} height={61} />
+              ) : (
+                <WatchDial art={itemArtGradient(group.art.detail)} size={54} />
               )}
               <View style={styles.rowInfo}>
                 <Text style={styles.rowName}>{group.label}</Text>
@@ -230,19 +245,19 @@ export function DiscoverCategoryScreen() {
 function FacetChip({
   label,
   active,
-  isWatch,
+  isCards,
   onPress,
 }: {
   label: string;
   active: boolean;
-  isWatch: boolean;
+  isCards: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       style={[
         styles.chip,
-        active && (isWatch ? styles.chipActiveWatch : styles.chipActiveCards),
+        active && (isCards ? styles.chipActiveCards : styles.chipActiveWatch),
       ]}
       onPress={onPress}
     >

@@ -22,6 +22,7 @@ import { queryClient } from "./src/state/queryClient";
 import { useOnboardingStore } from "./src/state/onboardingStore";
 import { useAuthStore } from "./src/state/authStore";
 import { AuthProvider } from "./src/providers/AuthProvider";
+import { ShaderWarmup } from "./src/engine/core/ShaderWarmup";
 import { colors } from "./src/theme/tokens";
 import { getOnboardingComplete, setOnboardingComplete } from "./src/lib/onboarding";
 import { usePackFlowStore } from "./src/state/packFlowStore";
@@ -86,6 +87,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
+          {/* TEMP: commented out to test whether it's causing the blank-screen-on-fresh-install
+              issue — mounting a GL Canvas this early (before fonts/auth resolve) is untested. */}
+          {/* <ShaderWarmup /> */}
           {/* Mounted unconditionally (not just around AppNavigator) so its token hydration —
               what `isReady`/`showOnboarding` above depend on — always runs, even while the
               splash/onboarding gate above is still deciding what to show first. */}

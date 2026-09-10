@@ -31,7 +31,10 @@ export function ListingDetailScreen() {
   const [listing, setListing] = useState(initialListing);
   const [editOpen, setEditOpen] = useState(false);
   const item = listing.item;
-  const isWatch = item.category === "watches";
+  // Cards gets its own bespoke visual register (art shape, wash/button color); everything else
+  // (watches, and any category added after, e.g. handbags) shares the other register as a
+  // generic fallback — same "cards is special, else shared" rule used throughout this pass.
+  const isCards = item.category === "cards";
   // Admin-configurable (rarity_tiers table) — this used to be a hardcoded "Common"/"Rare"/
   // "Chase" map that didn't even match the real tier names ("Core"/"Prime"/"Grail" etc.).
   const rarityTiers = useRarityTiers(item.category);
@@ -57,7 +60,7 @@ export function ListingDetailScreen() {
             whatever section (seller card, actions) scrolls into that same screen region. */}
         <View style={styles.washWrap}>
           <LinearGradient
-            colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+            colors={[isCards ? "rgba(177,75,255,0.24)" : "rgba(242,196,107,0.2)", "transparent"]}
             style={StyleSheet.absoluteFill}
           />
 
@@ -70,9 +73,7 @@ export function ListingDetailScreen() {
           </View>
 
           <View style={styles.heroWrap}>
-            {isWatch ? (
-              <WatchDial art={itemArtGradient(item)} size={150} />
-            ) : (
+            {isCards ? (
               <CardFace
                 gradient={itemArtGradient(item)}
                 imageUrl={item.textureUrl}
@@ -82,6 +83,8 @@ export function ListingDetailScreen() {
                 badge={(rarityTiers[item.rarityTierLevel]?.name ?? "").toUpperCase()}
                 style={styles.rotatedFace}
               />
+            ) : (
+              <WatchDial art={itemArtGradient(item)} size={150} />
             )}
           </View>
 
@@ -120,10 +123,10 @@ export function ListingDetailScreen() {
           </>
         ) : (
           <Pressable style={styles.buyButton} onPress={() => navigation.navigate("BuyListing", { listing })}>
-            <LinearGradient colors={isWatch ? ["#FFD75E", "#E08A16"] : ["#B14BFF", "#5B1FD6"]} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.buyLabel, isWatch && { color: "#2A1706" }]}>{copy.buyNow}</Text>
+            <LinearGradient colors={isCards ? ["#B14BFF", "#5B1FD6"] : ["#FFD75E", "#E08A16"]} style={StyleSheet.absoluteFill} />
+            <Text style={[styles.buyLabel, !isCards && { color: "#2A1706" }]}>{copy.buyNow}</Text>
             <View style={styles.buyPricePill}>
-              <Text style={[styles.buyPriceText, isWatch && { color: "#2A1706" }]}>
+              <Text style={[styles.buyPriceText, !isCards && { color: "#2A1706" }]}>
                 ${(listing.priceCents / 100).toLocaleString()}
               </Text>
             </View>

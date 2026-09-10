@@ -3,7 +3,8 @@ import * as Crypto from "expo-crypto";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
 import { usePackFlowStore } from "../state/packFlowStore";
-import { categoryRegistry } from "../engine/categories/registry";
+import { useCategoriesViewModel } from "./useCategoriesViewModel";
+import { toCategoryRevealConfig } from "../engine/core/categoryRevealConfig";
 import { purchaseService } from "../services/purchaseService";
 import { clearPendingPurchase, getPendingPurchase, reconcilePendingPurchase, setPendingPurchase } from "../lib/pendingPurchase";
 import {
@@ -50,6 +51,7 @@ export function usePackFlowViewModel() {
   const clear = usePackFlowStore((s) => s.clear);
   const [isPurchasing, setPurchasing] = useState(false);
   const queryClient = useQueryClient();
+  const { byId: categoriesById } = useCategoriesViewModel();
 
   const items: PulledOwnedItem[] | null = packs[currentPackIndex] ?? null;
 
@@ -199,7 +201,12 @@ export function usePackFlowViewModel() {
     isBatchSummary,
     purchaseId,
     phase,
-    config: sku ? categoryRegistry[sku.category] : null,
+    config: sku
+      ? (() => {
+          const row = categoriesById.get(sku.category);
+          return row ? toCategoryRevealConfig(row) : null;
+        })()
+      : null,
     isActive: sku != null && (items != null || isBatchSummary),
     isPurchasing,
     startFlow,

@@ -6,6 +6,7 @@ const NAV = [
   { href: "/", label: "Overview" },
   { href: "/economics", label: "Economics" },
   { href: "/packs", label: "Packs" },
+  { href: "/categories", label: "Categories" },
   { href: "/catalog", label: "Catalog" },
   { href: "/rarity-tiers", label: "Rarity Tiers" },
   { href: "/pressure-rules", label: "Pressure Rules" },

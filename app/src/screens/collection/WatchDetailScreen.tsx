@@ -24,7 +24,10 @@ export function WatchDetailScreen() {
   const { owned } = useRoute<Route>().params;
   const item = owned.item;
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
-  const rarityTiers = useRarityTiers("watches");
+  // Reads the *owned item's own* category, not a hardcoded "watches", since CollectionScreen
+  // routes every non-cards category here (there's no per-category detail screen pipeline yet) —
+  // hardcoding "watches" would show a handbags item its wrong tier names/colors.
+  const rarityTiers = useRarityTiers(item.category);
   const [marketValueOpen, setMarketValueOpen] = useState(false);
   const tabBarClearance = useTabBarClearance();
 

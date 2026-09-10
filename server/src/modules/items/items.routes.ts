@@ -12,7 +12,7 @@ export async function itemsRoutes(app: FastifyInstance) {
         summary: "Full catalog detail for every item — public, same as /packs",
         querystring: {
           type: "object",
-          properties: { category: { type: "string", enum: ["cards", "watches"] } },
+          properties: { category: { type: "string" } },
         },
         response: { 200: { type: "array", items: itemDetailSchema } },
       },

@@ -34,7 +34,7 @@ const ownedItemSchema = {
 const categoryBreakdownSchema = {
   type: "object",
   properties: {
-    category: { type: "string", enum: ["cards", "watches"] },
+    category: { type: "string" },
     count: { type: "number" },
     valueCents: { type: "number" },
     costBasisCents: { type: "number" },

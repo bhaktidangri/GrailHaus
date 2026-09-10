@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { Category } from "@grailhaus/shared";
-import { useDiscoverViewModel, type DiscoverItem } from "./useDiscoverViewModel";
+import { useDiscoverAllCategoriesViewModel, type DiscoverItem } from "./useDiscoverViewModel";
 
 export interface CatalogCollectionGroup {
   key: string;
@@ -13,19 +13,18 @@ export interface CatalogCollectionGroup {
 
 /**
  * Discover's third door — "a collection isn't a category," some (confirmed against the live
- * catalog, e.g. "GrailHaus: Velocity") span both cards and watches. Built the same way
- * `ExploreScreen` combines both worlds: two `useDiscoverViewModel` calls side by side, grouped
- * here by `item.detail.collection` instead of by Pokémon/brand identity. No new endpoint —
- * `collection` is a real column on every catalog row already fetched by `/items`.
+ * catalog, e.g. "GrailHaus: Velocity") span more than one category. Built off
+ * `useDiscoverAllCategoriesViewModel`'s merged `allItems` across every real category (not a
+ * hardcoded cards/watches pair), grouped here by `item.detail.collection` instead of by
+ * Pokémon/brand identity. No new endpoint — `collection` is a real column on every catalog row
+ * already fetched by `/items`.
  */
 export function useCollectionsViewModel() {
-  const cards = useDiscoverViewModel("cards");
-  const watches = useDiscoverViewModel("watches");
+  const { isLoading, allItems } = useDiscoverAllCategoriesViewModel();
 
   const groups = useMemo<CatalogCollectionGroup[]>(() => {
-    const all = [...cards.items, ...watches.items];
     const map = new Map<string, DiscoverItem[]>();
-    for (const item of all) {
+    for (const item of allItems) {
       const key = item.detail.collection ?? "Uncategorized";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
@@ -40,11 +39,11 @@ export function useCollectionsViewModel() {
         maxValueCents: Math.max(...items.map((i) => i.detail.currentValueCents)),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [cards.items, watches.items]);
+  }, [allItems]);
 
   return {
-    isLoading: cards.isLoading || watches.isLoading,
+    isLoading,
     groups,
-    totalItemCount: cards.items.length + watches.items.length,
+    totalItemCount: allItems.length,
   };
 }

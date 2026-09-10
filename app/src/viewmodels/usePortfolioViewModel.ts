@@ -22,6 +22,17 @@ export interface Position {
   isListed: boolean;
 }
 
+/** One category's slice of the live-ticked positions — every category actually held, not just
+ * cards/watches, so a third category (e.g. handbags) is never silently excluded from the
+ * allocation breakdown or (more importantly) from any *total* summed across this array. */
+export interface CategoryPosition {
+  categoryId: string;
+  positions: Position[];
+  valueCents: number;
+  sharePercent: number;
+  pnlCents: number;
+}
+
 /** How often the holdings list and the money aggregates are re-fetched. Deliberately slow: these
  * queries answer "what do I own / what did I spend", which only changes when the user rips, buys,
  * or sells — and every one of those paths already invalidates `["portfolio", "me"]` explicitly.
@@ -129,23 +140,32 @@ export function usePortfolioViewModel() {
     };
   }, [positions, summary]);
 
-  const cards = useMemo(() => positions.filter((p) => p.owned.item.category === "cards"), [positions]);
-  const watches = useMemo(() => positions.filter((p) => p.owned.item.category === "watches"), [positions]);
-
-  const categoryTotals = useMemo(() => {
+  /** Generalized replacement for what used to be two hardcoded `cards`/`watches` filters plus a
+   * `categoryTotals` object with a `cardsX`/`watchesX` field pair — every category actually held,
+   * sorted by value. `live.holdingsValueCents` (summed over every position regardless of
+   * category) stays the source of truth for the portfolio *total*, so a category this array
+   * doesn't get its own UI row for still counts toward it. */
+  const positionsByCategory = useMemo<CategoryPosition[]>(() => {
     const total = live.holdingsValueCents;
-    const sumOf = (list: Position[]) => list.reduce((sum, p) => sum + p.valueCents, 0);
-    const cardsValue = sumOf(cards);
-    const watchesValue = sumOf(watches);
-    return {
-      cardsValueCents: cardsValue,
-      watchesValueCents: watchesValue,
-      cardsSharePercent: total > 0 ? Math.round((cardsValue / total) * 100) : 0,
-      watchesSharePercent: total > 0 ? Math.round((watchesValue / total) * 100) : 0,
-      cardsPnlCents: cards.reduce((sum, p) => sum + (p.pnlCents ?? 0), 0),
-      watchesPnlCents: watches.reduce((sum, p) => sum + (p.pnlCents ?? 0), 0),
-    };
-  }, [cards, watches, live.holdingsValueCents]);
+    const map = new Map<string, Position[]>();
+    for (const p of positions) {
+      const categoryId = p.owned.item.category;
+      if (!map.has(categoryId)) map.set(categoryId, []);
+      map.get(categoryId)!.push(p);
+    }
+    return [...map.entries()]
+      .map(([categoryId, list]) => {
+        const valueCents = list.reduce((sum, p) => sum + p.valueCents, 0);
+        return {
+          categoryId,
+          positions: list,
+          valueCents,
+          sharePercent: total > 0 ? Math.round((valueCents / total) * 100) : 0,
+          pnlCents: list.reduce((sum, p) => sum + (p.pnlCents ?? 0), 0),
+        };
+      })
+      .sort((a, b) => b.valueCents - a.valueCents);
+  }, [positions, live.holdingsValueCents]);
 
   const visible = useMemo(() => {
     const scoped =
@@ -216,9 +236,7 @@ export function usePortfolioViewModel() {
     summary,
     live,
     positions,
-    cards,
-    watches,
-    categoryTotals,
+    positionsByCategory,
     visible,
     best,
     sparkline,

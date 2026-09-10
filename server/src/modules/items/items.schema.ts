@@ -9,7 +9,7 @@ export const itemDetailSchema = {
     currentValueCents: { type: "number", description: "Live simulated value — ticks every 30s, see PRD §28" },
     minValueCents: { type: "number" },
     maxValueCents: { type: "number" },
-    category: { type: "string", enum: ["cards", "watches"] },
+    category: { type: "string" },
     collection: { type: ["string", "null"] },
     tagline: { type: ["string", "null"] },
     traits: { type: ["string", "null"] },

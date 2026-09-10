@@ -110,10 +110,12 @@ export function BuyListingScreen() {
       </View>
 
       <View style={styles.itemRow}>
-        {item.category === "watches" ? (
-          <WatchDial art={itemArtGradient(item)} size={64} />
-        ) : (
+        {/* Cards keeps its own rectangular card-face art; every other category shares the
+            watch-dial treatment as a generic fallback — same rule as the rest of this pass. */}
+        {item.category === "cards" ? (
           <CardFace gradient={itemArtGradient(item)} imageUrl={item.textureUrl} width={64} height={89} />
+        ) : (
+          <WatchDial art={itemArtGradient(item)} size={64} />
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{(item.cardTitle ?? item.watchName ?? item.name).toUpperCase()}</Text>

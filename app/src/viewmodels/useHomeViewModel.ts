@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Category, Listing } from "@grailhaus/shared";
+import type { Listing } from "@grailhaus/shared";
 import { packsService } from "../services/packsService";
 import { marketplaceService } from "../services/marketplaceService";
 import { useDropsViewModel } from "./useDropsViewModel";
 import { useCollectionViewModel } from "./useCollectionViewModel";
+import { useCategoriesViewModel } from "./useCategoriesViewModel";
 import { useStableValue } from "../hooks/useStableValue";
 
 export interface CategorySummary {
@@ -12,13 +13,22 @@ export interface CategorySummary {
   fromPriceCents: number | null;
 }
 
+/** One category's row in the Collection Progress card — real label off the categories table
+ * (never a hardcoded "Cards"/"Watches" pair), so a third category's holdings render with its own
+ * name instead of being unlabeled or dropped. */
+export interface CollectionProgressCategory {
+  categoryId: string;
+  label: string;
+  sharePercent: number;
+  valueCents: number;
+}
+
 export interface CollectionProgressSummary {
   /** False until this account is signed in *and* actually owns something — there's no
    * real number to show before that, so the screen falls back to its own placeholder. */
   hasData: boolean;
   totalValueCents: number;
-  cardsSharePercent: number;
-  watchesSharePercent: number;
+  byCategory: CollectionProgressCategory[];
 }
 
 const MARKETPLACE_HIGHLIGHTS_LIMIT = 3;
@@ -53,16 +63,20 @@ export function useHomeViewModel() {
   const { drops, isLoading: dropsLoading } = useDropsViewModel();
   const collection = useCollectionViewModel();
   const listingsQuery = useQuery({ queryKey: ["listings", "all"], queryFn: () => marketplaceService.browse() });
+  const { categories, byId: categoriesById } = useCategoriesViewModel();
 
-  const evergreenByCategoryRaw = useMemo<Record<Category, CategorySummary>>(() => {
+  // Keyed by every category in the categories table, not a hardcoded cards/watches pair — a
+  // category with zero evergreen packs yet still gets an entry (tierCount 0), same "show it, but
+  // empty" rule the admin dashboard's own per-category pages already follow.
+  const evergreenByCategoryRaw = useMemo<Record<string, CategorySummary>>(() => {
     const evergreen = (packsQuery.data ?? []).filter((p) => p.goesLiveAt == null);
-    const summarize = (category: Category): CategorySummary => {
+    const summarize = (category: string): CategorySummary => {
       const packs = evergreen.filter((p) => p.category === category);
       const prices = packs.map((p) => p.priceCents);
       return { tierCount: packs.length, fromPriceCents: prices.length ? Math.min(...prices) : null };
     };
-    return { cards: summarize("cards"), watches: summarize("watches") };
-  }, [packsQuery.data]);
+    return Object.fromEntries(categories.map((c) => [c.id, summarize(c.id)]));
+  }, [packsQuery.data, categories]);
   const evergreenByCategory = useStableValue(evergreenByCategoryRaw);
 
   const featuredDropRaw = useMemo(() => drops.find((d) => d.phase === "live") ?? null, [drops]);
@@ -74,10 +88,14 @@ export function useHomeViewModel() {
     () => ({
       hasData: collection.isSignedIn && collection.owned.length > 0,
       totalValueCents: collection.totalValueCents,
-      cardsSharePercent: collection.cardsSharePercent,
-      watchesSharePercent: collection.watchesSharePercent,
+      byCategory: collection.byCategory.map((c) => ({
+        categoryId: c.categoryId,
+        label: categoriesById.get(c.categoryId)?.label ?? c.categoryId,
+        sharePercent: c.sharePercent,
+        valueCents: c.valueCents,
+      })),
     }),
-    [collection.isSignedIn, collection.owned.length, collection.totalValueCents, collection.cardsSharePercent, collection.watchesSharePercent]
+    [collection.isSignedIn, collection.owned.length, collection.totalValueCents, collection.byCategory, categoriesById]
   );
 
   const recentListings = useMemo<Listing[]>(

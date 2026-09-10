@@ -21,6 +21,15 @@ export const TIER_LABEL: Record<string, string> = {
   obsidian_vault: "GRAIL",
 };
 
+/** A pack SKU whose `tier` slug isn't one of the six curated ones above (any pack created for a
+ * new category via the admin dashboard, e.g. "atelier_drop") used to fall back to the raw slug
+ * uppercased with its underscore intact ("ATELIER_DROP") — every call site duplicated that same
+ * `tierLabel(sku)` fallback, so it's centralized here once, with
+ * the fallback itself prettified (spaces instead of underscores) instead of showing the raw slug. */
+export function tierLabel(sku: { tier: string }): string {
+  return TIER_LABEL[sku.tier] ?? sku.tier.replace(/_/g, " ").toUpperCase();
+}
+
 /** The middle-priced tier per category gets the mockup's bigger vertical
  * "hero" treatment; the other two are compact rows. Cards-only — watches
  * render every tier as an equal hairline row (no hero), per the mockup. */
@@ -91,7 +100,7 @@ function CardTile({
 
       <View style={styles.info}>
         <View style={styles.tierPill}>
-          <Text style={styles.tierPillText}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+          <Text style={styles.tierPillText}>{tierLabel(sku)}</Text>
         </View>
         <Text style={[styles.name, isHero && styles.nameHero]} numberOfLines={1}>
           {sku.name}
@@ -130,7 +139,7 @@ function WatchTileRow({ sku, onPress, disabled }: { sku: PackSku; onPress: () =>
     <Pressable onPress={onPress} disabled={disabled} style={[styles.watchRow, disabled && styles.cardDisabled]}>
       <WatchDial art={art} size={62} />
       <View style={styles.watchInfo}>
-        <Text style={styles.watchTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.watchTier}>{tierLabel(sku)}</Text>
         <Text style={styles.watchName} numberOfLines={1}>
           {sku.name}
         </Text>

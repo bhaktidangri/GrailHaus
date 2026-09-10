@@ -120,7 +120,12 @@ export interface OwnershipWeightCurve {
   floor: number;
 }
 
-export type OwnershipWeightTable = Record<"cards" | "watches", OwnershipWeightCurve>;
+export type OwnershipWeightTable = Partial<Record<string, OwnershipWeightCurve>>;
+
+/** Used when a category (e.g. one just added via the admin dashboard, with no
+ * `ownership_weight_tiers` rows yet) has no curve of its own — a mild, category-agnostic
+ * fade rather than a crash or a silent "duplicates never fade" no-op. */
+const FALLBACK_OWNERSHIP_CURVE: OwnershipWeightCurve = { byCopies: [1.0, 0.5, 0.25], floor: 0.15 };
 
 /**
  * Personal Duplicate Weight Logic: owning more copies of an item makes it
@@ -144,7 +149,7 @@ export const DEFAULT_OWNERSHIP_WEIGHTS: OwnershipWeightTable = {
 };
 
 function ownershipWeight(table: OwnershipWeightTable, category: PackSku["category"], copiesOwned: number): number {
-  const { byCopies, floor } = table[category];
+  const { byCopies, floor } = table[category] ?? FALLBACK_OWNERSHIP_CURVE;
   return copiesOwned < byCopies.length ? byCopies[copiesOwned] : floor;
 }
 

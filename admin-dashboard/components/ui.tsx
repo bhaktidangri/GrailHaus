@@ -29,9 +29,40 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
-export function SectionLabel({ children }: { children: ReactNode }) {
+/** A native <details>/<summary> card — zero JS, works fine wrapping a server-action <form>.
+ * Closed by default keeps a long list of per-category/per-pack sections from turning the page
+ * into one giant scroll; the summary row stays visible so you can still scan everything at a
+ * glance and only open the one you actually need to edit. */
+export function CollapsibleCard({
+  summary,
+  defaultOpen = false,
+  children,
+  className = "",
+}: {
+  summary: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-mute">{children}</p>
+    <details open={defaultOpen} className={`group rounded-xl border border-border bg-surface ${className}`}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-4 marker:content-none">
+        <div className="min-w-0 flex-1">{summary}</div>
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-border text-sm leading-none text-text-mute">
+          <span className="group-open:hidden">+</span>
+          <span className="hidden group-open:inline">−</span>
+        </span>
+      </summary>
+      <div className="border-t border-border px-6 py-6">{children}</div>
+    </details>
+  );
+}
+
+export function SectionLabel({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <p className={`mb-3 flex items-center text-xs font-semibold uppercase tracking-wider text-text-mute ${className}`}>
+      {children}
+    </p>
   );
 }
 

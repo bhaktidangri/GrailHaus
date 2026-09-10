@@ -5,7 +5,7 @@ import { PackFace } from "./PackFace";
 import { WatchDial } from "./WatchDial";
 import { GameButton } from "./GameButton";
 import { QuietButton } from "./QuietButton";
-import { ART_GRADIENT, TIER_LABEL } from "./PackTile";
+import { ART_GRADIENT, tierLabel } from "./PackTile";
 import { useExpectedValue } from "../viewmodels/useExpectedValue";
 import { confirmPurchase as copy, packTile as packTileCopy } from "../content/copy";
 
@@ -44,12 +44,15 @@ export function ConfirmPurchaseSheet({
   const ev = useExpectedValue(sku);
 
   if (!sku) return null;
-  const isWatches = sku.category === "watches";
+  // Cards is the one genuinely distinct treatment (multi-item tear); every other category
+  // (watches, handbags, anything added after) shares the "vault" single-item styling below —
+  // same fallback rule as ShelfScreen's REGISTER and the Home doors.
+  const isCards = sku.category === "cards";
   const totalPriceCents = sku.priceCents * quantity;
   const balanceAfter = balanceCents != null ? balanceCents - totalPriceCents : null;
   const insufficient = balanceAfter != null && balanceAfter < 0;
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
-  const tone = isWatches ? accent.watches : accent.cards;
+  const tone = isCards ? accent.cards : accent.watches;
   const priceLabel = `$${(totalPriceCents / 100).toFixed(2)}`;
   const confirmLabel = isPurchasing ? copy.working : `${copy.pay} ${priceLabel}`;
 
@@ -61,19 +64,19 @@ export function ConfirmPurchaseSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.wrap}>
         <Pressable style={styles.scrim} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: isWatches ? "#12100C" : "#171029" }]}>
+        <View style={[styles.sheet, { backgroundColor: isCards ? "#171029" : "#12100C" }]}>
           <View style={styles.grabber} />
-          <Text style={styles.eyebrow}>{isWatches ? copy.eyebrowWatches : copy.eyebrowCards}</Text>
+          <Text style={styles.eyebrow}>{isCards ? copy.eyebrowCards : copy.eyebrowVault}</Text>
 
           <View style={styles.itemRow}>
-            {isWatches ? (
-              <WatchDial art={art} size={60} />
-            ) : (
+            {isCards ? (
               <PackFace art={art} width={66} height={90} radius={10} crimp />
+            ) : (
+              <WatchDial art={art} size={60} />
             )}
             <View style={styles.itemInfo}>
-              <Text style={styles.itemTier}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
-              <Text style={[isWatches ? styles.itemNameWatches : styles.itemName]} numberOfLines={1}>
+              <Text style={styles.itemTier}>{tierLabel(sku)}</Text>
+              <Text style={[isCards ? styles.itemName : styles.itemNameWatches]} numberOfLines={1}>
                 {sku.name}
               </Text>
             </View>
@@ -100,14 +103,14 @@ export function ConfirmPurchaseSheet({
 
           <View style={styles.breakdown}>
             <Row
-              label={isWatches ? copy.unlockPrice : quantity > 1 ? `${quantity} × pack` : copy.lineItem}
+              label={!isCards ? copy.unlockPrice : quantity > 1 ? `${quantity} × pack` : copy.lineItem}
               value={priceLabel}
             />
             <Row
               label={copy.youReceive}
               value={
-                isWatches
-                  ? copy.oneWatch
+                !isCards
+                  ? copy.oneItem
                   : packTileCopy.countLabel(sku.category, sku.itemCount * quantity) +
                     (quantity > 1 ? ` across ${quantity} packs` : "")
               }
@@ -124,7 +127,7 @@ export function ConfirmPurchaseSheet({
           {ev && (
             <View style={styles.evNote}>
               <Text style={styles.evNoteText}>
-                {copy.evNote(ev.expectedCents * quantity, totalPriceCents, isWatches)}
+                {copy.evNote(ev.expectedCents * quantity, totalPriceCents, !isCards)}
               </Text>
             </View>
           )}
@@ -132,19 +135,19 @@ export function ConfirmPurchaseSheet({
           {insufficient && <Text style={styles.warning}>{copy.insufficientBalance}</Text>}
 
           <View style={styles.actions}>
-            {isWatches ? (
-              <>
-                <Pressable onPress={onClose} disabled={isPurchasing} style={styles.cancelPlain}>
-                  <Text style={styles.cancelPlainLabel}>{copy.cancel}</Text>
-                </Pressable>
-                <QuietButton label={confirmLabel} accent={tone} onPress={handleConfirm} dark style={styles.payWrap} />
-              </>
-            ) : (
+            {isCards ? (
               <>
                 <Pressable onPress={onClose} disabled={isPurchasing} style={styles.cancelBoxed}>
                   <Text style={styles.cancelBoxedLabel}>{copy.cancel}</Text>
                 </Pressable>
                 <GameButton label={confirmLabel} accent={tone} onPress={handleConfirm} style={styles.payWrapFlex} />
+              </>
+            ) : (
+              <>
+                <Pressable onPress={onClose} disabled={isPurchasing} style={styles.cancelPlain}>
+                  <Text style={styles.cancelPlainLabel}>{copy.cancel}</Text>
+                </Pressable>
+                <QuietButton label={confirmLabel} accent={tone} onPress={handleConfirm} dark style={styles.payWrap} />
               </>
             )}
           </View>

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Category, RarityTier, RarityTierLevel } from "@grailhaus/shared";
 import { packsService } from "../services/packsService";
 
@@ -20,4 +20,33 @@ export function useRarityTiers(category: Category): Partial<Record<RarityTierLev
     for (const tier of tiers) byLevel[tier.level] = tier;
     return byLevel;
   }, [query.data]);
+}
+
+/**
+ * The multi-category counterpart to `useRarityTiers` above, for a screen that shows items from
+ * more than one category at once (e.g. the Portfolio grid) and so can't fetch off a single
+ * hardcoded category — `useQueries` (not a `.map` of `useRarityTiers` calls) is what makes calling
+ * a variable, data-dependent number of these safe: React's rules of hooks forbid a component's own
+ * hook-call count changing between renders, which a plain loop of `useQuery` calls would do the
+ * moment `categories` grows from 0 to N once the categories list itself finishes loading.
+ */
+export function useRarityTiersByCategory(categories: Category[]): Record<string, Partial<Record<RarityTierLevel, RarityTier>>> {
+  const results = useQueries({
+    queries: categories.map((category) => ({
+      queryKey: ["packs", category],
+      queryFn: () => packsService.list(category),
+    })),
+  });
+
+  return useMemo(() => {
+    const out: Record<string, Partial<Record<RarityTierLevel, RarityTier>>> = {};
+    categories.forEach((category, i) => {
+      const tiers = results[i]?.data?.[0]?.rarityTiers ?? [];
+      const byLevel: Partial<Record<RarityTierLevel, RarityTier>> = {};
+      for (const tier of tiers) byLevel[tier.level] = tier;
+      out[category] = byLevel;
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, ...results.map((r) => r.data)]);
 }

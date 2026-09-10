@@ -8,9 +8,10 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { PackSku } from "@grailhaus/shared";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useExploreViewModel } from "../viewmodels/useExploreViewModel";
-import { useDiscoverViewModel, type DiscoverItem } from "../viewmodels/useDiscoverViewModel";
+import { useDiscoverAllCategoriesViewModel, type DiscoverItem } from "../viewmodels/useDiscoverViewModel";
+import { useCategoriesViewModel } from "../viewmodels/useCategoriesViewModel";
 import { useAuthStore } from "../state/authStore";
-import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/PackTile";
+import { PackTile, ART_GRADIENT, tierLabel, HERO_TIER } from "../components/PackTile";
 import { PackFace } from "../components/PackFace";
 import { CardFace } from "../components/CardFace";
 import { WatchDial } from "../components/WatchDial";
@@ -38,8 +39,8 @@ export function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const session = useSessionViewModel();
   const catalog = useExploreViewModel();
-  const cardCatalog = useDiscoverViewModel("cards");
-  const watchCatalog = useDiscoverViewModel("watches");
+  const { categories } = useCategoriesViewModel();
+  const discover = useDiscoverAllCategoriesViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
 
@@ -83,45 +84,45 @@ export function ExploreScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        <Section title={copy.sectionCards}>
-          {catalog.cards.length > 0 ? (
-            catalog.cards.map((sku) => (
-              <TierRow key={sku.id} sku={sku} onPress={() => navigation.navigate("PackDetail", { skuId: sku.id })} />
-            ))
-          ) : !catalog.isLoading ? (
-            <Text style={styles.empty}>{copy.emptySection(copy.sectionCards)}</Text>
-          ) : null}
-        </Section>
+        {/* One section per real category (not a hardcoded Cards/Watches pair) — cards keeps its
+            own multi-pull TierRow treatment, every other category (watches, and anything added
+            after, e.g. handbags) shares the single-box PackTile treatment, same fallback rule
+            ShelfScreen's own pack list already uses. */}
+        {categories.map((c) => {
+          const skus = catalog.byCategory[c.id] ?? [];
+          return (
+            <Section key={c.id} title={c.label}>
+              {skus.length > 0 ? (
+                c.id === "cards" ? (
+                  skus.map((sku) => (
+                    <TierRow key={sku.id} sku={sku} onPress={() => navigation.navigate("PackDetail", { skuId: sku.id })} />
+                  ))
+                ) : (
+                  skus.map((sku) => (
+                    <PackTile key={sku.id} sku={sku} onBuy={() => navigation.navigate("VaultDetail", { skuId: sku.id })} />
+                  ))
+                )
+              ) : !catalog.isLoading ? (
+                <Text style={styles.empty}>{copy.emptySection(c.label)}</Text>
+              ) : null}
+            </Section>
+          );
+        })}
 
-        <Section title={copy.sectionWatches}>
-          {catalog.watches.length > 0 ? (
-            catalog.watches.map((sku) => (
-              <PackTile key={sku.id} sku={sku} onBuy={() => navigation.navigate("VaultDetail", { skuId: sku.id })} />
-            ))
-          ) : !catalog.isLoading ? (
-            <Text style={styles.empty}>{copy.emptySection(copy.sectionWatches)}</Text>
-          ) : null}
-        </Section>
-
-        <Section title={copy.allCards(cardCatalog.items.length)}>
-          <CatalogGrid
-            category="cards"
-            items={cardCatalog.items}
-            isLoading={cardCatalog.isLoading}
-            emptyLabel={copy.emptySection(copy.sectionCards)}
-            onPress={(item) => navigation.navigate("ItemFork", { category: "cards", item })}
-          />
-        </Section>
-
-        <Section title={copy.allWatches(watchCatalog.items.length)}>
-          <CatalogGrid
-            category="watches"
-            items={watchCatalog.items}
-            isLoading={watchCatalog.isLoading}
-            emptyLabel={copy.emptySection(copy.sectionWatches)}
-            onPress={(item) => navigation.navigate("ItemFork", { category: "watches", item })}
-          />
-        </Section>
+        {categories.map((c) => {
+          const catalog = discover.byCategory[c.id];
+          return (
+            <Section key={c.id} title={copy.allOf(c.label, catalog?.items.length ?? 0)}>
+              <CatalogGrid
+                category={c.id}
+                items={catalog?.items ?? []}
+                isLoading={discover.isLoading}
+                emptyLabel={copy.emptySection(c.label)}
+                onPress={(item) => navigation.navigate("ItemFork", { category: c.id, item })}
+              />
+            </Section>
+          );
+        })}
       </Animated.ScrollView>
     </View>
   );
@@ -148,7 +149,7 @@ function TierRow({ sku, onPress }: { sku: PackSku; onPress: () => void }) {
     <Pressable onPress={onPress} style={[styles.tierRow, isHero && styles.tierRowFeatured]}>
       <PackFace art={art} width={64} height={88} radius={10} />
       <View style={styles.tierRowInfo}>
-        <Text style={styles.tierRowEyebrow}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.tierRowEyebrow}>{tierLabel(sku)}</Text>
         <Text style={styles.tierRowName} numberOfLines={1}>
           {sku.name}
         </Text>
@@ -175,7 +176,7 @@ function CatalogGrid({
   emptyLabel,
   onPress,
 }: {
-  category: "cards" | "watches";
+  category: string;
   items: DiscoverItem[];
   isLoading: boolean;
   emptyLabel: string;
@@ -198,38 +199,33 @@ function CatalogCell({
   item,
   onPress,
 }: {
-  category: "cards" | "watches";
+  category: string;
   item: DiscoverItem;
   onPress: () => void;
 }) {
   const detail = item.detail;
   return (
     <Pressable onPress={onPress} style={styles.cell}>
-      {category === "watches" ? (
-        <WatchDial art={itemArtGradient(detail)} size={64} />
-      ) : (
+      {/* Cards keeps its own rectangular card-face art; every other category shares the
+          watch-dial treatment as a generic fallback — same rule as the rest of this pass. */}
+      {category === "cards" ? (
         <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={64} height={89} />
+      ) : (
+        <WatchDial art={itemArtGradient(detail)} size={64} />
       )}
       {/* Cards: lead with the Pokémon identity (what you're browsing for), the print name
           (cardTitle) is the secondary line — same split ItemFork's own heading/subheading use,
           just swapped since a printing name alone ("Black Forecast") isn't scannable without
-          knowing which Pokémon it belongs to. Watches have no Pokémon-equivalent identity
-          split, so watchName stays the single line. */}
-      {category === "watches" ? (
-        <Text style={styles.cellName} numberOfLines={1}>
-          {detail.watchName ?? detail.name}
+          knowing which Pokémon it belongs to. Flat fallback chain (not a category check) for the
+          primary line, so a category with neither pokemonName nor watchName (e.g. handbags)
+          still shows its real catalog name instead of going blank. */}
+      <Text style={styles.cellName} numberOfLines={1}>
+        {detail.pokemonName ?? detail.watchName ?? detail.name}
+      </Text>
+      {category === "cards" && detail.cardTitle && (
+        <Text style={styles.cellSub} numberOfLines={1}>
+          {detail.cardTitle}
         </Text>
-      ) : (
-        <>
-          <Text style={styles.cellName} numberOfLines={1}>
-            {detail.pokemonName ?? detail.name}
-          </Text>
-          {detail.cardTitle && (
-            <Text style={styles.cellSub} numberOfLines={1}>
-              {detail.cardTitle}
-            </Text>
-          )}
-        </>
       )}
       <Text style={styles.cellPrice}>${(detail.currentValueCents / 100).toLocaleString()}</Text>
     </Pressable>

@@ -1,4 +1,9 @@
-export type Category = "cards" | "watches";
+/** A slug matching a row in the backend-driven `categories` table (see server's
+ * categories.repository.ts) — "cards" and "watches" are just the two rows that exist today, not
+ * a closed set. A third category (e.g. "handbags") is a new row plus a mesh archetype, not a
+ * type change here — keeping this as `string` (not a union) is what makes that true instead of
+ * aspirational. */
+export type Category = string;
 
 /** Always integer cents. Never a float. */
 export type MoneyCents = number;
@@ -287,4 +292,52 @@ export interface Listing {
   sellerProceedsCents: MoneyCents | null;
   createdAt: string;
   resolvedAt: string | null;
+}
+
+export interface CategoryLight {
+  kind: "ambient" | "directional";
+  position?: [number, number, number];
+  intensity: number;
+  color?: string;
+}
+
+export interface CategoryHapticStep {
+  atMs: number;
+  kind: "light" | "medium" | "heavy" | "success";
+}
+
+export interface CategoryOpeningBeat {
+  atMs: number;
+  label: string;
+}
+
+/**
+ * A category's whole reveal *personality*, exactly as stored in the backend `categories` table
+ * (server's categories.repository.ts) — the thing that makes a category genuinely
+ * admin/backend-driven instead of a hardcoded `*.config.tsx` file in the app. `meshArchetype` is
+ * the one field that isn't pure data: it selects a geometry-builder function from a small, fixed
+ * registry in the app (see engine/core/meshArchetypes.tsx) — no config system invents new 3D
+ * topology from numbers alone, so a genuinely novel silhouette (e.g. a handbag's structured body
+ * + flap + handle) needs one new archetype function, everything else about the category is this
+ * row.
+ */
+export interface CategoryReveal {
+  id: string;
+  label: string;
+  meshArchetype: string;
+  paletteBackground: string;
+  paletteAccent: string;
+  cameraPosition: [number, number, number];
+  cameraFov: number;
+  lighting: CategoryLight[];
+  gestureMode: "tear" | "lift-lid";
+  gestureVelocityThreshold: number;
+  gestureTravelDistance: number;
+  commonBeatMs: number;
+  rareHoldMs: number;
+  hapticCommon: CategoryHapticStep[];
+  hapticRare: CategoryHapticStep[];
+  openingBeatsCommon: CategoryOpeningBeat[] | null;
+  openingBeatsRare: CategoryOpeningBeat[] | null;
+  sortOrder: number;
 }

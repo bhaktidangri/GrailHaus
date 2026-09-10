@@ -35,8 +35,14 @@ const DRIFT_EPOCH_MS = Date.parse("2026-01-01T00:00:00.000Z");
 /** Full oscillation cycle length, in ticks — cards complete a cycle faster than watches,
  * matching §28's "Cards may move more aggressively... Watches move more slowly." Chosen so a
  * cycle is long enough to feel gradual over a demo session but short enough to actually move:
- * ~40 min for cards, ~100 min for watches. */
-const DRIFT_PERIOD_TICKS: Record<Category, number> = { cards: 80, watches: 200 };
+ * ~40 min for cards, ~100 min for watches. `Category` is a plain string (any admin-created
+ * category, not just these two), so this is a `Partial` with a fallback rather than a `Record` —
+ * an unlisted category (e.g. handbags) used to silently look up `undefined` here, which propagated
+ * as `NaN` all the way into a `GET /items`/`/purchases/:id` response and failed schema validation
+ * (a 500), rather than throwing where the actual bug was. Falls back to watches' slower cadence —
+ * a reasonable default for any other luxury-goods-style category. */
+const DEFAULT_DRIFT_PERIOD_TICKS = 200;
+const DRIFT_PERIOD_TICKS: Partial<Record<Category, number>> = { cards: 80, watches: 200 };
 /** PRD §28's own worked example (base $100, min $80, max $130) as a ratio of base value —
  * used as the bound for every item rather than a fixed dollar band. */
 const DRIFT_MIN_RATIO = 0.8;
@@ -86,7 +92,7 @@ export function driftParams(item: { id: string; category: Category; baseValueCen
     center: (minValueCents + maxValueCents) / 2,
     amplitude: (maxValueCents - minValueCents) / 2,
     phase: seededPhase(item.id),
-    periodTicks: DRIFT_PERIOD_TICKS[item.category],
+    periodTicks: DRIFT_PERIOD_TICKS[item.category] ?? DEFAULT_DRIFT_PERIOD_TICKS,
     minValueCents,
     maxValueCents,
   };

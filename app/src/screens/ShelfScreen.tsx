@@ -10,8 +10,9 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { Category, PackSku } from "@grailhaus/shared";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { useShelfViewModel } from "../viewmodels/useShelfViewModel";
+import { useCategoriesViewModel } from "../viewmodels/useCategoriesViewModel";
 import { useAuthStore } from "../state/authStore";
-import { PackTile, ART_GRADIENT, TIER_LABEL, HERO_TIER } from "../components/PackTile";
+import { PackTile, ART_GRADIENT, tierLabel, HERO_TIER } from "../components/PackTile";
 import { PackFace } from "../components/PackFace";
 import { CategorySwitch } from "../components/CategorySwitch";
 import { useHideTabBarOnScroll, useTabBarClearance } from "../navigation/tabBarVisibility";
@@ -21,7 +22,11 @@ import type { RootTabParamList } from "../navigation/RootTabs";
 import type { HomeStackParamList } from "../navigation/HomeStack";
 import type { AppStackParamList } from "../navigation/AppNavigator";
 
-const REGISTER: Record<Category, { label: string; wash: [string, string] }> = {
+// Cards gets its own multi-pull TierRow treatment below; every other category (watches, and
+// anything added after, e.g. handbags) shares the single-box PackTile treatment — same fallback
+// rule the Home doors and their accent colors already use. A category with no dedicated entry
+// here just reuses watches' wash color rather than crashing on an undefined lookup.
+const REGISTER: Partial<Record<Category, { label: string; wash: [string, string] }>> = {
   cards: { label: shelfCopy.categoryLabel.cards, wash: ["rgba(177,75,255,0.24)", "transparent"] },
   watches: { label: shelfCopy.categoryLabel.watches, wash: ["rgba(242,196,107,0.2)", "transparent"] },
 };
@@ -51,11 +56,16 @@ export function ShelfScreen() {
   const { category } = useRoute<RouteProp<HomeStackParamList, "World">>().params;
   const session = useSessionViewModel();
   const shelf = useShelfViewModel(category);
+  const { byId: categoriesById } = useCategoriesViewModel();
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
 
-  const register = REGISTER[category];
+  // Wash color is a cosmetic fallback (any category past cards/watches shares watches' wash);
+  // the label itself always comes from the category's own admin-configured label, never the
+  // hardcoded copy map, so a new category shows its real name instead of "Watches".
+  const register = REGISTER[category] ?? REGISTER.watches!;
+  const categoryLabel = categoriesById.get(category)?.label ?? register.label;
 
   const priceRange = useMemo(() => {
     if (shelf.packs.length === 0) return null;
@@ -101,7 +111,7 @@ export function ShelfScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.headingTitle}>{register.label}</Text>
+            <Text style={styles.headingTitle}>{categoryLabel}</Text>
             <Text style={styles.headingSub}>
               {priceRange
                 ? shelfCopy.priceRangeSub(
@@ -167,7 +177,7 @@ function TierRow({ sku, onPress }: { sku: PackSku; onPress: () => void }) {
         <PackFace art={art} width={76} height={104} radius={10} />
       </View>
       <View style={styles.tierRowInfo}>
-        <Text style={styles.tierRowEyebrow}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.tierRowEyebrow}>{tierLabel(sku)}</Text>
         <Text style={styles.tierRowName} numberOfLines={1}>
           {sku.name}
         </Text>

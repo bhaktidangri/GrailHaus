@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { Canvas } from "@react-three/fiber/native";
+import { Canvas, useFrame } from "@react-three/fiber/native";
 import type { DirectionalLight } from "three";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -15,9 +15,10 @@ import Animated, {
 import type { ItemDetail, PackSku } from "@grailhaus/shared";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
-import { cardsConfig } from "../categories/cards.config";
 import { GestureLayer } from "../core/GestureLayer";
 import { Renderer3DBoundary } from "../core/Renderer3DBoundary";
+import { useDeviceTilt, type DeviceTilt } from "../core/useDeviceTilt";
+import type { CategoryRevealConfig } from "../core/types";
 import { PackTearMesh } from "./reveal/PackTearMesh";
 import { PackTear2D } from "./reveal/PackTear2D";
 import { cardPackPersonality } from "./reveal/config/cardPack.config";
@@ -25,7 +26,7 @@ import { playHapticTrack } from "../core/HapticsTrack";
 import { PackFace } from "../../components/PackFace";
 import { ProgressRing } from "../../components/ProgressRing";
 import { StatBox } from "../../components/StatBox";
-import { ART_GRADIENT, TIER_LABEL } from "../../components/PackTile";
+import { ART_GRADIENT, tierLabel } from "../../components/PackTile";
 import { accents, fonts, ink, spacing } from "../../theme/tokens";
 import { cardFlow as copy } from "../../content/copy";
 
@@ -64,6 +65,7 @@ export interface BatchContext {
 export function CardFlowEngine({
   sku,
   items,
+  config,
   batchContext,
   onNextPack,
   onSkipToResults,
@@ -75,6 +77,10 @@ export function CardFlowEngine({
 }: {
   sku: PackSku;
   items: ItemDetail[];
+  /** This category's backend-driven reveal personality (see categoryRevealConfig.ts) — gesture
+   * feel and haptic track come from here now instead of the old hardcoded `cardsConfig` import,
+   * so an admin editing the "cards" row in the dashboard actually changes this screen. */
+  config: CategoryRevealConfig;
   batchContext?: BatchContext;
   onNextPack?: () => void;
   /** Batch-mode agency: jump straight to the terminal batch summary from anywhere in this
@@ -161,7 +167,7 @@ export function CardFlowEngine({
     // constants, the torn strip typically needs two or three bounces to settle below the "at
     // rest" threshold — a first pass at 1000ms cut away while it was still visibly mid-bounce,
     // which read as "nothing lands." 2500ms comfortably covers a full multi-bounce settle.
-    playHapticTrack(cardsConfig.hapticTrack("opening", false));
+    playHapticTrack(config.hapticTrack("opening", false));
     tearCompleteTimer.current = setTimeout(() => {
       setStep("card");
       setCardIndex(0);
@@ -203,7 +209,7 @@ export function CardFlowEngine({
   }
 
   if (step === "introduction") {
-    return <IntroductionView sku={sku} onTearComplete={handleTearComplete} />;
+    return <IntroductionView sku={sku} gesture={config.gesture} onTearComplete={handleTearComplete} />;
   }
 
   if (step === "card" || step === "final") {
@@ -331,8 +337,42 @@ export function ReadyView({
   );
 }
 
-function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplete: () => void }) {
+// Nudges the tear scene's key + rim lights off their declared base positions every frame,
+// following the phone's live tilt (see useDeviceTilt) — the foil-catches-a-highlight-as-you-turn
+// requirement (PRD §42), same idea as TiltLights but written by hand here since these two lights
+// (unlike RevealEngine's config-driven array) also carry the key light's own shadow-camera ref.
+function TiltCardLights({
+  keyLightRef,
+  rimLightRef,
+  tilt,
+}: {
+  keyLightRef: React.RefObject<DirectionalLight | null>;
+  rimLightRef: React.RefObject<DirectionalLight | null>;
+  tilt: React.MutableRefObject<DeviceTilt>;
+}) {
+  useFrame(() => {
+    if (keyLightRef.current) {
+      keyLightRef.current.position.set(0.16 + tilt.current.x * 0.3, 0.3 + tilt.current.y * 0.3, 0.28);
+    }
+    if (rimLightRef.current) {
+      rimLightRef.current.position.set(-0.28 + tilt.current.x * 0.3, 0.1 + tilt.current.y * 0.3, -0.24);
+    }
+  });
+  return null;
+}
+
+function IntroductionView({
+  sku,
+  gesture,
+  onTearComplete,
+}: {
+  sku: PackSku;
+  gesture: CategoryRevealConfig["gesture"];
+  onTearComplete: () => void;
+}) {
   const keyLightRef = useRef<DirectionalLight>(null);
+  const rimLightRef = useRef<DirectionalLight>(null);
+  const tilt = useDeviceTilt();
 
   // r3f's shadow pipeline is off by default at the Canvas level, and a directional light's own
   // shadow camera defaults to a frustum sized for a whole outdoor scene — hopelessly wrong for
@@ -353,7 +393,7 @@ function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplet
       <Text style={styles.introHeading}>{copy.introduction.heading(sku.itemCount)}</Text>
       <Text style={styles.introBody}>{copy.introduction.body}</Text>
       <View style={styles.tearCanvas}>
-        <GestureLayer gesture={cardsConfig.gesture} onComplete={onTearComplete}>
+        <GestureLayer gesture={gesture} onComplete={onTearComplete}>
           {(openProgress) => (
             <Renderer3DBoundary
               fallback={
@@ -379,7 +419,8 @@ function IntroductionView({ sku, onTearComplete }: { sku: PackSku; onTearComplet
                   position={[0.16, 0.3, 0.28]}
                   castShadow
                 />
-                <directionalLight color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
+                <directionalLight ref={rimLightRef} color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
+                <TiltCardLights keyLightRef={keyLightRef} rimLightRef={rimLightRef} tilt={tilt} />
                 <PackTearMesh openProgress={openProgress} />
               </Canvas>
             </Renderer3DBoundary>
@@ -590,7 +631,7 @@ export function SummaryView({
   const profitCents = totalValueCents - sku.priceCents;
   const newCount = items.filter((item) => (priorCountById.get(item.id) ?? 0) === 0).length;
   const duplicateCount = items.length - newCount;
-  const tierLabel = TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase();
+  const tierLabelText = tierLabel(sku);
   const isLastOfBatch = batchContext != null && batchContext.index === batchContext.total - 1;
 
   return (
@@ -668,7 +709,7 @@ export function SummaryView({
               {isRipAgainWorking ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonLabel}>{copy.summary.ripAgain(tierLabel)}</Text>
+                <Text style={styles.primaryButtonLabel}>{copy.summary.ripAgain(tierLabelText)}</Text>
               )}
             </LinearGradient>
           </Pressable>

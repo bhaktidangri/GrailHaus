@@ -47,7 +47,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         querystring: {
           type: "object",
           properties: {
-            category: { type: "string", enum: ["cards", "watches"] },
+            category: { type: "string" },
             limit: { type: "number", minimum: 1, maximum: 200, default: 50 },
             offset: { type: "number", minimum: 0, default: 0 },
           },
@@ -87,7 +87,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
           type: "object",
           required: ["category", "rarityTierLevel", "priceCents"],
           properties: {
-            category: { type: "string", enum: ["cards", "watches"] },
+            category: { type: "string" },
             rarityTierLevel: { type: "number", enum: [1, 2, 3] },
             priceCents: { type: "number", minimum: 1 },
           },

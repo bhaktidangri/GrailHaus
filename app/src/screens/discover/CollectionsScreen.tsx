@@ -15,7 +15,10 @@ import type { DiscoverStackParamList } from "../../navigation/DiscoverStack";
 
 type Nav = NativeStackNavigationProp<DiscoverStackParamList, "Collections">;
 
-const CATEGORY_LABEL: Record<"cards" | "watches", string> = { cards: "Cards", watches: "Watches" };
+// Cosmetic capitalization for the two known categories — any category not listed here (e.g. one
+// added via the admin dashboard) falls back to its raw id at the call site below rather than
+// crashing or showing "undefined".
+const CATEGORY_LABEL: Record<string, string> = { cards: "Cards", watches: "Watches" };
 
 /**
  * The Discover hub's third door — every named collection across both worlds, not filtered to
@@ -52,23 +55,26 @@ export function CollectionsScreen() {
           ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
           renderItem={({ item: group }: { item: CatalogCollectionGroup }) => {
             const primary = group.items[0];
-            const isWatch = primary.detail.category === "watches";
+            // Cards keeps its own rectangular card-face art; everything else (watches, and any
+            // category added after, e.g. handbags) shares the watch-dial treatment as a generic
+            // fallback — same rule as the rest of this pass (see ShelfScreen/HomeScreen).
+            const isCards = primary.detail.category === "cards";
             return (
               <Pressable
                 style={styles.row}
                 onPress={() => navigation.navigate("CollectionDetail", { title: group.label, items: group.items })}
               >
-                {isWatch ? (
-                  <WatchDial art={itemArtGradient(primary.detail)} size={52} />
-                ) : (
+                {isCards ? (
                   <CardFace gradient={itemArtGradient(primary.detail)} imageUrl={primary.detail.textureUrl} width={44} height={61} />
+                ) : (
+                  <WatchDial art={itemArtGradient(primary.detail)} size={52} />
                 )}
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowName} numberOfLines={1}>
                     {group.label}
                   </Text>
                   <Text style={styles.rowSub}>
-                    {categoryCopy.itemCount(group.items.length)} · {copy.categoriesLabel(group.categories.map((c) => CATEGORY_LABEL[c]))}
+                    {categoryCopy.itemCount(group.items.length)} · {copy.categoriesLabel(group.categories.map((c) => CATEGORY_LABEL[c] ?? c))}
                   </Text>
                 </View>
                 <View style={styles.rowValue}>

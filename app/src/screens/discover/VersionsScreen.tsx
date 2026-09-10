@@ -28,7 +28,10 @@ export function VersionsScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { category, group } = useRoute<Route>().params;
-  const isWatch = category === "watches";
+  // Cards gets its own bespoke visual register (art shape, wash color); everything else shares
+  // the other register as a generic fallback — same "cards is special, else shared" rule used
+  // throughout this pass.
+  const isCards = category === "cards";
   const tabBarClearance = useTabBarClearance();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
   const rarityTiers = useRarityTiers(category);
@@ -38,7 +41,7 @@ export function VersionsScreen() {
       {/* Bounded to the fixed header+title row (never scrolls) rather than the whole screen —
           a full-screen wash here would stay pinned behind the list's scrolled rows too. */}
       <LinearGradient
-        colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+        colors={[isCards ? "rgba(177,75,255,0.24)" : "rgba(242,196,107,0.2)", "transparent"]}
         style={styles.base}
       />
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -50,10 +53,10 @@ export function VersionsScreen() {
       </View>
 
       <View style={styles.titleRow}>
-        {isWatch ? (
-          <WatchDial art={itemArtGradient(group.versions[0].detail)} size={58} />
-        ) : (
+        {isCards ? (
           <CardFace gradient={itemArtGradient(group.versions[0].detail)} imageUrl={group.versions[0].detail.textureUrl} width={48} height={67} />
+        ) : (
+          <WatchDial art={itemArtGradient(group.versions[0].detail)} size={58} />
         )}
         <View style={styles.titleInfo}>
           <Text style={styles.name}>{group.label}</Text>
@@ -71,10 +74,10 @@ export function VersionsScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item: v }: { item: DiscoverItem }) => (
           <Pressable style={styles.row} onPress={() => navigation.navigate("ItemFork", { category, item: v })}>
-            {isWatch ? (
-              <WatchDial art={itemArtGradient(v.detail)} size={56} />
-            ) : (
+            {isCards ? (
               <CardFace gradient={itemArtGradient(v.detail)} imageUrl={v.detail.textureUrl} width={56} height={78} />
+            ) : (
+              <WatchDial art={itemArtGradient(v.detail)} size={56} />
             )}
             <View style={styles.rowInfo}>
               <View style={styles.rowBadges}>

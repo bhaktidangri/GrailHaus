@@ -37,7 +37,14 @@ export function ItemForkScreen() {
   const insets = useSafeAreaInsets();
   const { category, item } = useRoute<Route>().params;
   const { detail } = item;
+  // Two different questions, kept as two different booleans: `isWatch` gates the watches-only
+  // spec block below (a category that's neither cards nor watches correctly gets no flavor block
+  // at all, same as cards already does here — see the `specs` memo), while `isCards` is purely
+  // the visual-register choice (wash color, icon shape) — cards is the one with its own bespoke
+  // treatment, everything else (watches, and anything added after, e.g. handbags) shares the
+  // other register, same fallback rule ShelfScreen/HomeScreen already use.
   const isWatch = category === "watches";
+  const isCards = category === "cards";
   const tabBarClearance = useTabBarClearance();
 
   const listingsQuery = useQuery({
@@ -105,7 +112,7 @@ export function ItemForkScreen() {
             whatever section (value, fork options) scrolls into that same screen region. */}
         <View style={styles.washWrap}>
           <LinearGradient
-            colors={[isWatch ? "rgba(242,196,107,0.2)" : "rgba(177,75,255,0.24)", "transparent"]}
+            colors={[isCards ? "rgba(177,75,255,0.24)" : "rgba(242,196,107,0.2)", "transparent"]}
             style={StyleSheet.absoluteFill}
           />
 
@@ -118,10 +125,10 @@ export function ItemForkScreen() {
           </View>
 
           <View style={styles.heroRow}>
-            {isWatch ? (
-              <WatchDial art={itemArtGradient(detail)} size={124} />
-            ) : (
+            {isCards ? (
               <CardFace gradient={itemArtGradient(detail)} imageUrl={detail.textureUrl} width={124} height={173} borderColor="rgba(255,215,94,0.78)" />
+            ) : (
+              <WatchDial art={itemArtGradient(detail)} size={124} />
             )}
             <View style={styles.heroInfo}>
               <Text style={styles.name}>{(detail.cardTitle ?? detail.watchName ?? detail.name).toUpperCase()}</Text>
@@ -169,7 +176,11 @@ export function ItemForkScreen() {
           </View>
         )}
 
-        {isWatch && detail.tagline && (
+        {/* `tagline` is a generic catalog field (see shared/src/types.ts's `ItemDetail`), not a
+            watches-only one — WatchDetailScreen already shows it unconditionally, so this no
+            longer gates on category either, otherwise a real tagline on a cards or handbags item
+            would never render. */}
+        {detail.tagline && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{copy.collectorStory}</Text>
             <Text style={styles.tagline}>{detail.tagline}</Text>

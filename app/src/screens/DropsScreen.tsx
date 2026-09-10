@@ -11,7 +11,7 @@ import { PackFace } from "../components/PackFace";
 import { WatchDial } from "../components/WatchDial";
 import { StockBar } from "../components/StockBar";
 import { Countdown } from "../components/Countdown";
-import { ART_GRADIENT, TIER_LABEL } from "../components/PackTile";
+import { ART_GRADIENT, tierLabel } from "../components/PackTile";
 import { colors, ink, spacing, typography } from "../theme/tokens";
 import { drops as copy } from "../content/copy";
 import type { AppStackParamList } from "../navigation/AppNavigator";
@@ -76,14 +76,18 @@ function DropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
     <Pressable onPress={onPress} style={[styles.card, chrome.dim && styles.cardDim]}>
       <View style={styles.cardHeader}>
         <Text style={[styles.eyebrow, { color: chrome.eyebrowColor }]}>{chrome.eyebrow}</Text>
-        <Text style={styles.tierLabel}>{TIER_LABEL[sku.tier] ?? sku.tier.toUpperCase()}</Text>
+        <Text style={styles.tierLabel}>{tierLabel(sku)}</Text>
       </View>
 
       <View style={styles.artWrap}>
-        {sku.category === "watches" ? (
-          <WatchDial art={art} size={110} />
-        ) : (
+        {/* Cards keeps its own pack-tear art; every other category (watches, and anything added
+            after, e.g. handbags) shares the watch-dial treatment as a generic fallback — same
+            rule Home's DoorCard and Shelf's PackTile fallback already use, since there's no
+            per-category 3D icon asset pipeline for this decorative glyph. */}
+        {sku.category === "cards" ? (
           <PackFace art={art} width={100} height={138} radius={14} crimp />
+        ) : (
+          <WatchDial art={art} size={110} />
         )}
       </View>
 
@@ -107,6 +111,9 @@ function DropCard({ drop, onPress }: { drop: DropView; onPress: () => void }) {
 
       {phase === "closed" && <Text style={styles.closedNote}>{copy.closed.label}</Text>}
 
+      {/* "CHOOSE THIS BOX" is watches-specific copy (a watch ships in a box); every other
+          category uses the generic "CLAIM ONE" call to action, same cards-is-special/else-shared
+          split as the art above. */}
       {canBuy && (
         <Text style={styles.buyLink}>{sku.category === "watches" ? "CHOOSE THIS BOX" : "CLAIM ONE"}</Text>
       )}

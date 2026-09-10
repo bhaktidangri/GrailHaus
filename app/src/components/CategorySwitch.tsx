@@ -1,32 +1,52 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { Category } from "@grailhaus/shared";
-import { accents, typography } from "../theme/tokens";
-import { shelf as shelfCopy } from "../content/copy";
+import { typography } from "../theme/tokens";
+import { useCategoriesViewModel } from "../viewmodels/useCategoriesViewModel";
 
-const ORDER: Category[] = ["cards", "watches"];
+/** Darkens a `#rrggbb` hex color toward black by `amount` (0-1) — used to synthesize a two-stop
+ * gradient from a category's single admin-configured accent color, since the backend-driven
+ * `categories` table stores one accent, not a pre-baked gradient pair. */
+function darken(hex: string, amount: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amount)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amount)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amount)));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
 
 /**
- * The Shelf's Cards/Watches segmented switch — tapping the inactive side
- * jumps the whole screen's register (accent, tier vocabulary, art) to that
- * category. Matches the mockup's shelf header exactly: an active gradient
- * pill that takes the selected category's own accent (violet for cards,
- * gold for watches), a plain label for the inactive side.
+ * The Shelf's category segmented switch — tapping a side jumps the whole screen's register
+ * (accent, tier vocabulary, art) to that category. Segments come from the backend-driven
+ * `categories` table (useCategoriesViewModel), not a hardcoded two-entry array — a category
+ * added via the admin dashboard shows up here with no app change, which is the concrete "does
+ * adding handbags actually reach the app" proof point for this screen specifically.
  */
 export function CategorySwitch({ value, onChange }: { value: Category; onChange: (category: Category) => void }) {
+  const { categories, isLoading } = useCategoriesViewModel();
+
+  if (isLoading && categories.length === 0) {
+    return (
+      <View style={[styles.track, styles.loadingTrack]}>
+        <ActivityIndicator color="rgba(255,255,255,0.6)" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.track}>
-      {ORDER.map((category) => {
-        const isActive = category === value;
-        const accent = accents[category];
+      {categories.map((category) => {
+        const isActive = category.id === value;
+        const top = category.paletteAccent;
+        const bottom = darken(category.paletteAccent, 0.45);
         return (
-          <Pressable key={category} style={styles.segment} onPress={() => onChange(category)}>
+          <Pressable key={category.id} style={styles.segment} onPress={() => onChange(category.id)}>
             {isActive ? (
-              <LinearGradient colors={[accent.top, accent.bottom]} style={styles.activePill}>
-                <Text style={styles.activeLabel}>{shelfCopy.switchLabel[category]}</Text>
+              <LinearGradient colors={[top, bottom]} style={styles.activePill}>
+                <Text style={styles.activeLabel}>{category.label.toUpperCase()}</Text>
               </LinearGradient>
             ) : (
-              <Text style={styles.inactiveLabel}>{shelfCopy.switchLabel[category]}</Text>
+              <Text style={styles.inactiveLabel}>{category.label.toUpperCase()}</Text>
             )}
           </Pressable>
         );
@@ -46,6 +66,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.14)",
     padding: 5,
   },
+  loadingTrack: { alignItems: "center", justifyContent: "center" },
   segment: { flex: 1, alignItems: "center", justifyContent: "center" },
   activePill: {
     width: "100%",

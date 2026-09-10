@@ -28,7 +28,7 @@ export const packSkuSchema = {
   type: "object",
   properties: {
     id: { type: "string" },
-    category: { type: "string", enum: ["cards", "watches"] },
+    category: { type: "string" },
     tier: { type: "string", description: "Slug, e.g. street_rip" },
     name: { type: "string", description: "Display name, e.g. Street Rip" },
     priceCents: { type: "number" },
@@ -86,7 +86,7 @@ export async function packsRoutes(app: FastifyInstance) {
         summary: "The catalog — pack SKUs with their full reward-engine config",
         querystring: {
           type: "object",
-          properties: { category: { type: "string", enum: ["cards", "watches"] } },
+          properties: { category: { type: "string" } },
         },
         response: { 200: { type: "array", items: packSkuSchema } },
       },

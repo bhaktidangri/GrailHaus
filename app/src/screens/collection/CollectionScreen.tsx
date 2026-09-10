@@ -14,14 +14,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RarityTier } from "@grailhaus/shared";
+import type { CategoryReveal, RarityTier } from "@grailhaus/shared";
 import {
   usePortfolioViewModel,
+  type CategoryPosition,
   type PortfolioFilter,
   type PortfolioSort,
   type Position,
 } from "../../viewmodels/usePortfolioViewModel";
-import { useRarityTiers } from "../../viewmodels/useRarityTiers";
+import { useRarityTiersByCategory } from "../../viewmodels/useRarityTiers";
+import { useCategoriesViewModel } from "../../viewmodels/useCategoriesViewModel";
 import { useHideTabBarOnScroll, useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { SignInPrompt } from "../../components/SignInPrompt";
 import { GlossyButton } from "../../components/GlossyButton";
@@ -40,6 +42,17 @@ type Nav = NativeStackNavigationProp<CollectionStackParamList, "Collection">;
 
 const CARDS_TINT = "#B14BFF";
 const WATCHES_TINT = "#F2C46B";
+
+/** Cards/watches keep their existing hardcoded tints (unchanged pixel-for-pixel); any category
+ * added after them (e.g. handbags) gets its own real admin-configured `paletteAccent` off the
+ * categories table instead of reusing one of the two by coincidence — otherwise a third category
+ * would be visually indistinguishable from watches everywhere this tint is used (allocation bar,
+ * holding cells, dots). */
+function categoryTint(categoryId: string, categoriesById: Map<string, CategoryReveal>): string {
+  if (categoryId === "cards") return CARDS_TINT;
+  if (categoryId === "watches") return WATCHES_TINT;
+  return categoriesById.get(categoryId)?.paletteAccent ?? WATCHES_TINT;
+}
 
 /** Sends an empty portfolio off to go buy something — Portfolio's own stack has no route for
  * that, so this jumps up to the root tab navigator the same way RevealScreen/ItemForkScreen
@@ -85,17 +98,28 @@ export function CollectionScreen() {
   // row sits at half width instead of stretching (the same fix MarketplaceScreen documents).
   const { width: windowWidth } = useWindowDimensions();
   const cellWidth = (windowWidth - 20 * 2 - 12) / 2;
+  const { byId: categoriesById } = useCategoriesViewModel();
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
-  const cardTiers = useRarityTiers("cards");
-  const watchTiers = useRarityTiers("watches");
+  // Fetched for every category actually held (not just cards/watches) via `useQueries` under the
+  // hood, so a third category's own tier names/colors show up instead of falling back to
+  // whichever of the two hardcoded maps happened to be passed in.
+  const heldCategoryIds = useMemo(
+    () => [...new Set(vm.positions.map((p) => p.owned.item.category))],
+    [vm.positions]
+  );
+  const tiersByCategory = useRarityTiersByCategory(heldCategoryIds);
 
-  const categories = (vm.cards.length > 0 ? 1 : 0) + (vm.watches.length > 0 ? 1 : 0);
+  const categoryCount = vm.positionsByCategory.filter((c) => c.positions.length > 0).length;
 
   function openDetail(position: Position) {
-    if (position.owned.item.category === "watches") {
-      navigation.navigate("WatchDetail", { owned: position.owned });
-    } else {
+    // Cards gets its own dedicated detail screen; every other category (watches, and anything
+    // added after, e.g. handbags) shares WatchDetail as the generic fallback — there's no
+    // per-category detail screen pipeline yet, same "cards is special, else shared" rule the rest
+    // of the app already follows (see ShelfScreen/HomeScreen's own fallback comments).
+    if (position.owned.item.category === "cards") {
       navigation.navigate("CardDetail", { owned: position.owned });
+    } else {
+      navigation.navigate("WatchDetail", { owned: position.owned });
     }
   }
 
@@ -110,7 +134,7 @@ export function CollectionScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.sub}>{copy.itemCount(vm.positions.length, categories)}</Text>
+          <Text style={styles.sub}>{copy.itemCount(vm.positions.length, categoryCount)}</Text>
         </View>
         {vm.summary && (
           <View style={styles.balancePill}>
@@ -143,6 +167,7 @@ export function CollectionScreen() {
             <PortfolioHeader
               vm={vm}
               width={windowWidth}
+              categoriesById={categoriesById}
               onOpenBinder={() => navigation.navigate("Binder", undefined)}
               onOpenVault={() => navigation.navigate("Vault")}
             />
@@ -152,11 +177,8 @@ export function CollectionScreen() {
             <HoldingCell
               position={position}
               width={cellWidth}
-              tier={
-                (position.owned.item.category === "cards" ? cardTiers : watchTiers)[
-                  position.owned.item.rarityTierLevel
-                ]
-              }
+              tier={tiersByCategory[position.owned.item.category]?.[position.owned.item.rarityTierLevel]}
+              tint={categoryTint(position.owned.item.category, categoriesById)}
               onOpen={() => openDetail(position)}
               onSell={() => navigation.navigate("SellItem", { owned: position.owned })}
             />
@@ -173,17 +195,20 @@ export function CollectionScreen() {
 function PortfolioHeader({
   vm,
   width,
+  categoriesById,
   onOpenBinder,
   onOpenVault,
 }: {
   vm: ReturnType<typeof usePortfolioViewModel>;
   width: number;
+  categoriesById: Map<string, CategoryReveal>;
   onOpenBinder: () => void;
   onOpenVault: () => void;
 }) {
   const { live, summary, sparkline } = vm;
   // Hero card's inner width: screen padding (20 × 2) + card padding (18 × 2).
   const chartWidth = width - 20 * 2 - 18 * 2;
+  const categoryLabel = (categoryId: string) => categoriesById.get(categoryId)?.label ?? categoryId;
 
   // The chart's own leading edge is the tick-fresh total rather than the last historical sample —
   // the history is recomputed every few minutes, but the live value moves every 30 seconds, and a
@@ -286,27 +311,29 @@ function PortfolioHeader({
                 {copy.tracker.costLine(moneyWhole(live.costBasisCents))}
               </Text>
             </View>
+            {/* One segment/leg per category actually held (not a hardcoded cards/watches pair),
+                so a third category's value is never left out of the split — and never silently
+                dropped from the *total* above it either, since that total is summed over every
+                position regardless of category. */}
             <View style={styles.splitBar}>
-              <View style={{ flex: Math.max(vm.categoryTotals.cardsSharePercent, 1), backgroundColor: CARDS_TINT }} />
-              <View
-                style={{ flex: Math.max(vm.categoryTotals.watchesSharePercent, 1), backgroundColor: WATCHES_TINT }}
-              />
+              {vm.positionsByCategory.map((c) => (
+                <View
+                  key={c.categoryId}
+                  style={{ flex: Math.max(c.sharePercent, 1), backgroundColor: categoryTint(c.categoryId, categoriesById) }}
+                />
+              ))}
             </View>
             <View style={styles.legendRow}>
-              <AllocationLeg
-                tint={CARDS_TINT}
-                label={copy.tracker.filterCards}
-                sharePercent={vm.categoryTotals.cardsSharePercent}
-                valueCents={vm.categoryTotals.cardsValueCents}
-                pnlCents={vm.categoryTotals.cardsPnlCents}
-              />
-              <AllocationLeg
-                tint={WATCHES_TINT}
-                label={copy.tracker.filterWatches}
-                sharePercent={vm.categoryTotals.watchesSharePercent}
-                valueCents={vm.categoryTotals.watchesValueCents}
-                pnlCents={vm.categoryTotals.watchesPnlCents}
-              />
+              {vm.positionsByCategory.map((c) => (
+                <AllocationLeg
+                  key={c.categoryId}
+                  tint={categoryTint(c.categoryId, categoriesById)}
+                  label={categoryLabel(c.categoryId)}
+                  sharePercent={c.sharePercent}
+                  valueCents={c.valueCents}
+                  pnlCents={c.pnlCents}
+                />
+              ))}
             </View>
             {summary.holdings.pricedCount < summary.holdings.count && (
               <Text style={styles.allocNote}>
@@ -315,25 +342,38 @@ function PortfolioHeader({
             )}
           </View>
 
+          {/* Binder and Vault are real, dedicated browse screens that only exist for cards and
+              watches — there's no third "world" screen yet for a category added after them (e.g.
+              handbags), so this row stays exactly these two shortcuts. That category's holdings
+              are never hidden, though: they're in the total/allocation above and in the grid
+              below, just not behind their own shortcut tile here yet. */}
           <View style={styles.worldRow}>
-            {vm.cards.length > 0 && (
-              <WorldTile
-                tint={CARDS_TINT}
-                icon="albums"
-                label={copy.tracker.binderCta}
-                sub={copy.tracker.worldSummary(vm.cards.length, moneyWhole(vm.categoryTotals.cardsValueCents))}
-                onPress={onOpenBinder}
-              />
-            )}
-            {vm.watches.length > 0 && (
-              <WorldTile
-                tint={WATCHES_TINT}
-                icon="lock-closed"
-                label={copy.tracker.vaultCta}
-                sub={copy.tracker.worldSummary(vm.watches.length, moneyWhole(vm.categoryTotals.watchesValueCents))}
-                onPress={onOpenVault}
-              />
-            )}
+            {(() => {
+              const cardsTotal = vm.positionsByCategory.find((c) => c.categoryId === "cards");
+              const watchesTotal = vm.positionsByCategory.find((c) => c.categoryId === "watches");
+              return (
+                <>
+                  {cardsTotal && cardsTotal.positions.length > 0 && (
+                    <WorldTile
+                      tint={CARDS_TINT}
+                      icon="albums"
+                      label={copy.tracker.binderCta}
+                      sub={copy.tracker.worldSummary(cardsTotal.positions.length, moneyWhole(cardsTotal.valueCents))}
+                      onPress={onOpenBinder}
+                    />
+                  )}
+                  {watchesTotal && watchesTotal.positions.length > 0 && (
+                    <WorldTile
+                      tint={WATCHES_TINT}
+                      icon="lock-closed"
+                      label={copy.tracker.vaultCta}
+                      sub={copy.tracker.worldSummary(watchesTotal.positions.length, moneyWhole(watchesTotal.valueCents))}
+                      onPress={onOpenVault}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </View>
         </>
       )}
@@ -345,8 +385,15 @@ function PortfolioHeader({
 
       <View style={styles.controlRow}>
         <FilterChip vm={vm} value="all" label={copy.tracker.filterAll} count={vm.positions.length} />
-        <FilterChip vm={vm} value="cards" label={copy.tracker.filterCards} count={vm.cards.length} />
-        <FilterChip vm={vm} value="watches" label={copy.tracker.filterWatches} count={vm.watches.length} />
+        {vm.positionsByCategory.map((c) => (
+          <FilterChip
+            key={c.categoryId}
+            vm={vm}
+            value={c.categoryId}
+            label={categoryLabel(c.categoryId)}
+            count={c.positions.length}
+          />
+        ))}
       </View>
 
       <View style={styles.sortRow}>
@@ -485,30 +532,30 @@ function HoldingCell({
   position,
   width,
   tier,
+  tint,
   onOpen,
   onSell,
 }: {
   position: Position;
   width: number;
   tier: RarityTier | undefined;
+  tint: string;
   onOpen: () => void;
   onSell: () => void;
 }) {
   const { owned, valueCents, pnlCents, pnlPercent, isListed } = position;
   const item = owned.item;
-  const isWatch = item.category === "watches";
-  const tint = isWatch ? WATCHES_TINT : CARDS_TINT;
+  // Cards gets its own rectangular card-face art; every other category (watches, and anything
+  // added after, e.g. handbags) shares the circular watch-dial treatment as a generic fallback —
+  // same cards-is-special/else-shared rule used throughout this pass (see ShelfScreen/HomeScreen).
+  const isCards = item.category === "cards";
   const artHeight = width * 1.3;
 
   return (
     <View style={[styles.cell, { width }]}>
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={displayName(position)}>
         <View style={[styles.art, { height: artHeight }]}>
-          {isWatch ? (
-            <View style={styles.watchArt}>
-              <WatchDial art={itemArtGradient(item)} size={Math.min(width - 44, artHeight - 52)} />
-            </View>
-          ) : (
+          {isCards ? (
             <CardFace
               gradient={itemArtGradient(item)}
               imageUrl={item.textureUrl}
@@ -516,6 +563,10 @@ function HoldingCell({
               height={artHeight}
               borderColor={`${tint}66`}
             />
+          ) : (
+            <View style={styles.watchArt}>
+              <WatchDial art={itemArtGradient(item)} size={Math.min(width - 44, artHeight - 52)} />
+            </View>
           )}
           {isListed && (
             <View style={styles.listedBadge}>
@@ -534,7 +585,9 @@ function HoldingCell({
         <View style={styles.cellMeta}>
           <View style={[styles.categoryDot, { backgroundColor: tint }]} />
           <Text style={styles.cellMetaText} numberOfLines={1}>
-            {tier?.name?.toUpperCase() ?? (isWatch ? "WATCH" : "CARD")}
+            {/* Falls back to the raw category id (never a hardcoded "WATCH"/"CARD") on the rare
+                chance its rarity tiers haven't loaded yet. */}
+            {tier?.name?.toUpperCase() ?? item.category.toUpperCase()}
           </Text>
         </View>
 
