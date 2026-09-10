@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { CardFace } from "../../components/CardFace";
+import { PositionCard } from "../../components/PositionCard";
 import { ValueDriftChart } from "../../components/ValueDriftChart";
 import { itemArtGradient } from "../../content/cardArt";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
@@ -111,6 +112,13 @@ export function CardDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* Position before market value on purpose: "what did this do for me" is the question a
+            collector opens their own copy with, and the item-level appraisal below is the
+            context for it rather than the other way round. */}
+        <View style={styles.section}>
+          <PositionCard owned={owned} register="cards" />
+        </View>
 
         <View style={styles.section}>
           <View style={styles.valueCard}>

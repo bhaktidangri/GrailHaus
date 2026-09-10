@@ -1,60 +1,103 @@
 import { useMemo } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import Animated from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { OwnedItem } from "@grailhaus/shared";
-import { useSessionViewModel } from "../../viewmodels/useSessionViewModel";
-import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
-import { useTabBarClearance } from "../../navigation/tabBarVisibility";
+import type { RarityTier } from "@grailhaus/shared";
+import {
+  usePortfolioViewModel,
+  type PortfolioFilter,
+  type PortfolioSort,
+  type Position,
+} from "../../viewmodels/usePortfolioViewModel";
+import { useRarityTiers } from "../../viewmodels/useRarityTiers";
+import { useHideTabBarOnScroll, useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { SignInPrompt } from "../../components/SignInPrompt";
 import { GlossyButton } from "../../components/GlossyButton";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
+import { PnlPill } from "../../components/PnlPill";
+import { Sparkline } from "../../components/Sparkline";
+import { StatTile } from "../../components/StatTile";
 import { itemArtGradient } from "../../content/cardArt";
-import { accents, colors, shadow, spacing, typography } from "../../theme/tokens";
+import { money, moneyWhole, signedMoney } from "../../lib/money";
+import { accents, colors, fonts, ink, shadow, spacing, typography } from "../../theme/tokens";
 import { collection as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
-const HOLDINGS_PREVIEW_COUNT = 8;
-
 type Nav = NativeStackNavigationProp<CollectionStackParamList, "Collection">;
-/** Reaches the Explore tab from this screen — Portfolio's own stack has no route for it, so
- * this jumps up to the root tab navigator the same way RevealScreen/ItemForkScreen already do
- * for the same kind of cross-tab hop. */
+
+const CARDS_TINT = "#B14BFF";
+const WATCHES_TINT = "#F2C46B";
+
+/** Sends an empty portfolio off to go buy something — Portfolio's own stack has no route for
+ * that, so this jumps up to the root tab navigator the same way RevealScreen/ItemForkScreen
+ * already do for the same kind of cross-tab hop. Used to land on the Explore tab; that tab is
+ * parked (see RootTabs), so it lands on Home, which carries the featured drop and the Card/
+ * Watch world doors onto the same pack shelf.
+ * // Original Explore target, for whenever that tab comes back:
+ * // (navigation.navigate as (name: string, params?: object) => void)("Tabs", { screen: "Explore" });
+ */
 function rootNavigateExplore(navigation: Nav) {
-  (navigation.navigate as (name: string, params?: object) => void)("Tabs", { screen: "Explore" });
+  (navigation.navigate as (name: string, params?: object) => void)("Tabs", { screen: "Home" });
 }
 
 /**
- * The Portfolio tab's root — a fork, not a tab bar (mockup 13a): two doors, each carrying its
- * own count and value, because cards and watches are read completely differently below this
- * point (a binder vs a vault). Every number here comes straight off `/me/portfolio` — nothing
- * is invented to fill the mockup's "+1.84%" style day-over-day badge, since a portfolio-level
- * change figure isn't something the API tracks.
+ * The Portfolio tab's root — a position tracker, not a menu.
+ *
+ * It used to be two doors and a total: a count of what you held and a button per category, with
+ * the actual pieces one tap further in. That answered "where is my stuff" but never "how am I
+ * doing", which is the question anyone who has spent real balance on packs actually opens this
+ * tab with. So the shape is a broker's: what it's worth now and which way it's moving up top,
+ * the money facts behind that (wallet, invested, sold, realized) as tiles, then every piece you
+ * hold in one filterable, sortable grid — each with its own live value and its P&L against what
+ * it actually cost you.
+ *
+ * Nothing on this screen is invented to fill a layout. Cost basis and every settled figure come
+ * off the ledger via `/me/portfolio/summary`; current values are the same simulated drift the
+ * rest of the app shows, recomputed locally on its own 30s tick so the total is live rather than
+ * as old as the last fetch (see `useDriftClock` for why that beats polling or a push channel).
+ * Where a number genuinely can't be known — a holding whose purchase never completed, so it has
+ * no derivable cost — it renders as "—", never as a zero that would read as break-even.
+ *
+ * The Binder and Vault still exist and are still where a collection is *browsed* (a binder page,
+ * a lit vault plinth); they're reached from the compact pair of world tiles rather than from two
+ * full-width doors, because the grid below is now the faster path to any individual piece.
  */
 export function CollectionScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const session = useSessionViewModel();
-  const vm = useCollectionViewModel();
+  const vm = usePortfolioViewModel();
+  const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
+  // Matches the grid's 20px side padding + the 12px inter-column gap, so a lone cell in the last
+  // row sits at half width instead of stretching (the same fix MarketplaceScreen documents).
+  const { width: windowWidth } = useWindowDimensions();
+  const cellWidth = (windowWidth - 20 * 2 - 12) / 2;
+  // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
+  const cardTiers = useRarityTiers("cards");
+  const watchTiers = useRarityTiers("watches");
 
   const categories = (vm.cards.length > 0 ? 1 : 0) + (vm.watches.length > 0 ? 1 : 0);
 
-  // Highest-value holdings first — a portfolio's whole point is showing what you actually hold,
-  // not just a count and a door to tap through for it. Real ownership order (by current value),
-  // not the arbitrary order /me/portfolio happens to return.
-  const topCards = useMemo(
-    () => [...vm.cards].sort((a, b) => b.item.currentValueCents - a.item.currentValueCents).slice(0, HOLDINGS_PREVIEW_COUNT),
-    [vm.cards]
-  );
-  const topWatches = useMemo(
-    () => [...vm.watches].sort((a, b) => b.item.currentValueCents - a.item.currentValueCents).slice(0, HOLDINGS_PREVIEW_COUNT),
-    [vm.watches]
-  );
+  function openDetail(position: Position) {
+    if (position.owned.item.category === "watches") {
+      navigation.navigate("WatchDetail", { owned: position.owned });
+    } else {
+      navigation.navigate("CardDetail", { owned: position.owned });
+    }
+  }
 
   return (
     <View style={styles.fill}>
@@ -67,12 +110,12 @@ export function CollectionScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.sub}>{copy.itemCount(vm.owned.length, categories)}</Text>
+          <Text style={styles.sub}>{copy.itemCount(vm.positions.length, categories)}</Text>
         </View>
-        {session.balanceCents != null && (
+        {vm.summary && (
           <View style={styles.balancePill}>
             <LinearGradient colors={["#FFE27A", "#E0A016"]} style={styles.coin} />
-            <Text style={styles.balanceText}>{(session.balanceCents / 100).toLocaleString()}</Text>
+            <Text style={styles.balanceText}>{Math.round(vm.live.walletCents / 100).toLocaleString()}</Text>
           </View>
         )}
       </View>
@@ -81,147 +124,460 @@ export function CollectionScreen() {
         <SignInPrompt title={copy.signInTitle} body={copy.signInBody} />
       ) : vm.isLoading ? (
         <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
-      ) : vm.owned.length === 0 ? (
+      ) : vm.positions.length === 0 ? (
         <EmptyCollectionState onExplore={() => rootNavigateExplore(navigation)} />
       ) : (
-        // A plain non-scrolling View here meant the Vault door's bottom (including its CTA
-        // button) could sit underneath the floating tab bar on shorter screens, with no way to
-        // scroll past it — this content is real and often taller than one screen once both
-        // doors are showing.
-        <ScrollView contentContainerStyle={[styles.body, { paddingBottom: tabBarClearance }]} showsVerticalScrollIndicator={false}>
-          <View style={styles.totalCard}>
-            <Text style={styles.totalLabel}>{copy.totalValue}</Text>
-            <Text style={styles.totalValue}>${(vm.totalValueCents / 100).toLocaleString()}</Text>
-            <View style={styles.splitBar}>
-              <View style={{ flex: Math.max(vm.cardsSharePercent, 1), backgroundColor: "#B14BFF" }} />
-              <View style={{ flex: Math.max(vm.watchesSharePercent, 1), backgroundColor: "#F2C46B" }} />
-            </View>
-            <View style={styles.legendRow}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: "#B14BFF" }]} />
-                <Text style={styles.legendText}>{copy.cardsLabel(vm.cardsSharePercent)}</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: "#F2C46B" }]} />
-                <Text style={styles.legendText}>{copy.watchesLabel(vm.watchesSharePercent)}</Text>
-              </View>
-            </View>
-          </View>
-
-          {vm.cards.length > 0 && (
-            <>
-              <Pressable style={styles.door} onPress={() => navigation.navigate("Binder", undefined)}>
-                <LinearGradient
-                  colors={["rgba(177,75,255,0.26)", "rgba(91,31,214,0.14)"]}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={[styles.doorBorder, { borderColor: "rgba(177,75,255,0.55)" }]} />
-                <Text style={styles.doorEyebrow}>{copy.binder.eyebrow}</Text>
-                <Text style={styles.doorTitle}>{copy.binder.title}</Text>
-                <Text style={styles.doorSummary}>
-                  {copy.cardsSummary(vm.cards.length, vm.collections.length, vm.cardsValueCents)}
-                </Text>
-                <View style={styles.doorCta}>
-                  <LinearGradient colors={["#B14BFF", "#5B1FD6"]} style={styles.doorCtaBtn}>
-                    <Text style={styles.doorCtaLabel}>{copy.binder.cta}</Text>
-                  </LinearGradient>
-                </View>
-              </Pressable>
-
-              <HoldingsPreview
-                title={copy.topCards}
-                accentColor="#E0C4FF"
-                category="cards"
-                items={topCards}
-                totalCount={vm.cards.length}
-                onPressItem={(owned) => navigation.navigate("CardDetail", { owned })}
-                onSeeAll={() => navigation.navigate("Binder", undefined)}
-              />
-            </>
+        <Animated.FlatList
+          data={vm.visible}
+          keyExtractor={(p: Position) => p.owned.ownedItemId}
+          numColumns={2}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.grid, { paddingBottom: tabBarClearance }]}
+          columnWrapperStyle={styles.gridRow}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={vm.isRefreshing} onRefresh={vm.refresh} tintColor={colors.textSecondary} />
+          }
+          ListHeaderComponent={
+            <PortfolioHeader
+              vm={vm}
+              width={windowWidth}
+              onOpenBinder={() => navigation.navigate("Binder", undefined)}
+              onOpenVault={() => navigation.navigate("Vault")}
+            />
+          }
+          ListEmptyComponent={<Text style={styles.emptyFiltered}>{copy.tracker.emptyFiltered}</Text>}
+          renderItem={({ item: position }: { item: Position }) => (
+            <HoldingCell
+              position={position}
+              width={cellWidth}
+              tier={
+                (position.owned.item.category === "cards" ? cardTiers : watchTiers)[
+                  position.owned.item.rarityTierLevel
+                ]
+              }
+              onOpen={() => openDetail(position)}
+              onSell={() => navigation.navigate("SellItem", { owned: position.owned })}
+            />
           )}
-
-          {vm.watches.length > 0 && (
-            <>
-              <Pressable style={styles.door} onPress={() => navigation.navigate("Vault")}>
-                <LinearGradient
-                  colors={["rgba(242,196,107,0.2)", "rgba(122,90,34,0.1)"]}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={[styles.doorBorder, { borderColor: "rgba(242,196,107,0.5)" }]} />
-                <Text style={[styles.doorEyebrow, { color: "#F2C46B" }]}>{copy.vault.eyebrow}</Text>
-                <Text style={styles.doorTitle}>{copy.vault.title}</Text>
-                <Text style={styles.doorSummary}>
-                  {copy.watchesSummary(vm.watches.length, vm.brands.length, vm.watchesValueCents)}
-                </Text>
-                <View style={styles.doorCta}>
-                  <LinearGradient colors={["#FFD75E", "#E08A16"]} style={styles.doorCtaBtn}>
-                    <Text style={[styles.doorCtaLabel, { color: "#2A1706" }]}>{copy.vault.cta}</Text>
-                  </LinearGradient>
-                </View>
-              </Pressable>
-
-              <HoldingsPreview
-                title={copy.topWatches}
-                accentColor="#F2C46B"
-                category="watches"
-                items={topWatches}
-                totalCount={vm.watches.length}
-                onPressItem={(owned) => navigation.navigate("WatchDetail", { owned })}
-                onSeeAll={() => navigation.navigate("Vault")}
-              />
-            </>
-          )}
-        </ScrollView>
+        />
       )}
     </View>
   );
 }
 
-/** The doors alone (a count + a button) never actually showed a single real card or watch —
- * this is what makes the hub read as a portfolio rather than a menu: the highest-value pieces
- * you actually hold, with real art, right here, one tap from their own detail page. */
-function HoldingsPreview({
-  title,
-  accentColor,
-  category,
-  items,
-  totalCount,
-  onPressItem,
-  onSeeAll,
+/** Everything above the grid. Split out so the whole block is one `ListHeaderComponent` element
+ * rather than a wrapper `ScrollView` around a 700-cell list — a nested scroll view would render
+ * every holding at once and lose FlatList's windowing entirely. */
+function PortfolioHeader({
+  vm,
+  width,
+  onOpenBinder,
+  onOpenVault,
 }: {
-  title: string;
-  accentColor: string;
-  category: "cards" | "watches";
-  items: OwnedItem[];
-  totalCount: number;
-  onPressItem: (owned: OwnedItem) => void;
-  onSeeAll: () => void;
+  vm: ReturnType<typeof usePortfolioViewModel>;
+  width: number;
+  onOpenBinder: () => void;
+  onOpenVault: () => void;
+}) {
+  const { live, summary, sparkline } = vm;
+  // Hero card's inner width: screen padding (20 × 2) + card padding (18 × 2).
+  const chartWidth = width - 20 * 2 - 18 * 2;
+
+  // The chart's own leading edge is the tick-fresh total rather than the last historical sample —
+  // the history is recomputed every few minutes, but the live value moves every 30 seconds, and a
+  // line whose tip lags the big number printed above it looks broken.
+  const series = useMemo(
+    () => (sparkline.length > 0 ? [...sparkline.slice(0, -1), live.holdingsValueCents] : []),
+    [sparkline, live.holdingsValueCents]
+  );
+  const up = live.unrealizedPnlCents >= 0;
+  const trendColor = up ? colors.success : colors.danger;
+
+  return (
+    <View style={styles.headerBlock}>
+      <View style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <Text style={styles.heroEyebrow}>{copy.tracker.portfolioValue}</Text>
+          <View style={styles.liveTag}>
+            <View style={[styles.liveDot, { backgroundColor: trendColor }]} />
+            <Text style={styles.liveText}>{copy.tracker.liveNote}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+          {money(live.netWorthCents)}
+        </Text>
+        <Text style={styles.heroSub}>
+          {copy.tracker.heroSub(moneyWhole(live.holdingsValueCents), moneyWhole(live.walletCents))}
+        </Text>
+
+        <View style={styles.heroPnlRow}>
+          <PnlPill cents={live.unrealizedPnlCents} percent={live.unrealizedPnlPercent} size="lg" />
+          <Text style={styles.heroPnlNote}>{copy.tracker.unrealizedLabel}</Text>
+        </View>
+
+        <View style={styles.chartWrap}>
+          <Sparkline points={series} color={trendColor} width={chartWidth} height={72} />
+        </View>
+        <View style={styles.axisRow}>
+          <Text style={styles.axisLabel}>{copy.tracker.window}</Text>
+          <Text style={styles.axisLabel}>{copy.tracker.allTimeLabel(signedMoney(live.realizedPnlCents))}</Text>
+        </View>
+      </View>
+
+      {summary && (
+        <>
+          <View style={styles.tileRow}>
+            <StatTile
+              icon="wallet"
+              iconColor={colors.goldTop}
+              label={copy.tracker.walletStat}
+              value={moneyWhole(live.walletCents)}
+              sub={copy.tracker.walletSub}
+            />
+            <StatTile
+              icon="cart"
+              iconColor={CARDS_TINT}
+              label={copy.tracker.investedStat}
+              value={moneyWhole(summary.totalSpendCents)}
+              sub={copy.tracker.investedSub(summary.purchases.packCount, summary.marketplaceBuys.count)}
+            />
+          </View>
+          <View style={styles.tileRow}>
+            <StatTile
+              icon="pricetag"
+              iconColor={WATCHES_TINT}
+              label={copy.tracker.salesStat}
+              value={moneyWhole(summary.sales.netCents)}
+              sub={copy.tracker.salesSub(summary.sales.count, moneyWhole(summary.sales.feeCents))}
+            />
+            <StatTile
+              icon="trending-up"
+              iconColor={summary.sales.realizedPnlCents >= 0 ? colors.success : colors.danger}
+              label={copy.tracker.realizedStat}
+              value={signedMoney(summary.sales.realizedPnlCents)}
+              valueColor={
+                summary.sales.realizedPnlCents === 0
+                  ? ink.text
+                  : summary.sales.realizedPnlCents > 0
+                    ? colors.success
+                    : colors.danger
+              }
+              sub={copy.tracker.realizedSub}
+            />
+          </View>
+
+          {vm.best && (
+            <View style={styles.moverRow}>
+              <Text style={styles.moverLabel}>{copy.tracker.topMover}</Text>
+              <Text style={styles.moverName} numberOfLines={1}>
+                {displayName(vm.best)}
+              </Text>
+              <PnlPill cents={vm.best.pnlCents} percent={vm.best.pnlPercent} size="sm" />
+            </View>
+          )}
+
+          <View style={styles.allocCard}>
+            <View style={styles.allocHead}>
+              <Text style={styles.sectionLabel}>{copy.tracker.allocation}</Text>
+              <Text style={styles.allocCost}>
+                {copy.tracker.costLine(moneyWhole(live.costBasisCents))}
+              </Text>
+            </View>
+            <View style={styles.splitBar}>
+              <View style={{ flex: Math.max(vm.categoryTotals.cardsSharePercent, 1), backgroundColor: CARDS_TINT }} />
+              <View
+                style={{ flex: Math.max(vm.categoryTotals.watchesSharePercent, 1), backgroundColor: WATCHES_TINT }}
+              />
+            </View>
+            <View style={styles.legendRow}>
+              <AllocationLeg
+                tint={CARDS_TINT}
+                label={copy.tracker.filterCards}
+                sharePercent={vm.categoryTotals.cardsSharePercent}
+                valueCents={vm.categoryTotals.cardsValueCents}
+                pnlCents={vm.categoryTotals.cardsPnlCents}
+              />
+              <AllocationLeg
+                tint={WATCHES_TINT}
+                label={copy.tracker.filterWatches}
+                sharePercent={vm.categoryTotals.watchesSharePercent}
+                valueCents={vm.categoryTotals.watchesValueCents}
+                pnlCents={vm.categoryTotals.watchesPnlCents}
+              />
+            </View>
+            {summary.holdings.pricedCount < summary.holdings.count && (
+              <Text style={styles.allocNote}>
+                {copy.tracker.costSub(summary.holdings.pricedCount, summary.holdings.count)}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.worldRow}>
+            {vm.cards.length > 0 && (
+              <WorldTile
+                tint={CARDS_TINT}
+                icon="albums"
+                label={copy.tracker.binderCta}
+                sub={copy.tracker.worldSummary(vm.cards.length, moneyWhole(vm.categoryTotals.cardsValueCents))}
+                onPress={onOpenBinder}
+              />
+            )}
+            {vm.watches.length > 0 && (
+              <WorldTile
+                tint={WATCHES_TINT}
+                icon="lock-closed"
+                label={copy.tracker.vaultCta}
+                sub={copy.tracker.worldSummary(vm.watches.length, moneyWhole(vm.categoryTotals.watchesValueCents))}
+                onPress={onOpenVault}
+              />
+            )}
+          </View>
+        </>
+      )}
+
+      <View style={styles.holdingsHead}>
+        <Text style={styles.holdingsTitle}>{copy.tracker.holdingsTitle}</Text>
+        <Text style={styles.holdingsCount}>{vm.visible.length}</Text>
+      </View>
+
+      <View style={styles.controlRow}>
+        <FilterChip vm={vm} value="all" label={copy.tracker.filterAll} count={vm.positions.length} />
+        <FilterChip vm={vm} value="cards" label={copy.tracker.filterCards} count={vm.cards.length} />
+        <FilterChip vm={vm} value="watches" label={copy.tracker.filterWatches} count={vm.watches.length} />
+      </View>
+
+      <View style={styles.sortRow}>
+        <Text style={styles.sortLabel}>{copy.tracker.sortLabel}</Text>
+        <SortChip vm={vm} value="value" label={copy.tracker.sortValue} icon="cash-outline" />
+        <SortChip vm={vm} value="pnl" label={copy.tracker.sortPnl} icon="trending-up-outline" />
+        <SortChip vm={vm} value="recent" label={copy.tracker.sortRecent} icon="time-outline" />
+      </View>
+    </View>
+  );
+}
+
+function AllocationLeg({
+  tint,
+  label,
+  sharePercent,
+  valueCents,
+  pnlCents,
+}: {
+  tint: string;
+  label: string;
+  sharePercent: number;
+  valueCents: number;
+  pnlCents: number;
 }) {
   return (
-    <View style={styles.previewSection}>
-      <View style={styles.previewHeader}>
-        <Text style={styles.previewTitle}>{title}</Text>
-        {totalCount > items.length && (
-          <Pressable onPress={onSeeAll} hitSlop={8}>
-            <Text style={[styles.previewSeeAll, { color: accentColor }]}>{copy.seeAllCount(totalCount)}</Text>
-          </Pressable>
-        )}
+    <View style={styles.legendItem}>
+      <View style={styles.legendTop}>
+        <View style={[styles.legendDot, { backgroundColor: tint }]} />
+        <Text style={styles.legendText}>
+          {label} {sharePercent}%
+        </Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewRow}>
-        {items.map((owned) => (
-          <Pressable key={owned.ownedItemId} style={styles.previewCell} onPress={() => onPressItem(owned)}>
-            {category === "watches" ? (
-              <WatchDial art={itemArtGradient(owned.item)} size={84} />
-            ) : (
-              <CardFace gradient={itemArtGradient(owned.item)} imageUrl={owned.item.textureUrl} width={84} height={117} />
-            )}
-            <Text style={styles.previewName} numberOfLines={1}>
-              {(owned.item.cardTitle ?? owned.item.watchName ?? owned.item.name).toUpperCase()}
-            </Text>
-            <Text style={styles.previewValue}>${(owned.item.currentValueCents / 100).toLocaleString()}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <Text style={styles.legendValue}>{money(valueCents)}</Text>
+      <PnlPill cents={pnlCents} size="sm" showPercent={false} />
+    </View>
+  );
+}
+
+function WorldTile({
+  tint,
+  icon,
+  label,
+  sub,
+  onPress,
+}: {
+  tint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={[styles.worldTile, { borderColor: `${tint}55` }]} onPress={onPress}>
+      <View style={[styles.worldIcon, { backgroundColor: `${tint}22` }]}>
+        <Ionicons name={icon} size={15} color={tint} />
+      </View>
+      <View style={styles.worldInfo}>
+        <Text style={styles.worldLabel}>{label}</Text>
+        <Text style={styles.worldSub} numberOfLines={1}>
+          {sub}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.4)" />
+    </Pressable>
+  );
+}
+
+function FilterChip({
+  vm,
+  value,
+  label,
+  count,
+}: {
+  vm: ReturnType<typeof usePortfolioViewModel>;
+  value: PortfolioFilter;
+  label: string;
+  count: number;
+}) {
+  const active = vm.filter === value;
+  return (
+    <Pressable
+      style={[styles.chip, active && styles.chipActive]}
+      onPress={() => vm.setFilter(value)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {label} {count}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SortChip({
+  vm,
+  value,
+  label,
+  icon,
+}: {
+  vm: ReturnType<typeof usePortfolioViewModel>;
+  value: PortfolioSort;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}) {
+  const active = vm.sort === value;
+  return (
+    <Pressable
+      style={[styles.sortChip, active && styles.sortChipActive]}
+      onPress={() => vm.setSort(value)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Ionicons name={icon} size={12} color={active ? "#fff" : "rgba(255,255,255,0.5)"} />
+      <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** Cards carry a card title, watches a model name — both fall back to the raw catalog name. */
+function displayName(position: Position): string {
+  const item = position.owned.item;
+  return item.cardTitle ?? item.watchName ?? item.name;
+}
+
+/**
+ * One holding. Everything a decision needs without opening it: what it is, how rare, what it's
+ * worth right now, what it did against what you paid, and the two things you can do with it.
+ *
+ * The sell action is a real button rather than a hidden long-press — listing is the whole point of
+ * holding a tradeable asset, and burying it behind a gesture makes the marketplace feel like a
+ * separate app. When a copy is already listed the button reports that instead of offering to list
+ * it twice (which the DB's partial unique index would reject anyway).
+ */
+function HoldingCell({
+  position,
+  width,
+  tier,
+  onOpen,
+  onSell,
+}: {
+  position: Position;
+  width: number;
+  tier: RarityTier | undefined;
+  onOpen: () => void;
+  onSell: () => void;
+}) {
+  const { owned, valueCents, pnlCents, pnlPercent, isListed } = position;
+  const item = owned.item;
+  const isWatch = item.category === "watches";
+  const tint = isWatch ? WATCHES_TINT : CARDS_TINT;
+  const artHeight = width * 1.3;
+
+  return (
+    <View style={[styles.cell, { width }]}>
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={displayName(position)}>
+        <View style={[styles.art, { height: artHeight }]}>
+          {isWatch ? (
+            <View style={styles.watchArt}>
+              <WatchDial art={itemArtGradient(item)} size={Math.min(width - 44, artHeight - 52)} />
+            </View>
+          ) : (
+            <CardFace
+              gradient={itemArtGradient(item)}
+              imageUrl={item.textureUrl}
+              width={width}
+              height={artHeight}
+              borderColor={`${tint}66`}
+            />
+          )}
+          {isListed && (
+            <View style={styles.listedBadge}>
+              <Ionicons name="pricetag" size={8} color="#2A1706" />
+              <Text style={styles.listedBadgeText}>
+                {copy.tracker.listed(moneyWhole(owned.activeListing!.priceCents))}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.cellName} numberOfLines={1}>
+          {displayName(position).toUpperCase()}
+        </Text>
+
+        <View style={styles.cellMeta}>
+          <View style={[styles.categoryDot, { backgroundColor: tint }]} />
+          <Text style={styles.cellMetaText} numberOfLines={1}>
+            {tier?.name?.toUpperCase() ?? (isWatch ? "WATCH" : "CARD")}
+          </Text>
+        </View>
+
+        <Text style={styles.cellValue}>{money(valueCents)}</Text>
+        <View style={styles.cellPnl}>
+          <PnlPill cents={pnlCents} percent={pnlPercent} size="sm" />
+        </View>
+      </Pressable>
+
+      <View style={styles.cellActions}>
+        <Pressable
+          style={styles.cellAction}
+          onPress={onOpen}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={`${copy.tracker.actionDetails}: ${displayName(position)}`}
+        >
+          <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.72)" />
+          <Text style={styles.cellActionText}>{copy.tracker.actionDetails}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.cellAction, styles.cellActionSell, isListed && styles.cellActionDisabled]}
+          onPress={onSell}
+          disabled={isListed}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isListed }}
+          accessibilityLabel={
+            isListed
+              ? copy.tracker.listed(moneyWhole(owned.activeListing!.priceCents))
+              : `${copy.tracker.actionSell}: ${displayName(position)}`
+          }
+        >
+          <Ionicons
+            name={isListed ? "checkmark-circle-outline" : "pricetag-outline"}
+            size={13}
+            color={isListed ? "rgba(255,255,255,0.45)" : "#2A1706"}
+          />
+          <Text style={[styles.cellActionText, isListed ? styles.cellActionTextMuted : styles.cellActionTextSell]}>
+            {isListed ? copy.tracker.actionListed : copy.tracker.actionSell}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -271,6 +627,7 @@ const styles = StyleSheet.create({
   coin: { width: 14, height: 14, borderRadius: 7 },
   balanceText: typography.countMain,
   loading: { marginTop: 60 },
+
   emptyWrap: { alignItems: "center", paddingHorizontal: 32, marginTop: 56, gap: 10 },
   emptyBadge: {
     width: 72,
@@ -283,40 +640,174 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.title, textAlign: "center" },
   empty: { ...typography.sectionSub, textAlign: "center" },
   emptyButton: { width: "100%", marginTop: 14 },
-  body: { padding: 20, gap: 14 },
-  totalCard: {
-    padding: 18,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  totalLabel: typography.eyebrow,
-  totalValue: { ...typography.heroWordmark, fontSize: 38, marginTop: 6 },
-  splitBar: { flexDirection: "row", height: 8, borderRadius: 5, overflow: "hidden", marginTop: 16, gap: 3 },
-  legendRow: { flexDirection: "row", gap: 16, marginTop: 11 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  legendDot: { width: 8, height: 8, borderRadius: 3 },
-  legendText: { ...typography.metaLine, color: "rgba(255,255,255,0.72)" },
-  door: {
-    borderRadius: 22,
-    padding: 18,
-    overflow: "hidden",
-  },
-  doorBorder: { ...StyleSheet.absoluteFill, borderRadius: 22, borderWidth: 2 },
-  doorEyebrow: { ...typography.eyebrow, letterSpacing: 3.4, color: "#E0C4FF" },
-  doorTitle: { ...typography.pageHeading, fontSize: 26, marginTop: 7 },
-  doorSummary: { ...typography.sectionSub, marginTop: 5 },
-  doorCta: { marginTop: 14, alignSelf: "flex-start" },
-  doorCtaBtn: { height: 38, paddingHorizontal: 16, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  doorCtaLabel: { ...typography.chipLabel, fontSize: 12.5, color: "#fff" },
+  // The grid's own "this filter matches nothing" line — sits inside the list, below the header
+  // block, so it needs its own spacing rather than the empty-collection body's.
+  emptyFiltered: { ...typography.sectionSub, textAlign: "center", width: "100%", marginTop: 34 },
 
-  previewSection: { marginTop: -2, gap: 10 },
-  previewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  previewTitle: { fontFamily: typography.title.fontFamily, fontSize: 15, color: colors.textPrimary },
-  previewSeeAll: { ...typography.linkMuted, fontSize: 12.5 },
-  previewRow: { gap: 12, paddingRight: 4 },
-  previewCell: { width: 84 },
-  previewName: { ...typography.footNote, color: colors.textPrimary, marginTop: 7 },
-  previewValue: { ...typography.footNote, color: colors.textMuted, marginTop: 1 },
+  grid: { padding: 20, paddingTop: 14 },
+  gridRow: { gap: 12, marginBottom: 16 },
+  headerBlock: { gap: 12, marginBottom: 4 },
+
+  heroCard: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroEyebrow: typography.eyebrow,
+  liveTag: { flexDirection: "row", alignItems: "center", gap: 5 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  liveText: { fontFamily: fonts.medium, fontSize: 9.5, color: "rgba(255,255,255,0.45)" },
+  // Tabular figures keep the hero from reflowing every time a digit changes on the 30s tick.
+  heroValue: {
+    ...typography.heroWordmark,
+    fontSize: 40,
+    marginTop: 8,
+    fontVariant: ["tabular-nums"],
+  },
+  heroSub: { ...typography.footNote, marginTop: 3 },
+  heroPnlRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12 },
+  heroPnlNote: { fontFamily: fonts.medium, fontSize: 11, color: "rgba(255,255,255,0.45)" },
+  chartWrap: { marginTop: 14 },
+  axisRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
+  axisLabel: { fontFamily: fonts.semibold, fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.42)" },
+
+  tileRow: { flexDirection: "row", gap: 12 },
+
+  moverRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+  },
+  moverLabel: { fontFamily: fonts.bold, fontSize: 8.5, letterSpacing: 1.3, color: "rgba(255,255,255,0.42)" },
+  moverName: { flex: 1, fontFamily: fonts.semibold, fontSize: 12, color: ink.text },
+
+  allocCard: {
+    padding: 15,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.11)",
+  },
+  allocHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  sectionLabel: typography.eyebrow,
+  allocCost: { fontFamily: fonts.semibold, fontSize: 11, color: "rgba(255,255,255,0.5)" },
+  splitBar: { flexDirection: "row", height: 8, borderRadius: 5, overflow: "hidden", marginTop: 13, gap: 3 },
+  legendRow: { flexDirection: "row", gap: 18, marginTop: 12 },
+  legendItem: { gap: 4 },
+  legendTop: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 3 },
+  legendText: { ...typography.metaLine, fontSize: 11.5, color: "rgba(255,255,255,0.72)" },
+  legendValue: { fontFamily: fonts.extrabold, fontSize: 15, color: ink.text, fontVariant: ["tabular-nums"] },
+  allocNote: { fontFamily: fonts.medium, fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 10 },
+
+  worldRow: { flexDirection: "row", gap: 12 },
+  worldTile: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1.5,
+  },
+  worldIcon: { width: 28, height: 28, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  worldInfo: { flex: 1, minWidth: 0 },
+  worldLabel: { fontFamily: fonts.extrabold, fontSize: 13, color: ink.text },
+  worldSub: { fontFamily: fonts.medium, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 1 },
+
+  holdingsHead: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 6 },
+  holdingsTitle: { fontFamily: fonts.extrabold, fontSize: 17, color: ink.text },
+  holdingsCount: { fontFamily: fonts.semibold, fontSize: 12.5, color: "rgba(255,255,255,0.45)" },
+
+  controlRow: { flexDirection: "row", gap: 7 },
+  chip: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.14)",
+    justifyContent: "center",
+  },
+  chipActive: { backgroundColor: colors.violetTop, borderColor: colors.violetTop },
+  chipText: { ...typography.metaLine, fontSize: 12, color: "rgba(255,255,255,0.6)" },
+  chipTextActive: { color: "#fff" },
+
+  sortRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  sortLabel: { fontFamily: fonts.bold, fontSize: 8.5, letterSpacing: 1.4, color: "rgba(255,255,255,0.38)" },
+  sortChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  sortChipActive: { backgroundColor: "rgba(177,75,255,0.26)", borderColor: "rgba(177,75,255,0.6)" },
+  sortChipText: { fontFamily: fonts.semibold, fontSize: 11, color: "rgba(255,255,255,0.5)" },
+  sortChipTextActive: { color: "#fff" },
+
+  cell: { gap: 5 },
+  art: { position: "relative", justifyContent: "center" },
+  watchArt: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1.5,
+    borderColor: "rgba(242,196,107,0.3)",
+  },
+  listedBadge: {
+    position: "absolute",
+    left: 7,
+    top: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+    backgroundColor: WATCHES_TINT,
+  },
+  listedBadgeText: { fontFamily: fonts.extrabold, fontSize: 7.5, letterSpacing: 0.6, color: "#2A1706" },
+  cellName: { fontFamily: fonts.extrabold, fontSize: 10.5, color: ink.text, marginTop: 3 },
+  cellMeta: { flexDirection: "row", alignItems: "center", gap: 5 },
+  categoryDot: { width: 5, height: 5, borderRadius: 3 },
+  cellMetaText: { flex: 1, fontFamily: fonts.semibold, fontSize: 8.5, letterSpacing: 0.9, color: "rgba(255,255,255,0.5)" },
+  cellValue: { fontFamily: fonts.black, fontSize: 15, color: ink.text, fontVariant: ["tabular-nums"], marginTop: 1 },
+  cellPnl: { marginTop: 1 },
+  cellActions: { flexDirection: "row", gap: 6, marginTop: 3 },
+  cellAction: {
+    flex: 1,
+    height: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  cellActionSell: { backgroundColor: colors.goldTop, borderColor: "rgba(255,255,255,0.3)" },
+  cellActionDisabled: { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.1)" },
+  cellActionText: { fontFamily: fonts.extrabold, fontSize: 10, color: "rgba(255,255,255,0.78)" },
+  cellActionTextSell: { color: "#2A1706" },
+  cellActionTextMuted: { color: "rgba(255,255,255,0.45)" },
 });

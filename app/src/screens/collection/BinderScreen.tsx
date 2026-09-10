@@ -5,12 +5,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { computePriceDrift } from "@grailhaus/shared";
 import type { OwnedItem, RarityTierLevel } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { CardFace } from "../../components/CardFace";
+import { PnlPill } from "../../components/PnlPill";
 import { itemArtGradient } from "../../content/cardArt";
+import { useDriftClock } from "../../lib/driftClock";
+import { money } from "../../lib/money";
 import { colors, ink, typography } from "../../theme/tokens";
 import { binder as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
@@ -40,6 +44,8 @@ export function BinderScreen() {
   const [facet, setFacet] = useState<Facet>("collection");
   const [filter, setFilter] = useState<string | null>(route.params?.collectionFilter ?? null);
   const tabBarClearance = useTabBarClearance();
+  // One clock for the whole page, so every cell's value steps on the same 30s boundary.
+  const now = useDriftClock();
 
   const rarityGroups = useMemo(() => {
     const levels: RarityTierLevel[] = [1, 2, 3];
@@ -118,16 +124,57 @@ export function BinderScreen() {
         columnWrapperStyle={styles.gridRow}
         ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
         renderItem={({ item: owned }: { item: OwnedItem }) => (
-          <Pressable style={{ width: cellWidth }} onPress={() => navigation.navigate("CardDetail", { owned })}>
-            <CardFace gradient={itemArtGradient(owned.item)} imageUrl={owned.item.textureUrl} width={cellWidth} height={cellWidth * 1.36} />
-            <Text style={styles.cellName} numberOfLines={1}>
-              {(owned.item.cardTitle ?? owned.item.name).toUpperCase()}
-            </Text>
-            <Text style={styles.cellValue}>${(owned.item.currentValueCents / 100).toLocaleString()}</Text>
-          </Pressable>
+          <BinderCell
+            owned={owned}
+            width={cellWidth}
+            now={now}
+            onPress={() => navigation.navigate("CardDetail", { owned })}
+          />
         )}
       />
     </View>
+  );
+}
+
+/** A binder page is a browsing surface, not a tracker — so the cell stays art-first and adds only
+ * the two figures a collector would otherwise have to open the card to see: what it's worth on
+ * this tick, and what that is against what they paid. Same live value and same P&L definition as
+ * the Portfolio grid (see usePortfolioViewModel), so the two screens can never disagree. */
+function BinderCell({
+  owned,
+  width,
+  now,
+  onPress,
+}: {
+  owned: OwnedItem;
+  width: number;
+  now: Date;
+  onPress: () => void;
+}) {
+  const { currentValueCents } = computePriceDrift(owned.item, now);
+  const basis = owned.costBasisCents;
+
+  return (
+    <Pressable style={{ width }} onPress={onPress}>
+      <CardFace
+        gradient={itemArtGradient(owned.item)}
+        imageUrl={owned.item.textureUrl}
+        width={width}
+        height={width * 1.36}
+      />
+      <Text style={styles.cellName} numberOfLines={1}>
+        {(owned.item.cardTitle ?? owned.item.name).toUpperCase()}
+      </Text>
+      <Text style={styles.cellValue}>{money(currentValueCents)}</Text>
+      <View style={styles.cellPnl}>
+        <PnlPill
+          cents={basis == null ? null : currentValueCents - basis}
+          percent={basis == null || basis === 0 ? null : ((currentValueCents - basis) / basis) * 100}
+          size="sm"
+          showPercent={false}
+        />
+      </View>
+    </Pressable>
   );
 }
 
@@ -182,6 +229,7 @@ const styles = StyleSheet.create({
   grid: { padding: 20, paddingTop: 8, gap: 14 },
   gridRow: { gap: 9 },
   cellName: { ...typography.footNote, fontWeight: "800" as const, color: "#fff", marginTop: 6, fontSize: 9 },
-  cellValue: { ...typography.footNote, color: colors.goldTop, marginTop: 1, fontSize: 9 },
+  cellValue: { ...typography.footNote, color: colors.goldTop, marginTop: 1, fontSize: 10.5, fontVariant: ["tabular-nums"] },
+  cellPnl: { marginTop: 3 },
   empty: { ...typography.sectionSub, textAlign: "center", marginTop: 60, width: "100%" },
 });

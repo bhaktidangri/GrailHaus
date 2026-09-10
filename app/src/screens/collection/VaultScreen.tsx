@@ -4,12 +4,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { computePriceDrift } from "@grailhaus/shared";
 import type { OwnedItem } from "@grailhaus/shared";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { useRarityTiers } from "../../viewmodels/useRarityTiers";
 import { useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { WatchDial } from "../../components/WatchDial";
+import { PnlPill } from "../../components/PnlPill";
 import { itemArtGradient } from "../../content/cardArt";
+import { useDriftClock } from "../../lib/driftClock";
+import { money } from "../../lib/money";
 import { ink, typography } from "../../theme/tokens";
 import { vault as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
@@ -26,6 +30,8 @@ export function VaultScreen() {
   // Admin-configurable (rarity_tiers table), not a hardcoded name map — see useRarityTiers.ts.
   const rarityTiers = useRarityTiers("watches");
   const tabBarClearance = useTabBarClearance();
+  // One clock for the whole list, so every row's value steps on the same 30s boundary.
+  const now = useDriftClock();
 
   return (
     <View style={styles.fill}>
@@ -55,19 +61,31 @@ export function VaultScreen() {
         keyExtractor={(o: OwnedItem) => o.ownedItemId}
         contentContainerStyle={[styles.list, { paddingBottom: tabBarClearance }]}
         ListEmptyComponent={<Text style={styles.empty}>{copy.empty}</Text>}
-        renderItem={({ item: owned }: { item: OwnedItem }) => (
-          <Pressable style={styles.row} onPress={() => navigation.navigate("WatchDetail", { owned })}>
-            <WatchDial art={itemArtGradient(owned.item)} size={70} />
-            <View style={styles.rowInfo}>
-              <Text style={styles.brand}>{(owned.item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
-              <Text style={styles.name}>{owned.item.watchName ?? owned.item.name}</Text>
-              <Text style={styles.ref}>{owned.item.modelName ?? rarityTiers[owned.item.rarityTierLevel]?.name ?? ""}</Text>
-            </View>
-            <View style={styles.rowValue}>
-              <Text style={styles.priceText}>${(owned.item.currentValueCents / 100).toLocaleString()}</Text>
-            </View>
-          </Pressable>
-        )}
+        renderItem={({ item: owned }: { item: OwnedItem }) => {
+          // Same live value and P&L definition as the Portfolio grid — the vault is the quieter
+          // way to browse the same positions, not a different set of numbers.
+          const { currentValueCents } = computePriceDrift(owned.item, now);
+          const basis = owned.costBasisCents;
+          return (
+            <Pressable style={styles.row} onPress={() => navigation.navigate("WatchDetail", { owned })}>
+              <WatchDial art={itemArtGradient(owned.item)} size={70} />
+              <View style={styles.rowInfo}>
+                <Text style={styles.brand}>{(owned.item.brand ?? "INDEPENDENT").toUpperCase()}</Text>
+                <Text style={styles.name}>{owned.item.watchName ?? owned.item.name}</Text>
+                <Text style={styles.ref}>{owned.item.modelName ?? rarityTiers[owned.item.rarityTierLevel]?.name ?? ""}</Text>
+              </View>
+              <View style={styles.rowValue}>
+                <Text style={styles.priceText}>{money(currentValueCents)}</Text>
+                <PnlPill
+                  cents={basis == null ? null : currentValueCents - basis}
+                  percent={basis == null || basis === 0 ? null : ((currentValueCents - basis) / basis) * 100}
+                  size="sm"
+                  showPercent={false}
+                />
+              </View>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -114,6 +132,6 @@ const styles = StyleSheet.create({
   brand: { fontFamily: "Outfit_600SemiBold", fontSize: 10, letterSpacing: 2.4, color: "rgba(242,196,107,0.75)" },
   name: { fontFamily: "Outfit_400Regular", fontSize: 21, color: ink.textOnWatches, marginTop: 5 },
   ref: { fontFamily: "Outfit_500Medium", fontSize: 11.5, color: "rgba(246,243,236,0.62)", marginTop: 4 },
-  rowValue: { alignItems: "flex-end" },
-  priceText: { fontFamily: "Outfit_600SemiBold", fontSize: 17, color: "#fff" },
+  rowValue: { alignItems: "flex-end", gap: 5 },
+  priceText: { fontFamily: "Outfit_600SemiBold", fontSize: 17, color: "#fff", fontVariant: ["tabular-nums"] },
 });

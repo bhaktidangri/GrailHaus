@@ -69,14 +69,110 @@ export interface ItemDetail extends PackItem {
   maxValueCents: MoneyCents;
 }
 
+/** How the *current* owner came to hold a specific copy: they tore it out of a pack, or they
+ * bought it off another collector on the marketplace. Not a property of the item — the same
+ * copy can change hands and change source. */
+export type AcquisitionSource = "pack" | "marketplace";
+
 /** One row in a user's portfolio — an owned item plus when and from which purchase/pack it
- * was acquired. */
+ * was acquired, and what it cost the person holding it now.
+ *
+ * `costBasisCents` is what makes per-item P&L real rather than guessed, and it is derived, never
+ * stored: a pack pull costs its share of the pack's price (that purchase's `total_price_cents`
+ * split across every copy it produced, to the cent), a marketplace acquisition costs exactly what
+ * the buyer paid. It is null only when neither is derivable (a legacy row whose purchase never
+ * completed), and a null basis is excluded from P&L everywhere rather than being treated as zero
+ * — "we don't know" and "it was free" are very different claims to put in front of a collector.
+ */
 export interface OwnedItem {
   ownedItemId: string;
   item: ItemDetail;
   packId: string;
   purchaseId: string | null;
+  /** When this copy first came into existence (the pack pull), regardless of who holds it now. */
   acquiredAt: string;
+  /** When the *current* owner took possession — the same as `acquiredAt` for a pack pull, the
+   * sale timestamp for a marketplace buy. This is the one to sort "recent" by, and the one
+   * per-item P&L is measured from. */
+  heldSinceAt: string;
+  costBasisCents: MoneyCents | null;
+  acquiredVia: AcquisitionSource;
+  /** This copy's own live listing, if the owner currently has it up for sale — lets a portfolio
+   * view show "listed at $X" instead of offering to list something twice (the DB's partial
+   * unique index would reject that anyway). */
+  activeListing: { id: string; priceCents: MoneyCents } | null;
+}
+
+/** One category's slice of a portfolio. `sharePercent` is share of current *value*, not of
+ * item count — two cards and one watch is not a 67/33 portfolio. */
+export interface PortfolioCategoryBreakdown {
+  category: Category;
+  count: number;
+  valueCents: MoneyCents;
+  costBasisCents: MoneyCents;
+  unrealizedPnlCents: MoneyCents;
+  sharePercent: number;
+}
+
+/**
+ * Every money fact about one collector's position, computed server-side from the ledger tables
+ * (`purchases`, `listings`, `owned_items`) rather than assembled by the client out of whatever
+ * it happens to have paged in — a portfolio that says "$4,210 spent" must mean it across all 715
+ * items a user owns, not just the first 200 the grid fetched.
+ *
+ * Realized vs unrealized is kept strictly separate, the way a brokerage does it: unrealized is
+ * mark-to-market against the live simulated value (PRD §28) and moves every 30 seconds; realized
+ * is settled cash out of completed sales and never moves again. `totalPnlCents` is the sum, and
+ * is the only figure that answers "am I up or down overall".
+ */
+export interface PortfolioSummary {
+  /** Spendable paper USD — the same balance `/me` reports, restated here so one request answers
+   * the whole screen. */
+  walletCents: MoneyCents;
+  holdings: {
+    count: number;
+    valueCents: MoneyCents;
+    /** Cost basis of the priced holdings only — see `pricedCount`. */
+    costBasisCents: MoneyCents;
+    /** How many holdings have a derivable cost basis; the rest are excluded from P&L. */
+    pricedCount: number;
+    unrealizedPnlCents: MoneyCents;
+    /** Against cost basis. 0 when nothing is priced. */
+    unrealizedPnlPercent: number;
+    listedCount: number;
+  };
+  /** Wallet + current value of everything held. */
+  netWorthCents: MoneyCents;
+  purchases: {
+    /** Completed `/purchase` calls — one tap of "buy", which may have been a ×10. */
+    count: number;
+    /** Packs actually bought across those calls. */
+    packCount: number;
+    spendCents: MoneyCents;
+    /** Items those packs produced — includes copies since sold or given away. */
+    itemsReceived: number;
+  };
+  marketplaceBuys: { count: number; spendCents: MoneyCents };
+  sales: {
+    count: number;
+    /** What buyers paid. */
+    grossCents: MoneyCents;
+    feeCents: MoneyCents;
+    /** What actually landed in the wallet, after fees. */
+    netCents: MoneyCents;
+    /** Net proceeds minus cost basis, over the sales whose basis is known. */
+    realizedPnlCents: MoneyCents;
+    pricedCount: number;
+  };
+  /** Packs + marketplace buys. */
+  totalSpendCents: MoneyCents;
+  realizedPnlCents: MoneyCents;
+  /** Realized + unrealized. */
+  totalPnlCents: MoneyCents;
+  byCategory: PortfolioCategoryBreakdown[];
+  /** The instant the mark-to-market figures above were computed — they are a snapshot of a
+   * value that ticks every 30s, so a client holding this response knows how old it is. */
+  valuedAt: string;
 }
 
 /** One pack slot's base probability distribution across tier levels — percentage points, sums to 100. */

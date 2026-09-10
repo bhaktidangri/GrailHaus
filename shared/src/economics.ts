@@ -22,7 +22,12 @@ export function computeExpectedValueCents(pack: PackSku): number {
   return Math.round(evCents);
 }
 
-const DRIFT_TICK_MS = 30_000; // PRD §28: "Update Frequency: Every 30 seconds"
+/** PRD §28: "Update Frequency: Every 30 seconds". Exported because a client that wants to keep a
+ * displayed price live has to re-evaluate `computePriceDrift` on exactly this grid — anything
+ * faster is wasted work (the value is a step function between ticks) and anything slower shows a
+ * stale number. See the app's `useDriftClock`. */
+export const PRICE_DRIFT_TICK_MS = 30_000;
+const DRIFT_TICK_MS = PRICE_DRIFT_TICK_MS;
 /** A fixed, shared tick-zero for every item — not a per-item creation time, since the phase
  * seed (below) already keeps items from moving in lockstep, and a shared epoch means no
  * `created_at` column is needed on `items` at all. */
@@ -54,6 +59,47 @@ function seededPhase(itemId: string): number {
   return ((hash >>> 0) / 0xffffffff) * Math.PI * 2;
 }
 
+/** Everything about one item's drift curve that doesn't depend on time. */
+export interface DriftParams {
+  center: number;
+  amplitude: number;
+  phase: number;
+  periodTicks: number;
+  minValueCents: number;
+  maxValueCents: number;
+}
+
+/**
+ * Splits the time-independent half of `computePriceDrift` out so a caller evaluating the same
+ * item at many timestamps pays for the id hash once instead of once per point.
+ *
+ * That is not a micro-optimization in one place that matters: charting a whole portfolio's value
+ * across a window is (holdings × points) evaluations — 750 items over 60 points is 45,000 — and
+ * the FNV pass over a uuid dominates every one of them. Precomputing turns that into 750 hashes
+ * plus 45,000 sines, which is the difference between a visible hitch and nothing on a mid-range
+ * phone. See the app's portfolio sparkline.
+ */
+export function driftParams(item: { id: string; category: Category; baseValueCents: number }): DriftParams {
+  const minValueCents = Math.round(item.baseValueCents * DRIFT_MIN_RATIO);
+  const maxValueCents = Math.round(item.baseValueCents * DRIFT_MAX_RATIO);
+  return {
+    center: (minValueCents + maxValueCents) / 2,
+    amplitude: (maxValueCents - minValueCents) / 2,
+    phase: seededPhase(item.id),
+    periodTicks: DRIFT_PERIOD_TICKS[item.category],
+    minValueCents,
+    maxValueCents,
+  };
+}
+
+/** The value half of `computePriceDrift`, given precomputed params. Identical arithmetic — the
+ * two must never diverge, which is why `computePriceDrift` is written in terms of these. */
+export function driftValueAt(params: DriftParams, now: Date = new Date()): number {
+  const tick = Math.floor((now.getTime() - DRIFT_EPOCH_MS) / DRIFT_TICK_MS);
+  const angle = params.phase + (tick / params.periodTicks) * Math.PI * 2;
+  return Math.round(params.center + params.amplitude * Math.sin(angle));
+}
+
 /**
  * Bounded simulated price drift (PRD §28-29): an item's "current value" moves smoothly within
  * [minValueCents, maxValueCents] around its base value, ticking every 30 seconds.
@@ -72,19 +118,11 @@ export function computePriceDrift(
   item: { id: string; category: Category; baseValueCents: number },
   now: Date = new Date()
 ): PriceDrift {
-  const minValueCents = Math.round(item.baseValueCents * DRIFT_MIN_RATIO);
-  const maxValueCents = Math.round(item.baseValueCents * DRIFT_MAX_RATIO);
-  const center = (minValueCents + maxValueCents) / 2;
-  const amplitude = (maxValueCents - minValueCents) / 2;
-
-  const tick = Math.floor((now.getTime() - DRIFT_EPOCH_MS) / DRIFT_TICK_MS);
-  const periodTicks = DRIFT_PERIOD_TICKS[item.category];
-  const angle = seededPhase(item.id) + (tick / periodTicks) * Math.PI * 2;
-
+  const params = driftParams(item);
   return {
-    currentValueCents: Math.round(center + amplitude * Math.sin(angle)),
-    minValueCents,
-    maxValueCents,
+    currentValueCents: driftValueAt(params, now),
+    minValueCents: params.minValueCents,
+    maxValueCents: params.maxValueCents,
   };
 }
 
