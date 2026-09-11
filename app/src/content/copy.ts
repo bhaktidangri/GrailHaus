@@ -561,6 +561,74 @@ export const reveal = {
   emptyNote: "Rip a pack from the Shelf to see it here.",
 } as const;
 
+/**
+ * The bulk (10-pack) run's copy — the Grail Hunt and the stages after it.
+ *
+ * Two rules shape all of this. First, it never discloses how many grails are in the run before
+ * they've been revealed: "4 Grails found" up front would spoil the only suspense the feature has.
+ * Second, it stays on the right side of the line between *collecting* and *gambling* — the
+ * language is about discovery, craft and rarity, never odds, luck, jackpots or winnings. The
+ * results were already decided server-side the instant the user paid, and the copy says so plainly
+ * rather than implying the presentation order affects anything.
+ */
+export const bulkRun = {
+  intro: {
+    eyebrow: (packCount: number) => `${packCount} PACK RUN`,
+    title: "THE GRAIL HUNT",
+    body: "Every card is already pulled and yours. We'll show you the chase first.",
+    begin: "BEGIN THE HUNT",
+    skip: "Skip to results",
+  },
+  grail: {
+    eyebrow: "GRAIL HUNT",
+    hint: "Tap to reveal",
+    continueHint: "Tap to continue",
+    finalEyebrow: "FINAL GRAIL",
+    bestPull: "BEST PULL",
+    fromPack: (packIndex: number) => `From pack ${packIndex + 1}`,
+    /** The journey tracker's position line — "GRAIL 3 OF 7". Shown from the first grail onward so
+     * the user always knows where they are in the run and how much is still coming. The *count*
+     * is not the spoiler; which cards they are, and what they're worth, still is. */
+    journey: (position: number, total: number) => `GRAIL ${position} OF ${total}`,
+    remaining: (n: number) => (n === 1 ? "1 more to come" : `${n} more to come`),
+    foundCount: (n: number) => (n === 1 ? "1 GRAIL THIS RUN" : `${n} GRAILS THIS RUN`),
+  },
+  noGrail: {
+    title: "NO GRAIL THIS RUN",
+    body: "The chase continues. Here's everything you pulled.",
+    cta: "SEE THE PULLS",
+  },
+  prime: {
+    eyebrow: "PRIME PULLS",
+    title: (n: number) => (n === 1 ? "1 Prime" : `${n} Primes`),
+    cta: "CONTINUE",
+  },
+  core: {
+    eyebrow: "CORE PULLS",
+    title: (n: number) => (n === 1 ? "1 Core" : `${n} Cores`),
+    body: "Everything else from the run.",
+    cta: "SEE RUN SUMMARY",
+  },
+  summary: {
+    eyebrow: "RUN COMPLETE",
+    grailLabel: "GRAIL",
+    primeLabel: "PRIME",
+    coreLabel: "CORE",
+    bestPull: "BEST PULL",
+    totalSpend: "TOTAL SPEND",
+    estimatedValue: "ESTIMATED VALUE",
+    estimatedPnl: "ESTIMATED P/L",
+    cardsCollected: (n: number) => `${n} CARDS COLLECTED`,
+    /** Kept honest and non-promotional: estimates are mark-to-market on simulated values that
+     * drift, and saying so is better than implying a guaranteed sale price. */
+    valueNote: "Estimated values drift with the market and exclude marketplace fees.",
+    viewCollection: "VIEW COLLECTION",
+    listPull: "LIST A PULL",
+    ripAgain: (tier: string) => `RIP 10 MORE ${tier.toUpperCase()}`,
+    done: "BACK TO HOME",
+  },
+} as const;
+
 export const vaultFlow = {
   summaryTitle: "Watch Revealed",
   viewDetails: "VIEW DETAILS",

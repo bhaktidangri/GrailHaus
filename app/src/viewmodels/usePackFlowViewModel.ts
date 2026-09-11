@@ -1,7 +1,8 @@
 import { useState } from "react";
 import * as Crypto from "expo-crypto";
 import { useQueryClient } from "@tanstack/react-query";
-import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
+import type { PackSku, PulledOwnedItem, RevealStage } from "@grailhaus/shared";
+import { groupBulkRun, nextStage, presentationStrategyFor, withPackCoordinates } from "@grailhaus/shared";
 import { usePackFlowStore } from "../state/packFlowStore";
 import { useCategoriesViewModel } from "./useCategoriesViewModel";
 import { toCategoryRevealConfig } from "../engine/core/categoryRevealConfig";
@@ -12,6 +13,7 @@ import {
   clearActiveReveal,
   resumeActiveReveal,
   setActiveReveal,
+  setActiveRevealBulkState,
   setActiveRevealPackIndex,
 } from "../lib/activeReveal";
 import { retryOnceOnNetworkError } from "../lib/retryOnNetworkError";
@@ -49,6 +51,9 @@ export function usePackFlowViewModel() {
   const advancePack = usePackFlowStore((s) => s.advancePack);
   const skipToBatchSummary = usePackFlowStore((s) => s.skipToBatchSummary);
   const clear = usePackFlowStore((s) => s.clear);
+  const bulkReveal = usePackFlowStore((s) => s.bulkReveal);
+  const setBulkStage = usePackFlowStore((s) => s.setBulkStage);
+  const completeGrail = usePackFlowStore((s) => s.completeGrail);
   const [isPurchasing, setPurchasing] = useState(false);
   const queryClient = useQueryClient();
   const { byId: categoriesById } = useCategoriesViewModel();
@@ -120,7 +125,11 @@ export function usePackFlowViewModel() {
       // One flat, ordered list back into `quantity` per-pack groups — see chunkIntoPacks's own
       // header for why this exact math (itemCount-sized slices) is what resumeActiveReveal also
       // uses, so a fresh batch and a disk-restored one always draw pack boundaries identically.
-      start(pack, result.purchaseId, chunkIntoPacks(result.items, pack.itemCount, quantity));
+      // `withPackCoordinates` is a no-op for anything the server already tagged (it only fills
+      // gaps left by purchase rows written before coordinates were persisted) — so every item
+      // carries its authoritative pack/card position from here on, whatever order the bulk
+      // presentation later shows it in.
+      start(pack, result.purchaseId, withPackCoordinates(chunkIntoPacks(result.items, pack.itemCount, quantity)));
       return { ok: true };
     } catch (err) {
       // The idempotency key is left in secure storage on purpose — even after the one built-in
@@ -157,6 +166,31 @@ export function usePackFlowViewModel() {
    * watched — this skips remaining animations, never remaining content. */
   function skipToResults() {
     skipToBatchSummary();
+    const state = usePackFlowStore.getState();
+    if (state.bulkReveal) void setActiveRevealBulkState(state.bulkReveal);
+  }
+
+  /** Moves a bulk run to an explicit stage and persists that, so a kill resumes there. */
+  async function goToBulkStage(stage: RevealStage) {
+    setBulkStage(stage);
+    const state = usePackFlowStore.getState();
+    if (state.bulkReveal) await setActiveRevealBulkState(state.bulkReveal);
+  }
+
+  /** Moves a bulk run to whatever stage naturally follows the current one, skipping stages with
+   * nothing in them (see shared's `nextStage` for that rule). */
+  async function advanceBulkStage() {
+    const state = usePackFlowStore.getState();
+    if (!state.bulkReveal) return;
+    await goToBulkStage(nextStage(state.bulkReveal.stage, groupBulkRun(state.packs)));
+  }
+
+  /** One grail fully revealed. Persists immediately — this is exactly the moment a resume needs
+   * to land after, so it must survive a kill on the very next frame. */
+  async function revealGrail(ownedItemId: string) {
+    completeGrail(ownedItemId);
+    const state = usePackFlowStore.getState();
+    if (state.bulkReveal) await setActiveRevealBulkState(state.bulkReveal);
   }
 
   /** Runs at boot and on every foreground resume (see App.tsx). Re-populates this store from a
@@ -177,9 +211,14 @@ export function usePackFlowViewModel() {
     if (usePackFlowStore.getState().sku != null) return false;
     const outcome = await resumeActiveReveal();
     if (outcome.kind === "resume") {
+      // A bulk run resumes into its *own* stage machine (mid-hunt, at the prime grid, wherever it
+      // was), never into a per-pack summary — `resumedToSummary` is a single-pack concept and
+      // would strand a bulk run on the wrong screen entirely.
+      const isBulk = outcome.packs.length > 1;
       start(outcome.sku, outcome.purchaseId, outcome.packs, {
         resumeAtIndex: outcome.resumeIndex,
-        resumedToSummary: true,
+        resumedToSummary: !isBulk,
+        bulkReveal: outcome.bulkReveal ?? null,
       });
       return true;
     }
@@ -198,6 +237,10 @@ export function usePackFlowViewModel() {
     currentPackIndex,
     quantity: packs.length,
     isBatch: packs.length > 1,
+    /** Which presentation this purchase's results get — the single/bulk decision has exactly one
+     * definition (shared's `presentationStrategyFor`) rather than a `length > 1` check per screen. */
+    strategy: presentationStrategyFor(packs.length),
+    bulkReveal,
     isBatchSummary,
     purchaseId,
     phase,
@@ -212,6 +255,9 @@ export function usePackFlowViewModel() {
     startFlow,
     advanceBatch,
     skipToResults,
+    goToBulkStage,
+    advanceBulkStage,
+    revealGrail,
     resumeFlow,
     setPhase,
     finishFlow,

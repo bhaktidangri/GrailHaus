@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
-import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
+import type { BatchRevealState, PackSku, PulledOwnedItem } from "@grailhaus/shared";
+import { withPackCoordinates } from "@grailhaus/shared";
 
 const KEY = "grailhaus_active_reveal";
 
@@ -15,6 +16,17 @@ export interface ActiveReveal {
    * generated once in the purchase's own transaction), only "how far this device had gotten
    * watching them" was, and that's exactly what this field exists to protect. */
   packIndex: number;
+  /**
+   * A bulk run's curated-presentation progress (stage + grails witnessed), or undefined for a
+   * single pack, which has no stages. Rewritten on every stage transition and every grail reveal
+   * — the same cheap single-field rewrite `setActiveRevealPackIndex` already does per pack.
+   *
+   * This is what makes "killed during the Grail Hunt, reopen, continue from the next grail" hold.
+   * As with `packIndex`, the pulled contents were never at risk — they're server-side and
+   * immutable — so nothing here can ever change *what* the user gets, only where the
+   * presentation picks back up.
+   */
+  bulkReveal?: BatchRevealState;
 }
 
 /**
@@ -74,6 +86,15 @@ export async function setActiveRevealPackIndex(packIndex: number): Promise<void>
   await setActiveReveal({ ...current, packIndex });
 }
 
+/** The bulk twin of `setActiveRevealPackIndex` — called on every stage transition and grail
+ * reveal so a process death resumes mid-hunt rather than restarting the chase. Same deliberate
+ * no-op if the marker was already cleared. */
+export async function setActiveRevealBulkState(bulkReveal: BatchRevealState): Promise<void> {
+  const current = await getActiveReveal();
+  if (!current) return;
+  await setActiveReveal({ ...current, bulkReveal });
+}
+
 export async function clearActiveReveal(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY);
 }
@@ -81,7 +102,15 @@ export async function clearActiveReveal(): Promise<void> {
 export type ResumeOutcome =
   | { kind: "none" }
   | { kind: "unknown" } // couldn't reach the server to find out — try again later, marker untouched
-  | { kind: "resume"; sku: PackSku; packs: PulledOwnedItem[][]; purchaseId: string; resumeIndex: number }
+  | {
+      kind: "resume";
+      sku: PackSku;
+      packs: PulledOwnedItem[][];
+      purchaseId: string;
+      resumeIndex: number;
+      /** Present only for a bulk run that had already started its curated presentation. */
+      bulkReveal?: BatchRevealState;
+    }
   | { kind: "unrecoverable" }; // purchase resolved (or failed) but there's nothing left to show
 
 /**
@@ -136,9 +165,11 @@ export async function resumeActiveReveal(): Promise<ResumeOutcome> {
       return { kind: "unrecoverable" };
     }
 
-    const packs = chunkIntoPacks(result.items, sku.itemCount, pending.quantity);
+    // `withPackCoordinates` only fills in what the server didn't send (older purchase rows) — a
+    // response that already carries authoritative packIndex/cardIndex per item is left untouched.
+    const packs = withPackCoordinates(chunkIntoPacks(result.items, sku.itemCount, pending.quantity));
     const resumeIndex = Math.min(Math.max(0, pending.packIndex), Math.max(0, packs.length - 1));
-    return { kind: "resume", sku, packs, purchaseId: result.purchaseId, resumeIndex };
+    return { kind: "resume", sku, packs, purchaseId: result.purchaseId, resumeIndex, bulkReveal: pending.bulkReveal };
   } catch (err) {
     if (err instanceof NetworkError) return { kind: "unknown" };
     // A definite server error (e.g. a stale key the server no longer recognizes) — nothing to

@@ -234,9 +234,56 @@ export type PulledItem = PackItem;
 /** One pulled item as `/purchase` actually returns it — full catalog detail plus the specific
  * `owned_items` row id that purchase created for it, so a post-reveal screen (Cards' Pack
  * Summary, Watches' post-reveal fork) can act on *that exact copy* — view it, sell it — without
- * a separate portfolio lookup. */
+ * a separate portfolio lookup.
+ *
+ * `packIndex`/`cardIndex` are the item's *authoritative* coordinates within the purchase: which
+ * pack of the batch produced it (0-based) and its slot within that pack's own pull order. They
+ * are assigned server-side at generation time and never change. The bulk reveal deliberately
+ * presents items in a different order than this (grails first — see bulkPresentation.ts), which
+ * is exactly why these must travel with each item: the presentation layer may reorder freely
+ * precisely because the authoritative position is never lost. Optional only for backward
+ * compatibility with purchase rows written before these were persisted; treat a missing value as
+ * "derive it positionally" (see chunkIntoPacks in the app).
+ */
 export interface PulledOwnedItem extends ItemDetail {
   ownedItemId: string;
+  packIndex?: number;
+  cardIndex?: number;
+}
+
+/**
+ * Which presentation a completed purchase's results get. This is a *presentation* choice made
+ * entirely client-side from the purchase's quantity — it never touches generation, odds,
+ * ownership, or stored order, and the server neither knows nor cares which one is in use.
+ *
+ * `SINGLE_PACK` is the original sequential rip (tear → card → card → rare-pull climax → summary),
+ * unchanged. `BULK_GRAIL_HUNT` is the 10-pack curated run (grails first, escalating → prime grid
+ * → core list → summary). A future category adds a strategy here rather than a second engine.
+ */
+export type PresentationStrategy = "SINGLE_PACK" | "BULK_GRAIL_HUNT";
+
+/** The stages a `BULK_GRAIL_HUNT` run moves through, in order. `intro` is the "THE CHASE BEGINS"
+ * beat that deliberately does *not* disclose the grail count. */
+export type RevealStage = "intro" | "grail_hunt" | "prime" | "core" | "summary";
+
+/**
+ * Everything needed to put a bulk run back exactly where it was after a process death. Persisted
+ * on the device (see the app's lib/activeReveal.ts) alongside the purchase's idempotency key —
+ * the *contents* are never stored here and never at risk, since they're server-side and
+ * immutable; only "how far through presenting them had this device gotten" is.
+ *
+ * `completedGrailIds` is kept (rather than just an index) so a replay or an out-of-order resume
+ * can still tell exactly which grails the user has already witnessed.
+ */
+export interface BatchRevealState {
+  stage: RevealStage;
+  /** How many grails have been fully revealed — the next one to show. Never exposed to the user
+   * as a total (that would spoil the hunt), only used to resume. */
+  currentGrailIndex: number;
+  completedGrailIds: string[];
+  primeStageCompleted: boolean;
+  coreStageCompleted: boolean;
+  summaryViewed: boolean;
 }
 
 /** Per-user, per-pack pity counter — deliberately scoped to one SKU, never global across a user's

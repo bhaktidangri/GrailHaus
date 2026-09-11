@@ -1,5 +1,8 @@
 import type { VaultBreakPersonality } from "../../vaultReveal/config/types";
 import { SEAM_FRAC, FLAP_FRAC } from "../art/blackLabelArt";
+// Palette/kicker live in their own dependency-free module so consumers that need only this tier's
+// colours (the bulk run's tierPersonality.ts) don't pull the Skia art chain in with them.
+import { BLACK_LABEL_PALETTE, BLACK_LABEL_KICKER } from "./blackLabel.palette";
 
 // Tier 3 — "Black Label". Numbers below are carried over from the actual Claude Design handoff
 // (grailhaus-vault-break.html's "Black Label" canvas + apex-art.js/fire.js) rather than the
@@ -21,19 +24,9 @@ export const blackLabelPersonality: VaultBreakPersonality = {
   size: { width: BASE_W * 1.06, height: BASE_W * 1.06 * (1200 / 800), thickness: 0.02 },
   seamFrac: SEAM_FRAC,
   flapFrac: FLAP_FRAC,
-  palette: {
-    violet: "#1c1c24",
-    plum: "#0c0c12",
-    ink: "#04040a",
-    champagne: "#d8b877",
-    champagneHi: "#f7e6bd",
-    champagneMid: "#a5854a",
-    champagneDark: "#57431f",
-    graphite: "#28282f",
-    ivory: "#f2ece2",
-  },
+  palette: { ...BLACK_LABEL_PALETTE },
   copy: {
-    kicker: "Tier III · Sealed",
+    kicker: BLACK_LABEL_KICKER,
     title: "Black Label",
     titleEmphasis: "",
     meta: ["6 CARDS", "1 PRIME OR ABOVE", "GRAIL 1 IN 25"],

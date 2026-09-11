@@ -22,6 +22,9 @@ import {
 } from "./purchase.repository.js";
 import type { PurchaseRow } from "./purchase.types.js";
 
+/** One item's authoritative position within a purchase — see PurchaseResultPayload. */
+type PackCoordinate = { packIndex: number; cardIndex: number };
+
 /** PRD §21 / instructions.md frame this as exactly two purchase modes, not a free 1-10 range:
  * a single pack, or a fixed 10-pack bulk buy. "Buy 7" isn't a real product mode. */
 const SINGLE_QUANTITY = 1;
@@ -47,19 +50,40 @@ export interface PurchaseResponse {
  * preserving the original pull order (reveal pacing depends on it — the reward engine's own
  * reordering already happened before this ever runs). Pairs by array position, not by
  * `item.id` alone, since one pull can pull the same catalog item more than once. */
-async function enrichItems(pulledItems: PulledItem[], ownedItemIds: string[]): Promise<PulledOwnedItem[]> {
+async function enrichItems(
+  pulledItems: PulledItem[],
+  ownedItemIds: string[],
+  packCoordinates?: PackCoordinate[],
+  itemCount?: number
+): Promise<PulledOwnedItem[]> {
   if (pulledItems.length === 0) return [];
   const rows = await findItemDetailsByIds(pulledItems.map((item) => item.id));
   const byId = new Map(rows.map((row) => [row.id, toItemDetail(row)]));
   const out: PulledOwnedItem[] = [];
   pulledItems.forEach((item, i) => {
     const detail = byId.get(item.id);
-    if (detail) out.push({ ...detail, ownedItemId: ownedItemIds[i] });
+    if (!detail) return;
+    // Prefer the stored coordinate; fall back to deriving it positionally for rows written before
+    // `packCoordinates` was persisted. The fallback reproduces exactly how the batch was built
+    // (pack-sized contiguous slices), so old and new rows describe identical structure.
+    const stored = packCoordinates?.[i];
+    const derived =
+      itemCount && itemCount > 0
+        ? { packIndex: Math.floor(i / itemCount), cardIndex: i % itemCount }
+        : undefined;
+    const coord = stored ?? derived;
+    out.push({ ...detail, ownedItemId: ownedItemIds[i], packIndex: coord?.packIndex, cardIndex: coord?.cardIndex });
   });
   return out;
 }
 
 async function toResponse(row: PurchaseRow): Promise<PurchaseResponse> {
+  // Only needed as a fallback for rows stored before `packCoordinates` existed; a lookup miss
+  // just means coordinates stay undefined, which the client already handles positionally.
+  let itemCount: number | undefined;
+  if (row.result && !row.result.packCoordinates) {
+    itemCount = (await getPackSkuById(row.pack_id))?.itemCount;
+  }
   return {
     purchaseId: row.id,
     status: row.status === "pending" ? "pending" : row.status,
@@ -67,7 +91,12 @@ async function toResponse(row: PurchaseRow): Promise<PurchaseResponse> {
     quantity: row.quantity,
     totalPriceCents: row.total_price_cents != null ? Number(row.total_price_cents) : null,
     failureReason: row.failure_reason,
-    items: await enrichItems(row.result?.items ?? [], row.result?.ownedItemIds ?? []),
+    items: await enrichItems(
+      row.result?.items ?? [],
+      row.result?.ownedItemIds ?? [],
+      row.result?.packCoordinates,
+      itemCount
+    ),
   };
 }
 
@@ -179,11 +208,16 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
 
     let consecutive = await getPressureState(client, claim.user_id, claim.pack_id);
     const allItems: PulledItem[] = [];
+    // The authoritative batch → pack → card structure, recorded as it is generated rather than
+    // re-derived later. Nothing about generation changes here: the same pullPack/resolveItems
+    // calls in the same order, with Grail Pressure still carried across packs exactly as before.
+    const packCoordinates: PackCoordinate[] = [];
     for (let i = 0; i < claim.quantity; i++) {
       const pressureState: PressureState = { packId: claim.pack_id, consecutiveWithoutQualifying: consecutive };
       const { tierLevels, nextPressureState } = pullPack(packSku, pressureState);
       const items = resolveItems(packSku, tierLevels, ownershipCounts, weightTable);
       for (const item of items) ownershipCounts[item.id] = (ownershipCounts[item.id] ?? 0) + 1;
+      items.forEach((_, cardIndex) => packCoordinates.push({ packIndex: i, cardIndex }));
       allItems.push(...items);
       consecutive = nextPressureState.consecutiveWithoutQualifying;
     }
@@ -198,7 +232,7 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
     await decrementStock(client, claim.pack_id, claim.quantity);
     await debitBalance(client, claim.user_id, totalCost);
     await upsertPressureState(client, claim.user_id, claim.pack_id, consecutive);
-    await markPurchaseCompleted(client, claim.id, totalCost, { items: allItems, ownedItemIds });
+    await markPurchaseCompleted(client, claim.id, totalCost, { items: allItems, ownedItemIds, packCoordinates });
 
     await client.query("COMMIT");
     return {
@@ -208,7 +242,7 @@ async function executePurchase(claim: PurchaseRow, packSku: PackSku): Promise<Pu
       quantity: claim.quantity,
       totalPriceCents: totalCost,
       failureReason: null,
-      items: await enrichItems(allItems, ownedItemIds),
+      items: await enrichItems(allItems, ownedItemIds, packCoordinates, packSku.itemCount),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

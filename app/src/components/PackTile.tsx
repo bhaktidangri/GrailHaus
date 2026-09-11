@@ -75,7 +75,10 @@ function CardTile({
   const isHero = HERO_TIER.has(sku.tier);
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
   const countLabel = packTileCopy.countLabel(sku.category, sku.itemCount);
-  const canBulk = sku.tier !== "black_label" && (sku.stockRemaining == null || sku.stockRemaining >= 10);
+  // Every card tier can batch now that a bulk buy runs the Grail Hunt presentation rather than
+  // replaying a per-pack reveal ten times (see engine/cards/bulk/ and PackDetailScreen's own
+  // `bulkEligible`); the only remaining gate is having the stock to actually sell ten.
+  const canBulk = sku.stockRemaining == null || sku.stockRemaining >= 10;
 
   return (
     <View

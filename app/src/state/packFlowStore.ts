@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
+import type { BatchRevealState, PackSku, PulledOwnedItem, RevealStage } from "@grailhaus/shared";
+import { initialBatchRevealState } from "@grailhaus/shared";
 
 /**
  * Where the *current pack* is in the post-payment flow — `RevealScreen` branches its whole
@@ -53,6 +54,17 @@ interface PackFlowState {
    * shows, and never anything about the packs before or after it. */
   resumedToSummary: boolean;
   /**
+   * Where a bulk (10-pack) run's curated presentation currently is — which stage, and how many
+   * grails have been witnessed. Null for a single-pack purchase, which has no stages at all and
+   * keeps running the original sequential rip untouched.
+   *
+   * This is *presentation* progress only. It never describes what was pulled (that's `packs`,
+   * server-authoritative and immutable) — only how much of it this device has shown the user, so
+   * a process death can resume mid-hunt instead of restarting the chase. Persisted by
+   * usePackFlowViewModel alongside the reveal marker (lib/activeReveal.ts).
+   */
+  bulkReveal: BatchRevealState | null;
+  /**
    * Begins a flow right after a successful purchase — payment, stock decrement and item
    * assignment are already committed server-side by this point, so `"processing"` here is pure
    * pacing, not a wait for anything to actually finish. `opts` is only ever populated by the
@@ -63,8 +75,14 @@ interface PackFlowState {
     sku: PackSku,
     purchaseId: string,
     packs: PulledOwnedItem[][],
-    opts?: { resumeAtIndex?: number; resumedToSummary?: boolean }
+    opts?: { resumeAtIndex?: number; resumedToSummary?: boolean; bulkReveal?: BatchRevealState | null }
   ) => void;
+  /** Moves a bulk run to a named stage (the stage machine's transitions live in shared's
+   * `nextStage`, not here — this store only records the outcome). No-op for a single pack. */
+  setBulkStage: (stage: RevealStage) => void;
+  /** Records that one more grail has been fully revealed. Idempotent per grail id, so a
+   * double-fired animation callback can't advance the hunt twice. */
+  completeGrail: (ownedItemId: string) => void;
   setPhase: (phase: FlowPhase) => void;
   /** Called when the pack currently on screen is done (its own summary was dismissed / "Next
    * Pack" tapped). Moves to the next pack fresh (not resumed), or — once there isn't a next pack
@@ -89,6 +107,7 @@ export const usePackFlowStore = create<PackFlowState>((set, get) => ({
   isBatchSummary: false,
   phase: "processing",
   resumedToSummary: false,
+  bulkReveal: null,
   start: (sku, purchaseId, packs, opts) => {
     const resumeAtIndex = opts?.resumeAtIndex ?? 0;
     const resumedToSummary = opts?.resumedToSummary ?? false;
@@ -96,6 +115,10 @@ export const usePackFlowStore = create<PackFlowState>((set, get) => ({
     // mean the batch was already fully watched before the marker was cleared) lands directly on
     // the batch summary rather than reading out of bounds.
     const pastEnd = resumeAtIndex >= packs.length;
+    // A bulk run gets stage state; a single pack never does. On a fresh bulk purchase this starts
+    // at the intro beat, on a resume it's whatever was persisted.
+    const isBulk = packs.length > 1;
+    const bulkReveal = isBulk ? (opts?.bulkReveal ?? initialBatchRevealState()) : null;
     set({
       sku,
       purchaseId,
@@ -104,6 +127,35 @@ export const usePackFlowStore = create<PackFlowState>((set, get) => ({
       isBatchSummary: pastEnd,
       phase: resumedToSummary || pastEnd ? "summary" : "processing",
       resumedToSummary: resumedToSummary && !pastEnd,
+      bulkReveal,
+    });
+  },
+  setBulkStage: (stage) => {
+    const { bulkReveal } = get();
+    if (!bulkReveal) return;
+    set({
+      bulkReveal: {
+        ...bulkReveal,
+        stage,
+        primeStageCompleted: bulkReveal.primeStageCompleted || stage === "core" || stage === "summary",
+        coreStageCompleted: bulkReveal.coreStageCompleted || stage === "summary",
+        summaryViewed: bulkReveal.summaryViewed || stage === "summary",
+      },
+      // The terminal batch summary is one and the same screen for both paths — keeping this flag
+      // in sync means RevealScreen's existing summary routing needs no bulk-specific branch.
+      isBatchSummary: stage === "summary" ? true : get().isBatchSummary,
+      phase: stage === "summary" ? "summary" : "revealing",
+    });
+  },
+  completeGrail: (ownedItemId) => {
+    const { bulkReveal } = get();
+    if (!bulkReveal || bulkReveal.completedGrailIds.includes(ownedItemId)) return;
+    set({
+      bulkReveal: {
+        ...bulkReveal,
+        currentGrailIndex: bulkReveal.currentGrailIndex + 1,
+        completedGrailIds: [...bulkReveal.completedGrailIds, ownedItemId],
+      },
     });
   },
   setPhase: (phase) => set({ phase }),
@@ -119,7 +171,16 @@ export const usePackFlowStore = create<PackFlowState>((set, get) => ({
     // actual initial step instead of describing a beat that won't play.
     set({ currentPackIndex: nextIndex, phase: nextIndex > 0 ? "ready" : "processing", resumedToSummary: false });
   },
-  skipToBatchSummary: () => set({ isBatchSummary: true, phase: "summary" }),
+  skipToBatchSummary: () => {
+    const { bulkReveal } = get();
+    set({
+      isBatchSummary: true,
+      phase: "summary",
+      bulkReveal: bulkReveal
+        ? { ...bulkReveal, stage: "summary", primeStageCompleted: true, coreStageCompleted: true, summaryViewed: true }
+        : null,
+    });
+  },
   clear: () =>
     set({
       sku: null,
@@ -129,5 +190,6 @@ export const usePackFlowStore = create<PackFlowState>((set, get) => ({
       isBatchSummary: false,
       phase: "processing",
       resumedToSummary: false,
+      bulkReveal: null,
     }),
 }));

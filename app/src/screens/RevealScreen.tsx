@@ -1,12 +1,13 @@
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { OwnedItem } from "@grailhaus/shared";
+import type { OwnedItem, PulledOwnedItem } from "@grailhaus/shared";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { RevealEngine } from "../engine/core/RevealEngine";
 import { CardFlowEngine } from "../engine/cards/CardFlowEngine";
 import { VaultBreakFlowEngine } from "../engine/cards/VaultBreakFlowEngine";
 import { BatchSummaryScreen } from "../engine/cards/BatchSummaryScreen";
+import { BulkRunOrchestrator } from "../engine/cards/bulk/BulkRunOrchestrator";
 import { BlackLabelFlowEngine } from "../engine/cards/BlackLabelFlowEngine";
 import { ScreenBackground } from "../components/ScreenBackground";
 import { colors, spacing, typography } from "../theme/tokens";
@@ -48,9 +49,12 @@ export function RevealScreen() {
   }
 
   function handleViewCollection() {
-    // Captured before finishFlow() clears the flow's own state — whatever pack is still on
-    // screen right now is what the portfolio should highlight as "just landed here".
-    const justAddedIds = flow.items?.map((i) => i.ownedItemId) ?? [];
+    // Captured before finishFlow() clears the flow's own state. For a bulk run the whole batch
+    // just landed, not merely whichever pack happens to be current — the curated presentation
+    // never had a "current pack" to speak of — so highlight every item the purchase produced.
+    const justAddedIds = flow.isBatch
+      ? flow.packs.flat().map((i) => i.ownedItemId)
+      : (flow.items?.map((i) => i.ownedItemId) ?? []);
     flow.finishFlow();
     rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "Collection", params: { justAddedIds } } });
   }
@@ -73,6 +77,34 @@ export function RevealScreen() {
   function handleListForSale(owned: OwnedItem) {
     flow.finishFlow();
     rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "SellItem", params: { owned } } });
+  }
+
+  /**
+   * "List a Pull" on the batch summary — hands the run's best pull straight into the *existing*
+   * marketplace listing flow, prefilled, rather than duplicating any listing logic here.
+   *
+   * `SellItem` takes an `OwnedItem`, so the pull is wrapped into one the same way the watches
+   * post-reveal fork already does (see RevealEngine's own summary): cost basis is this purchase's
+   * price split evenly across the copies it produced — floored, because the server hands the
+   * sub-cent remainder to specific rows in an id order this side can't know. The authoritative
+   * figure lands with the next portfolio read; the two differ by at most a cent.
+   */
+  function handleListPull(pull: PulledOwnedItem) {
+    if (!flow.sku) return;
+    const totalItems = flow.packs.flat().length;
+    const totalSpendCents = flow.sku.priceCents * flow.packs.length;
+    const acquiredAt = new Date().toISOString();
+    handleListForSale({
+      ownedItemId: pull.ownedItemId,
+      item: pull,
+      packId: flow.sku.id,
+      purchaseId: flow.purchaseId,
+      acquiredAt,
+      heldSinceAt: acquiredAt,
+      costBasisCents: totalItems > 0 ? Math.floor(totalSpendCents / totalItems) : null,
+      acquiredVia: "pack",
+      activeListing: null,
+    });
   }
 
   if (!flow.isActive || !flow.config || !flow.sku) {
@@ -99,6 +131,32 @@ export function RevealScreen() {
         onRipAgain={() => handleRipAgain(10)}
         onGoHome={handleGoHome}
         onViewCollection={handleViewCollection}
+        onListPull={handleListPull}
+      />
+    );
+  }
+
+  /**
+   * A bulk (10-pack) card purchase runs the curated Grail Hunt presentation instead of replaying a
+   * per-pack reveal ten times: grails from every pack first (weakest → strongest), then the prime
+   * grid, then the core list, then the same batch summary above.
+   *
+   * This is a *presentation* branch and nothing more. Both paths render the identical
+   * server-generated, already-persisted `flow.packs`; the strategy only decides what order and
+   * with how much ceremony those results are shown. Watches never reach it (they can't buy in
+   * bulk), and a single pack never reaches it either — `strategy` is `SINGLE_PACK` whenever
+   * there's one pack, so the traditional sequential rip below is completely untouched.
+   */
+  if (flow.strategy === "BULK_GRAIL_HUNT" && flow.bulkReveal && flow.sku.category === "cards") {
+    return (
+      <BulkRunOrchestrator
+        sku={flow.sku}
+        packs={flow.packs}
+        bulkReveal={flow.bulkReveal}
+        onGoToStage={(stage) => void flow.goToBulkStage(stage)}
+        onAdvanceStage={() => void flow.advanceBulkStage()}
+        onRevealGrail={(id) => void flow.revealGrail(id)}
+        onSkipToResults={flow.skipToResults}
       />
     );
   }
@@ -115,12 +173,7 @@ export function RevealScreen() {
   }
 
   if (flow.sku.category === "cards") {
-    // Vault Break is the one card tier with its own richer reveal (cards physically rise out of
-    // the torn pack and fan out in the 3D scene, with tap/drag/pinch/flip inspection) — every
-    // other tier keeps CardFlowEngine's tear + flat swipe-through-cards flow, and is the only
-    // one bulk-eligible (see ConfirmPurchaseSheet/PackDetailScreen) — Vault Break's own richer
-    // engine isn't built to batch, so it's always a single pack here.
-
+    // Everything below this point is the SINGLE_PACK path — a bulk run already returned above.
     // Vault Break and Black Label are the two card tiers with their own richer reveal (cards
     // physically rise out of the torn pack and fan out, with a staged rarity moment and
     // tap/drag/pinch/flip inspection) — every other tier keeps CardFlowEngine's tear + flat

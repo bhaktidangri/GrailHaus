@@ -10,7 +10,8 @@
   "scripts": {
     "server:dev": "npm run dev -w server",
     "app:start": "npm run start -w app",
-    "admin:dev": "npm run dev -w admin-dashboard"
+    "admin:dev": "npm run dev -w admin-dashboard",
+    "test": "npm run test -w @grailhaus/shared && npm run test -w @grailhaus/server && npm run test -w app"
   },
   "dependencies": {
     "expo-image": "~57.0.4"

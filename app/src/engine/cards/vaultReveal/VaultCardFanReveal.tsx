@@ -40,7 +40,9 @@ export function VaultCardFanReveal({
       palette={{
         kicker: vaultBreakPersonality.copy.kicker,
         accentHex: "#e8cf9a",
-        accentRGB: "232,207,162",
+        // #e8cf9a — the two must describe the same colour (this triple read 232,207,162 and so
+        // tinted every rgba() built from it slightly greener than the hex-driven chrome beside it).
+        accentRGB: "232,207,154",
         vignetteGlow: "rgba(92,52,158,0.20)",
       }}
       onDone={onDone}

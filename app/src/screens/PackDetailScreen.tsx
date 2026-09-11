@@ -50,11 +50,14 @@ export function PackDetailScreen() {
   const tabBarClearance = useTabBarClearance();
 
   // Bulk ripping (PRD §46) is offered here — the evergreen shelf's own detail screen — for every
-  // card tier except Vault Break, whose richer 3D tear+fan reveal isn't built to batch (see
-  // RevealScreen/VaultBreakFlowEngine). Never offered for watches (one case at a time) or timed
-  // drops (DropDetailScreen, a separate screen entirely — "1 per account" is the whole point of
-  // a drop's scarcity, so a bulk buy there would undercut its own mechanic).
-  const bulkEligible = sku?.category === "cards" && sku.tier !== "vault_break";
+  // card tier. This used to exclude Vault Break, because a batch meant replaying that tier's
+  // richer 3D tear+fan reveal ten times over, which it isn't built for. A bulk buy no longer
+  // replays any per-pack reveal at all: it runs the Grail Hunt presentation instead (see
+  // engine/cards/bulk/), which renders one premium 3D moment at a time and flat 2D for everything
+  // else, so every card tier can batch safely now. Never offered for watches (one case at a time)
+  // or timed drops (DropDetailScreen, a separate screen entirely — "1 per account" is the whole
+  // point of a drop's scarcity, so a bulk buy there would undercut its own mechanic).
+  const bulkEligible = sku?.category === "cards";
 
   function handleOpenSheet() {
     setQuantity(1);
