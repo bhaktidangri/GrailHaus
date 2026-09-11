@@ -1,6 +1,7 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useSharedValue, useAnimatedScrollHandler, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useIsFocused } from "@react-navigation/native";
 
 /** The pill's own height — shared with PillTabBar.tsx so the two can never drift apart. */
 export const TAB_BAR_HEIGHT = 62;
@@ -35,6 +36,46 @@ const SCROLL_DELTA_THRESHOLD = 6;
 export function useTabBarClearance(extraGap = 24) {
   const insets = useSafeAreaInsets();
   return TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + extraGap;
+}
+
+/**
+ * Suppresses the floating pill nav for as long as this screen is focused, restoring it on the
+ * way out. For pushed screens that own a bottom action bar ("Sell", "Buy now", "Confirm"): the
+ * pill is a *root-level* destination switcher, so leaving it up on a leaf screen both competes
+ * with that screen's primary action and forces the action to float a nav-bar's height above the
+ * bottom edge — the thing that reads as broken. Such a screen is exited via its own back
+ * affordance, not by tab-hopping mid-task.
+ *
+ * Pairs with `useActionBarPadding()` below, which gives the now-unobstructed footer plain
+ * safe-area padding instead of `useTabBarClearance()`'s tab-sized gap.
+ *
+ * Safe on screens outside the tab navigator (the root stack's PackDetail/VaultDetail/ItemFork):
+ * there's no provider there, so this no-ops rather than throwing.
+ */
+export function useHideTabBarOnScreen() {
+  const hidden = useContext(TabBarHiddenContext);
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (!hidden || !isFocused) return;
+    // Instant on the way in — animating it out would race the push transition and show the pill
+    // sliding away after the new screen has already landed.
+    hidden.value = 1;
+    return () => {
+      hidden.value = withTiming(0, { duration: 200 });
+    };
+  }, [hidden, isFocused]);
+}
+
+/**
+ * Bottom padding for an action bar on a screen that has *no* tab bar over it — either because
+ * it called `useHideTabBarOnScreen()` or because it lives on the root stack above the tabs.
+ * Just the home-indicator inset plus a small breathing gap, so the primary action sits where
+ * the thumb expects it: at the bottom of the screen.
+ */
+export function useActionBarPadding(extraGap = 12) {
+  const insets = useSafeAreaInsets();
+  return Math.max(insets.bottom, 12) + extraGap;
 }
 
 /**
