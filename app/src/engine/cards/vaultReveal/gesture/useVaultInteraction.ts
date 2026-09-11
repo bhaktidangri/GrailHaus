@@ -237,10 +237,19 @@ export function useVaultInteraction(pack: BuiltVaultPack, personality: VaultBrea
     };
   };
 
-  return {
+  // Memoized on the pack (the only thing any of these close over that can actually change).
+  // Every handler above reads its state from `s`, a ref whose identity never changes, so the
+  // wrapper object had no reason to be rebuilt — yet without this it was, on every render, and
+  // the scenes that consume it re-render whenever anything in the reveal moves. That churn is
+  // what forced VaultScene and BlackLabelScene to deliberately leave `interaction` out of their
+  // orbit effect's dependency array (with an eslint-disable and a long comment explaining that
+  // including it made the camera snap back dozens of times a second). A stable identity makes
+  // that hazard structurally impossible rather than something a future edit has to remember.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => ({
     onPointerDown, onPointerMove, onPointerUp, onPointerCancel, dragDelta,
     update, toggleOrbit, reseal,
-  };
+  }), [pack]);
 }
 
 function pinchDistance(s: { pinchPids: number[]; pointers: Map<number, PointerRec> }): number {

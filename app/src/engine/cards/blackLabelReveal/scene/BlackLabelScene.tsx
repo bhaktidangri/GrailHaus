@@ -359,7 +359,14 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
   return (
     <>
       <hemisphereLight ref={hemiRef} args={[personality.lighting.hemiSky, personality.lighting.hemiGround, 0.4]} />
-      <directionalLight ref={keyRef} color={personality.lighting.key} intensity={2.1} position={[0.17, 0.3, 0.3]} castShadow />
+      {/* No castShadow. This tier's Canvas (BlackLabelTearStage) never enables `shadows`, so
+          the flag bought nothing — the renderer's shadow pass stays off and nothing is ever
+          drawn from it — while still having three.js allocate this light's shadow map and
+          carry it through per-light setup. The floor's `receiveShadow` below is inert for the
+          same reason and is left only because it costs nothing. The fire's own point lights
+          and the ember rim are what actually ground this pack visually here, not a cast
+          shadow. */}
+      <directionalLight ref={keyRef} color={personality.lighting.key} intensity={2.1} position={[0.17, 0.3, 0.3]} />
       <directionalLight ref={fillRef} color={0x8c2408} intensity={0.9} position={[-0.3, 0.1, -0.2]} />
       <directionalLight ref={emberRimRef} color={personality.lighting.rim} intensity={1.15} position={[0.06, -0.16, 0.34]} />
       <spotLight

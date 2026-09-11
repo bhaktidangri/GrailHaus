@@ -34,10 +34,13 @@ export function useDeviceTilt(enabled = true) {
           if (!rotation) return;
           // Clamped hard: a phone tilted past a modest angle shouldn't send the highlight flying
           // off-object — this reads as "the light noticed you moved," not a joystick.
-          tilt.current = {
-            x: Math.max(-0.5, Math.min(0.5, rotation.gamma)),
-            y: Math.max(-0.5, Math.min(0.5, rotation.beta)),
-          };
+          // Mutated in place rather than replaced: this fires ~30 times a second for the whole
+          // life of a reveal scene, and a fresh object each time is 30 short-lived allocations
+          // per second feeding the GC on the same thread that has to hit a 16ms (or 8ms) frame
+          // budget. Consumers only ever read `.current.x`/`.current.y` per frame, so nothing
+          // depends on the identity changing.
+          tilt.current.x = Math.max(-0.5, Math.min(0.5, rotation.gamma));
+          tilt.current.y = Math.max(-0.5, Math.min(0.5, rotation.beta));
         });
       })
       .catch(() => {

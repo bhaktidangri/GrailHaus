@@ -12,6 +12,10 @@
 import * as THREE from "three";
 import type { SkImage } from "@shopify/react-native-skia";
 import { noise } from "../../reveal/engine/noise";
+import {
+  bodyConstants, deformBody, deformLid, deformLiner, lidConstants, linerConstants, linerVisibleAt,
+  type LidConstants, type PackDims,
+} from "../../reveal/engine/deform";
 import { makeDataTexture } from "../../reveal/engine/textures";
 import * as defaultArt from "../art/vaultArt";
 import * as defaultCardArt from "../art/cardArt";
@@ -262,87 +266,58 @@ export function buildVaultPackObject(
   // density; costs the user only a few pixels of travel.
   let stretchAmt = 0, stretchU = 0;
   const setStretch = (amount: number, u: number) => { stretchAmt = amount; stretchU = u; };
+  // The lid peel, the body gape and the liner all live in ../../reveal/engine/deform.ts —
+  // shared with Tier 1's own pack (same math, only the peel constant and the pre-tear stretch
+  // differ) and, being free of three.js and Skia imports, testable on its own. See that file
+  // for why the per-vertex constants are tabulated up front.
+  const dims: PackDims = { W, H, T, seamY, lidSpanY, peel: PEEL };
 
-  const deformLidSheet = (sheetData: SheetData, q: number) => {
-    const { pos, rest, center, geometry } = sheetData;
-    const lead = q * (1 + PEEL);
-    for (let i = 0; i < pos.count; i++) {
-      const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
-      const X = x + center[0];
-      const u = (X + W / 2) / W;
-      const t = Math.min(1, Math.max(0, (lead - u) / PEEL));
-      const e = t * t * t * (t * (t * 6 - 15) + 10);
-      const ahead = Math.max(0, 1 - Math.abs((lead - u) / (PEEL * 0.35)));
-      const pull = stretchAmt > 0
-        ? Math.max(0, 1 - Math.abs(u - stretchU) / 0.22) * stretchAmt : 0;
-      const dy = y + center[1] - seamY;
-      const along = Math.min(1, Math.max(0, dy / lidSpanY));
-
-      const fold = Math.sin(u * Math.PI * 13 + q * 5) * Math.sin(along * Math.PI);
-      const crinkle = fold * 0.0031 * e + noise(u * 8 + q) * 0.0012 * e;
-
-      const gone = Math.min(1, Math.max(0, (t - 0.72) / 0.28)) ** 1.6;
-      const a = e * 2.35 * (0.5 + 0.5 * along) + crinkle * 26 + ahead * 0.22 * along;
-      const ny = dy * Math.cos(a) - z * Math.sin(a);
-      const nz = dy * Math.sin(a) + z * Math.cos(a) + crinkle;
-
-      const k = 1 - gone;
-      pos.setXYZ(
-        i,
-        x - e * 0.006 * (u - 0.5) + crinkle * 0.5,
-        (ny - (center[1] - seamY) + e * 0.0022 * along - ahead * 0.0009 * (1 - along)) * k,
-        (nz - e * 0.0015 + ahead * 0.0016 * (1 - along) + pull * 0.0042 * (0.35 + along)) * k
-      );
-    }
+  const lidConstF = lidConstants(lidS.rest, lidS.pos.count, lidS.center, dims);
+  const lidConstB = lidConstants(lidSB.rest, lidSB.pos.count, lidSB.center, dims);
+  const deformLidSheet = (sheetData: SheetData, c: LidConstants, q: number) => {
+    const { pos, rest, geometry } = sheetData;
+    deformLid(pos.array as Float32Array, rest, pos.count, c, dims, q, stretchAmt, stretchU);
     pos.needsUpdate = true;
     geometry.computeVertexNormals();
-    geometry.computeBoundingSphere();
+    // computeBoundingSphere() dropped: it walks the whole buffer again purely to size a culling
+    // volume, and the pack is the subject of this scene — never culled. The build-time sphere
+    // is already wide enough for the frustum test it feeds.
   };
-  const deformLid = (q: number) => { [lidS, lidSB].forEach((sh) => deformLidSheet(sh, q)); };
+  const deformLidAll = (q: number) => {
+    deformLidSheet(lidS, lidConstF, q);
+    deformLidSheet(lidSB, lidConstB, q);
+  };
 
-  // The mouth: once the strip is off, the two walls spring apart into a V and the torn edge
-  // loosens and buckles.
-  const deformBody = (q: number) => {
-    const open = Math.min(1, Math.max(0, (q - 0.22) / 0.78));
-    bodySheets.forEach(({ pos, rest, center, sign, geometry }) => {
-      for (let i = 0; i < pos.count; i++) {
-        const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
-        const X = x + center[0], Y = y + center[1];
-        const u = (X + W / 2) / W;
-        const d = (seamY - Y) / (H * 0.3);
-        const gf = Math.pow(Math.max(0, 1 - d), 2.2) * open;
-        const lip = Math.sin(Math.PI * Math.min(1, Math.max(0, u)));
-        const buckle = noise(u * 14 + sign) * 0.0012 * gf;
-        const ripU = Math.min(1, q / 0.8);
-        const tug = q < 0.02 ? 0
-          : Math.max(0, 1 - Math.abs(u - ripU) / 0.16) * Math.max(0, 1 - d) * 0.0014;
-        pos.setXYZ(
-          i,
-          x * (1 + gf * 0.05 * lip),
-          y - gf * 0.0015 + tug * 0.6,
-          z + sign * (gf * T * 2.4 * lip + Math.abs(buckle) + tug)
-        );
-      }
+  const bodyConsts = bodySheets.map(({ pos, rest, center, sign }) =>
+    bodyConstants(rest, pos.count, center, sign, dims)
+  );
+  const linerPair = linerFront && linerBack ? [linerFront, linerBack] : null;
+  const linerConsts = linerPair
+    ? linerPair.map((l) => linerConstants(l.rest, l.pos.count, dims, pillowZ))
+    : null;
+
+  const deformBodyAll = (q: number) => {
+    for (let s = 0; s < bodySheets.length; s++) {
+      const { pos, rest, sign, geometry } = bodySheets[s];
+      deformBody(pos.array as Float32Array, rest, pos.count, bodyConsts[s], dims, sign, q);
       pos.needsUpdate = true;
       geometry.computeVertexNormals();
-      geometry.computeBoundingSphere();
-    });
-    if (linerFront && linerBack) {
-      liner.visible = open > 0.015;
-      [linerFront, linerBack].forEach(({ pos, rest, sign, mesh }) => {
-        for (let i = 0; i < pos.count; i++) {
-          const x = rest[i * 3], Y = rest[i * 3 + 1];
-          const u = (x + W / 2) / W;
-          const d = (seamY - Y) / (H * 0.3);
-          const gf = Math.pow(Math.max(0, 1 - d), 2.2) * open;
-          const lip = Math.sin(Math.PI * Math.min(1, Math.max(0, u)));
-          const wall = gf * T * 2.4 * lip + pillowZ(u, (Y + H / 2) / H);
-          pos.setXYZ(i, x * (1 + gf * 0.05 * lip) * 0.97, Y - gf * 0.0015, sign * wall * 0.68);
+    }
+    if (linerPair && linerConsts) {
+      // The liner is only deformed while it can actually be seen. Its two sheets sit *inside*
+      // the pack mouth: below the gape threshold they are fully enclosed by the body sheets, so
+      // rewriting their vertices and recomputing their normals draws nothing — and the gape is
+      // shut for the entire first 22% of the tear plus the whole sealed idle before it.
+      const visible = linerVisibleAt(q);
+      liner.visible = visible;
+      if (visible) {
+        for (let n = 0; n < linerPair.length; n++) {
+          const { pos, rest, sign, mesh } = linerPair[n];
+          deformLiner(pos.array as Float32Array, rest, pos.count, linerConsts[n], dims, sign, q);
+          pos.needsUpdate = true;
+          mesh.geometry.computeVertexNormals();
         }
-        pos.needsUpdate = true;
-        mesh.geometry.computeVertexNormals();
-        mesh.geometry.computeBoundingSphere();
-      });
+      }
     }
   };
 
@@ -446,8 +421,8 @@ export function buildVaultPackObject(
     if (Math.abs(q - lastQ) > 1e-4) {
       lastQ = q;
       const peel = Math.min(1, q / 0.8);
-      deformLid(peel);
-      deformBody(q);
+      deformLidAll(peel);
+      deformBodyAll(q);
     }
 
     const o = Math.min(1, Math.max(0, (q - 0.86) / 0.14));

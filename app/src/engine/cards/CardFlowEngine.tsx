@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { Canvas, useFrame } from "@react-three/fiber/native";
+import { Canvas, useFrame, useThree } from "@react-three/fiber/native";
 import type { DirectionalLight } from "three";
 import type { ItemDetail, PackSku } from "@grailhaus/shared";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { GestureLayer } from "../core/GestureLayer";
 import { Renderer3DBoundary } from "../core/Renderer3DBoundary";
+import { clampRenderResolution } from "../core/clampRenderResolution";
+import { AdaptiveQuality } from "../core/useAdaptiveQuality";
 import { useDeviceTilt, type DeviceTilt } from "../core/useDeviceTilt";
 import type { CategoryRevealConfig } from "../core/types";
 import { PackTearMesh } from "./reveal/PackTearMesh";
@@ -378,12 +380,27 @@ function TiltCardLights({
   rimLightRef: React.RefObject<DirectionalLight | null>;
   tilt: React.MutableRefObject<DeviceTilt>;
 }) {
+  // Only writes when the tilt actually moved. DeviceMotion pushes at ~30Hz while the rendered
+  // frame runs at 60–120, so most frames read an unchanged value — and moving the *key* light
+  // is not free here: it invalidates the shadow map, which PackTearMesh otherwise keeps from
+  // re-rendering (see its useFrame). Without this guard, the manual shadow gating would be
+  // defeated on every frame by a light nudged to the position it already held.
+  const last = useRef({ x: NaN, y: NaN });
+  const gl = useThree((s) => s.gl);
   useFrame(() => {
+    const { x, y } = tilt.current;
+    if (x === last.current.x && y === last.current.y) return;
+    last.current.x = x;
+    last.current.y = y;
     if (keyLightRef.current) {
-      keyLightRef.current.position.set(0.16 + tilt.current.x * 0.3, 0.3 + tilt.current.y * 0.3, 0.28);
+      keyLightRef.current.position.set(0.16 + x * 0.3, 0.3 + y * 0.3, 0.28);
+      // Moving the shadow-casting light changes what the shadow map should contain, and
+      // PackTearMesh has turned off automatic updates — so this has to say so explicitly, or
+      // the shadow would stay frozen at whatever angle the light held when it last redrew.
+      gl.shadowMap.needsUpdate = true;
     }
     if (rimLightRef.current) {
-      rimLightRef.current.position.set(-0.28 + tilt.current.x * 0.3, 0.1 + tilt.current.y * 0.3, -0.24);
+      rimLightRef.current.position.set(-0.28 + x * 0.3, 0.1 + y * 0.3, -0.24);
     }
   });
   return null;
@@ -412,7 +429,11 @@ function IntroductionView({
   useEffect(() => {
     const light = keyLightRef.current;
     if (!light) return;
-    light.shadow.mapSize.set(1024, 1024);
+    // 512 rather than 1024: the shadow camera's frustum below is only 0.24 units across, so
+    // even at 512 each texel covers well under half a millimetre of the scene — far finer than
+    // the soft contact shadow this actually draws needs. A 1024 map is 4x the depth-pass
+    // fragments and 4x the GPU memory for detail that cannot be seen at this scale.
+    light.shadow.mapSize.set(512, 512);
     light.shadow.bias = -0.0004;
     Object.assign(light.shadow.camera, { left: -0.12, right: 0.12, top: 0.12, bottom: -0.12 });
     light.shadow.camera.updateProjectionMatrix();
@@ -448,7 +469,23 @@ function IntroductionView({
                   camera and its own lighting recipe than the old placeholder's 1.4-unit plane —
                   matched to the prototype's own PackScene.tsx setup (warm key + violet rim, no
                   flat ambient wash), not cardsConfig's generic ambient+directional pair. */}
-              <Canvas shadows camera={{ position: [0, 0.01, 0.22], fov: 35 }}>
+              {/* Antialias off and the render resolution capped (see clampRenderResolution).
+                  r3f's native Canvas hardcodes `dpr: PixelRatio.get()` and omits the `dpr`
+                  prop entirely, so on a 3x phone this renders ~9x the fragments of a 1x buffer
+                  for a scene made almost entirely of large, lit, soft-shaded foil — it is
+                  fill-rate bound, so that lands close to a straight multiplier on frame time
+                  for detail invisible at this pack's on-screen size. MSAA would add another
+                  resolve pass per frame on top; the other two tiers already ran
+                  `antialias: false` and this one had been left on three.js's default (true).
+                  `shadows` stays on — the torn strip landing on something is what sells the
+                  drop — but the map is no longer re-rendered every frame; see PackTearMesh,
+                  which drives it manually. */}
+              <Canvas
+                shadows
+                gl={{ antialias: false, powerPreference: "high-performance" }}
+                onCreated={clampRenderResolution}
+                camera={{ position: [0, 0.01, 0.22], fov: 35 }}
+              >
                 <hemisphereLight args={["#2a1b47", "#090610", 0.7]} />
                 <directionalLight
                   ref={keyLightRef}
@@ -459,6 +496,7 @@ function IntroductionView({
                 />
                 <directionalLight ref={rimLightRef} color="#8f5cff" intensity={1.6} position={[-0.28, 0.1, -0.24]} />
                 <TiltCardLights keyLightRef={keyLightRef} rimLightRef={rimLightRef} tilt={tilt} />
+                <AdaptiveQuality />
                 <PackTearMesh openProgress={openProgress} />
               </Canvas>
             </Renderer3DBoundary>

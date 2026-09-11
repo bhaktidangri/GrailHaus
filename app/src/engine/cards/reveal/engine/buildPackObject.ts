@@ -9,6 +9,10 @@
 import * as THREE from 'three';
 import type { SkImage } from '@shopify/react-native-skia';
 import { noise } from './noise';
+import {
+  bodyConstants, deformBody, deformLid, lidConstants,
+  type LidConstants, type PackDims,
+} from './deform';
 import { drawFront, drawBack, drawCardBack, drawShine } from '../art/packArt';
 import { makeDataTexture } from './textures';
 import type { CategoryPersonality } from '../config/types';
@@ -20,6 +24,10 @@ export interface BuiltPack {
   setProgress: (p: number) => void;
   setTime: (time: number, energy?: number) => void;
   react: (dt: number, pullX: number, pulling: boolean) => void;
+  /** True once the released strip has stopped moving (or was never released). Lets the caller
+   * stop re-rendering the shadow map on frames where nothing can have changed — see
+   * PackTearMesh's useFrame. */
+  physSettled: () => boolean;
   /** Frees every geometry, material and texture this pack allocated.
    * Call when the reveal is dismissed — required before building the next
    * pack in a batch, or memory climbs pack over pack. */
@@ -126,7 +134,14 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   const bodySheets: (SheetData & { sign: number })[] = [];
   ([[1, false, frontMat, 'bodyFrontSheet'], [-1, true, backMat, 'bodyBackSheet']] as const).forEach(
     ([sign, mirror, mat, name]) => {
-      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 96, 80, sign, mirror, 'top');
+      // Segment counts cut from the ported 96×80. deformBody rewrites every vertex of both of
+      // these sheets and recomputes their normals on every frame the tear is moving; at 96×80
+      // that was 7,857 vertices *per sheet*, and this pack is ~0.068 units wide on screen — far
+      // below the density where that tessellation is distinguishable. 48×40 keeps the gape's
+      // curvature and the noise-driven tear silhouette while cutting the per-frame vertex work
+      // to a quarter. Matches the same trade Vault Break already made (see
+      // ../../vaultReveal/engine/buildVaultPackObject.ts's own note on its 64×54).
+      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 48, 40, sign, mirror, 'top');
       const m = new THREE.Mesh(s.geometry, mat);
       m.name = name;
       m.position.set(s.center[0], s.center[1], 0);
@@ -167,8 +182,10 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   const lidMatBack = backMat.clone();
   lidMatBack.name = 'foilLidBack';
   disposeMat.push(lidMat, lidMatBack);
-  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, 1, false, 'bottom');
-  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, -1, true, 'bottom');
+  // Same reasoning as the body sheets above — the lid is the strip that actually peels, so it
+  // keeps proportionally more resolution across X (where the crinkle folds run) than down Y.
+  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 56, 16, 1, false, 'bottom');
+  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 56, 16, -1, true, 'bottom');
   const lid = new THREE.Group();
   lid.name = 'packTopStrip';
   const lidFace = new THREE.Mesh(lidS.geometry, lidMat);
@@ -186,71 +203,39 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   const lidSpanY = H / 2 - seamY;
   const PEEL = 0.4;
 
-  // Peel + crinkle: each column hinges at the crimp as the rip passes it,
-  // and the sheet gathers into folds — foil buckles, it does not bend
-  // smoothly.
-  const deformLidSheet = (sheetData: SheetData, q: number) => {
-    const { pos, rest, center, geometry } = sheetData;
-    const lead = q * (1 + PEEL);
-    for (let i = 0; i < pos.count; i++) {
-      const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
-      const X = x + center[0];
-      const u = (X + W / 2) / W;
-      const t = Math.min(1, Math.max(0, (lead - u) / PEEL));
-      const e = t * t * t * (t * (t * 6 - 15) + 10);
-      const ahead = Math.max(0, 1 - Math.abs((lead - u) / (PEEL * 0.35)));
-      const dy = y + center[1] - seamY;
-      const along = Math.min(1, Math.max(0, dy / lidSpanY));
+  // Peel/crinkle for the lid and gape for the body both live in ./deform.ts — pure arithmetic
+  // over typed arrays, with no three.js or Skia in its import graph, so that math is testable
+  // on its own (see deform.test.ts). This file keeps ownership of the geometry, materials and
+  // lifecycle; it just hands the buffers over for the numbers.
+  const dims: PackDims = { W, H, T, seamY, lidSpanY, peel: PEEL };
 
-      const fold = Math.sin(u * Math.PI * 13 + q * 5) * Math.sin(along * Math.PI);
-      const crinkle = fold * 0.0031 * e + noise(u * 8 + q) * 0.0012 * e;
-
-      const gone = Math.min(1, Math.max(0, (t - 0.72) / 0.28)) ** 1.6;
-      const a = e * 2.35 * (0.5 + 0.5 * along) + crinkle * 26 + ahead * 0.22 * along;
-      const ny = dy * Math.cos(a) - z * Math.sin(a);
-      const nz = dy * Math.sin(a) + z * Math.cos(a) + crinkle;
-
-      const k = 1 - gone;
-      pos.setXYZ(
-        i,
-        x - e * 0.006 * (u - 0.5) + crinkle * 0.5,
-        (ny - (center[1] - seamY) + e * 0.0022 * along - ahead * 0.0009 * (1 - along)) * k,
-        (nz - e * 0.0015 + ahead * 0.0016 * (1 - along)) * k,
-      );
-    }
+  const lidConstF = lidConstants(lidS.rest, lidS.pos.count, lidS.center, dims);
+  const lidConstB = lidConstants(lidSB.rest, lidSB.pos.count, lidSB.center, dims);
+  const deformLidSheet = (sheetData: SheetData, c: LidConstants, q: number) => {
+    const { pos, rest, geometry } = sheetData;
+    deformLid(pos.array as Float32Array, rest, pos.count, c, dims, q);
     pos.needsUpdate = true;
     geometry.computeVertexNormals();
-    geometry.computeBoundingSphere();
+    // No computeBoundingSphere() here. It walks every vertex a second time purely to produce a
+    // culling volume, and this pack is the only thing in frame — it is never culled, and the
+    // sphere computed at build time is already generous enough for the shadow camera. Dropping
+    // it removes a whole extra full-buffer pass per sheet per frame.
   };
-  const deformLid = (q: number) => { [lidS, lidSB].forEach((sh) => deformLidSheet(sh, q)); };
+  const deformLidAll = (q: number) => {
+    deformLidSheet(lidS, lidConstF, q);
+    deformLidSheet(lidSB, lidConstB, q);
+  };
 
-  // The mouth: once the strip is off, the two walls spring apart into a V
-  // and the torn edge loosens and buckles.
-  const deformBody = (q: number) => {
-    const open = Math.min(1, Math.max(0, (q - 0.22) / 0.78));
-    bodySheets.forEach(({ pos, rest, center, sign, geometry }) => {
-      for (let i = 0; i < pos.count; i++) {
-        const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
-        const X = x + center[0], Y = y + center[1];
-        const u = (X + W / 2) / W;
-        const d = (seamY - Y) / (H * 0.3);
-        const gf = Math.pow(Math.max(0, 1 - d), 2.2) * open;
-        const lip = Math.sin(Math.PI * Math.min(1, Math.max(0, u)));
-        const buckle = noise(u * 14 + sign) * 0.0012 * gf;
-        const ripU = Math.min(1, q / 0.8);
-        const tug = q < 0.02 ? 0
-          : Math.max(0, 1 - Math.abs(u - ripU) / 0.16) * Math.max(0, 1 - d) * 0.0014;
-        pos.setXYZ(
-          i,
-          x * (1 + gf * 0.05 * lip),
-          y - gf * 0.0015 + tug * 0.6,
-          z + sign * (gf * T * 2.4 * lip + Math.abs(buckle) + tug),
-        );
-      }
+  const bodyConsts = bodySheets.map(({ pos, rest, center, sign }) =>
+    bodyConstants(rest, pos.count, center, sign, dims)
+  );
+  const deformBodyAll = (q: number) => {
+    for (let s = 0; s < bodySheets.length; s++) {
+      const { pos, rest, sign, geometry } = bodySheets[s];
+      deformBody(pos.array as Float32Array, rest, pos.count, bodyConsts[s], dims, sign, q);
       pos.needsUpdate = true;
       geometry.computeVertexNormals();
-      geometry.computeBoundingSphere();
-    });
+    }
   };
 
   // ---- glint travelling along the crimp (pull cue only) -----------------
@@ -340,11 +325,24 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   };
 
   let fade = 1;
+  // `setProgress` is called every frame whether or not progress actually moved (see
+  // PackTearMesh's useFrame, which reads the gesture's shared value unconditionally). But
+  // deformLid/deformBody rewrite every vertex of four sheets and recompute their normals —
+  // by far the most expensive thing this module does — and when `q` hasn't changed they
+  // recompute the exact same positions they wrote last frame. That is most of this beat's
+  // on-screen time: the pack sits sealed at 0 waiting for a drag, and sits fully torn at 1
+  // for the 2.5s settle before the flow advances. Guarding on a real change in `q` leaves the
+  // deform running at full fidelity while the finger is moving and drops it to nothing when
+  // it isn't. (Vault Break's own build already does this; Tier 1 had been left without it.)
+  let lastQ = -1;
   const setProgress = (p: number) => {
     const q = Math.min(1, Math.max(0, p));
-    const peel = Math.min(1, q / 0.8);
-    deformLid(peel);
-    deformBody(q);
+    if (Math.abs(q - lastQ) > 1e-4) {
+      lastQ = q;
+      const peel = Math.min(1, q / 0.8);
+      deformLidAll(peel);
+      deformBodyAll(q);
+    }
 
     const o = Math.min(1, Math.max(0, (q - 0.86) / 0.14));
     const drop = o * o;
@@ -361,15 +359,17 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
     const rq = rise * rise * (3 - 2 * rise);
     const fanQ = Math.min(1, Math.max(0, (q - 0.8) / 0.2));
     const mid = (cardCount - 1) / 2;
-    cards.children.forEach((c, i) => {
+    const kids = cards.children;
+    for (let i = 0; i < kids.length; i++) {
+      const c = kids[i];
       const k = i - mid;
       c.position.set(
         k * fanQ * W * 0.16,
         cardRestY + rq * 0.042 - fanQ * Math.abs(k) * 0.004,
-        (i - mid) * 0.0013,
+        k * 0.0013,
       );
       c.rotation.set(0, 0, -k * fanQ * 0.13);
-    });
+    }
 
     if (q > 0.97 && !phys.live) release(1);
     if (q < 0.02 && phys.live) { phys.live = false; scrap.visible = false; }
@@ -403,6 +403,8 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
     disposeTex.forEach((t) => t.dispose());
   };
 
+  const physSettled = () => !phys.live || phys.settled;
+
   setProgress(0);
-  return { group, size: { W, H, T }, seamY, setProgress, setTime, react, dispose };
+  return { group, size: { W, H, T }, seamY, setProgress, setTime, react, physSettled, dispose };
 }

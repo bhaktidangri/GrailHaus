@@ -38,6 +38,8 @@ import { VaultVignette } from "./ui/VaultVignette";
 import type { VaultCardData } from "./config/types";
 import { GestureLayer } from "../../core/GestureLayer";
 import { Renderer3DBoundary } from "../../core/Renderer3DBoundary";
+import { clampRenderResolution } from "../../core/clampRenderResolution";
+import { AdaptiveQuality } from "../../core/useAdaptiveQuality";
 import { PackTear2D } from "../reveal/PackTear2D";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -175,11 +177,19 @@ export function VaultTearStage({ onTearComplete }: { onTearComplete: () => void 
           </GestureLayer>
         }
       >
+        {/* Render resolution capped — see clampRenderResolution. r3f's native Canvas otherwise
+            draws into a buffer sized to the device's full pixel ratio (3x or more on the phones
+            this has to stay above 60fps on, ~9x the fragments of a 1x buffer) for a scene made
+            almost entirely of large, lit, soft-shaded foil. It is fill-rate bound, so that lands
+            close to a straight multiplier on frame time while buying detail nobody can resolve
+            at this pack's on-screen size. */}
         <Canvas
           style={styles.canvas}
+          onCreated={clampRenderResolution}
           camera={{ position: [0, 0.006, 0.34], fov: 45, near: 0.01, far: 2 }}
-          gl={{ antialias: false, alpha: true }}
+          gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
         >
+          <AdaptiveQuality />
           <VaultScene personality={personality} deck={EMPTY_DECK} logo={logo} orbit={false} onSnapshot={setSnapshot} introDolly />
         </Canvas>
       </Renderer3DBoundary>

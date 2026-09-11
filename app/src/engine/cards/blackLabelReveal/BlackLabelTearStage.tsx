@@ -25,6 +25,8 @@ import { blackLabelPersonality } from "./config/blackLabel.config";
 import { BlackLabelScene, type BlackLabelStateSnapshot } from "./scene/BlackLabelScene";
 import { loadLogoImage } from "../reveal/engine/textures";
 import { VaultVignette } from "../vaultReveal/ui/VaultVignette";
+import { clampRenderResolution } from "../../core/clampRenderResolution";
+import { AdaptiveQuality } from "../../core/useAdaptiveQuality";
 import type { VaultCardData } from "../vaultReveal/config/types";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -134,11 +136,17 @@ export function BlackLabelTearStage({ onTearComplete }: { onTearComplete: () => 
       {/* Camera starts pulled back to 0.34 (vs. the pack's resting 0.218) — `introDolly` skips
           the usual instant snap-to-position on mount, so this eases smoothly in over about a
           second instead of appearing already framed. */}
+      {/* Render resolution capped — see clampRenderResolution. It matters most on this tier:
+          the fire layers are additive, depth-write-off THREE.Points that overdraw the same
+          pixels many times over, so this is the most fill-rate bound of the three scenes and
+          the one that gains the most from not drawing at 3x native density. */}
       <Canvas
         style={styles.canvas}
+        onCreated={clampRenderResolution}
         camera={{ position: [0, 0.006, 0.34], fov: 45, near: 0.01, far: 2 }}
-        gl={{ antialias: false, alpha: true }}
+        gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
       >
+        <AdaptiveQuality />
         <BlackLabelScene
           personality={personality}
           deck={EMPTY_DECK}
