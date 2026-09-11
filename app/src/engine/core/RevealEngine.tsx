@@ -7,6 +7,10 @@ import { GestureLayer } from "./GestureLayer";
 import { TiltLights } from "./TiltLights";
 import { useDeviceTilt } from "./useDeviceTilt";
 import { playHapticTrack } from "./HapticsTrack";
+import { Renderer3DBoundary } from "./Renderer3DBoundary";
+import { LiftLid2D } from "./LiftLid2D";
+import { PackTear2D } from "../cards/reveal/PackTear2D";
+import { ExploreOrbitGroup, ExploreOrbitSurface, useExploreOrbit } from "./ExploreOrbit";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { radii, spacing, typography } from "../../theme/tokens";
 import { RarityBadge } from "../../components/RarityBadge";
@@ -80,6 +84,10 @@ export function RevealEngine({
   // portfolio) would look like re-gifting something they already unwrapped.
   const resumedToSummary = usePackFlowStore((s) => s.resumedToSummary);
   const tilt = useDeviceTilt();
+  // "Explore it in 3D" — drag to orbit, pinch to zoom, once a reveal has actually settled (see
+  // ExploreOrbit.tsx's own header for why it's a separate gesture from GestureLayer's tear/lift
+  // Pan, and why its overlay has to sit on top of the Canvas rather than wrap it).
+  const orbit = useExploreOrbit();
   const orderedItems = useMemo(() => config.revealOrder(items), [items, config]);
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<RevealPhase>(resumedToSummary ? "summary" : "idle");
@@ -108,18 +116,20 @@ export function RevealEngine({
     };
   }, [phase, current, isRare, config]);
 
-  useEffect(() => {
-    if (phase !== "settled") return;
-    const timer = setTimeout(() => {
-      if (index + 1 < orderedItems.length) {
-        setIndex((i) => i + 1);
-        setPhase("idle");
-      } else {
-        setPhase("summary");
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [phase, index, orderedItems.length]);
+  // Was a flat 500ms auto-advance out of "settled" — the one phase where the user is actually
+  // looking at what they got, with nothing left to build toward. A fixed timer here is exactly
+  // the "reveals that auto-play... miss the entire point" failure mode every other reveal in
+  // this app was built to avoid (HoldToOpenFanReveal's own card only docks on a tap, never a
+  // timer) — RevealEngine just never got the same treatment. Continuing now takes a real tap
+  // (handleContinue, wired below), so "explore the watch" means whatever the user wants it to.
+  function handleContinue() {
+    if (index + 1 < orderedItems.length) {
+      setIndex((i) => i + 1);
+      setPhase("idle");
+    } else {
+      setPhase("summary");
+    }
+  }
 
   if (phase === "summary" || !current || !currentTier) {
     return (
@@ -168,14 +178,41 @@ export function RevealEngine({
         )}
       </View>
 
-      <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")}>
-        {(openProgress) => (
-          <Canvas camera={{ position: config.camera.position, fov: config.camera.fov }}>
-            <TiltLights lighting={config.lighting} tilt={tilt} />
-            {config.buildMesh(current, { openProgress, tierColor: currentTier.colorHex })}
-          </Canvas>
-        )}
-      </GestureLayer>
+      <View style={{ flex: 1 }}>
+        <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")}>
+          {(openProgress) => (
+            // Every card-tier tear already goes through this same boundary (see
+            // CardFlowEngine.IntroductionView) — RevealEngine's own Canvas never did, which meant
+            // a broken/unavailable 3D context here (expo-gl init failure, an r3f reconciler error —
+            // Renderer3DBoundary's own header names on-device iOS as a real, seen failure mode) had
+            // no fallback at all: gesture physics still ran (GestureLayer owns that, unconditionally),
+            // but there was nothing for the user to actually see or feel respond to it.
+            <Renderer3DBoundary
+              fallback={
+                isTear ? (
+                  <PackTear2D
+                    openProgress={openProgress}
+                    topColor={config.palette.accent}
+                    bottomColor={config.palette.background}
+                    wordmark={config.label.toUpperCase()}
+                    badge={config.label}
+                  />
+                ) : (
+                  <LiftLid2D openProgress={openProgress} accentColor={config.palette.accent} caseColor={config.palette.background} />
+                )
+              }
+            >
+              <Canvas camera={{ position: config.camera.position, fov: config.camera.fov }}>
+                <TiltLights lighting={config.lighting} tilt={tilt} />
+                <ExploreOrbitGroup handle={orbit}>
+                  {config.buildMesh(current, { openProgress, tierColor: currentTier.colorHex })}
+                </ExploreOrbitGroup>
+              </Canvas>
+            </Renderer3DBoundary>
+          )}
+        </GestureLayer>
+        <ExploreOrbitSurface handle={orbit} active={phase === "settled"} />
+      </View>
 
       {phase === "idle" && (
         // pointerEvents="none": this absolutely-positioned footer floats on top of the
@@ -187,6 +224,20 @@ export function RevealEngine({
         <View style={styles.idleFooter} pointerEvents="none">
           <Text style={styles.hint}>{hintLabel}</Text>
           <View style={styles.dragHandle} />
+        </View>
+      )}
+
+      {phase === "settled" && (
+        // "Explore the watch" only means something if nothing forces you off this screen —
+        // this used to auto-advance to the next item/summary on a flat 500ms timer regardless
+        // of whether anyone had actually looked yet (handleContinue's own comment). A deliberate
+        // tap target rather than making the whole screen tappable, so tilting the device to
+        // watch the case's own light sweep (TiltLights) never accidentally dismisses it.
+        <View style={styles.idleFooter} pointerEvents="box-none">
+          <Text style={[styles.hint, { opacity: 0.6 }]}>DRAG TO ROTATE · PINCH TO ZOOM</Text>
+          <Pressable onPress={handleContinue} hitSlop={16}>
+            <Text style={styles.hint}>TAP TO CONTINUE</Text>
+          </Pressable>
         </View>
       )}
     </View>

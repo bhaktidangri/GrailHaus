@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import type { CategoryRevealConfig } from "./types";
@@ -19,6 +19,20 @@ interface GestureLayerProps {
  * driving `openProgress` again, overriding any in-flight settle animation).
  * `config.gesture.mode` only changes which axis it reads — the physics are
  * identical across categories.
+ *
+ * The `GestureDetector` used to *wrap* `children` as a parent — correct-looking, but wrong
+ * whenever `children` is (or contains) an `@react-three/fiber` native `<Canvas>`: that component
+ * hardcodes its own `PanResponder` directly in its GL-context-creation callback (confirmed by
+ * reading the installed library's own source — nothing about this is gated behind its `events`
+ * prop, so there's no config-level way to turn it off) and spreads those handlers onto an overlay
+ * `View` sitting on top of the GL surface, *inside* the Canvas's own tree. As a descendant of the
+ * GestureDetector's view, that inner PanResponder view could still win the RN touch-responder
+ * race for itself, and once RN's legacy responder system claims a touch that way, RNGH's native
+ * recognizer on the ancestor never gets it — the drag "genuinely never reached it," not a canvas
+ * config problem. Rendering the GestureDetector's own transparent view as a *sibling on top of*
+ * `children` instead (last in this View's stacking order, so it's frontmost) means RNGH claims
+ * every touch in this region for itself before it can ever reach whatever the Canvas does
+ * internally beneath it — nothing below it is deep enough in the responder chain to contest that.
  */
 export function GestureLayer({ gesture, onComplete, children }: GestureLayerProps) {
   const openProgress = useSharedValue(0);
@@ -43,8 +57,11 @@ export function GestureLayer({ gesture, onComplete, children }: GestureLayerProp
     });
 
   return (
-    <GestureDetector gesture={pan}>
-      <View style={{ flex: 1 }}>{children(openProgress)}</View>
-    </GestureDetector>
+    <View style={{ flex: 1 }}>
+      {children(openProgress)}
+      <GestureDetector gesture={pan}>
+        <View style={StyleSheet.absoluteFill} />
+      </GestureDetector>
+    </View>
   );
 }
