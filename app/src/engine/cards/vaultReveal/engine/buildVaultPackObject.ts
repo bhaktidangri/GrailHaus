@@ -163,14 +163,13 @@ export function buildVaultPackObject(
   const bodySheets: (SheetData & { sign: number })[] = [];
   ([[1, false, frontMat, "bodyFrontSheet"], [-1, true, backMat, "bodyBackSheet"]] as const).forEach(
     ([sign, mirror, mat, name]) => {
-      // Segment counts trimmed from the ported 96×80 (Tier 1's own body sheets, which this was
-      // copied from unchanged) — deformLid/deformBody recompute every vertex's position plus
-      // normals every frame while the tear is actively moving, and this scene already carries
-      // more than Tier 1's does (the liner, the reveal engine even with an empty deck). Roughly
-      // halving the vertex count trades a little smoothness in the noise-driven tear silhouette
-      // for real per-frame cost during the one part of this reveal that's still genuinely
-      // running every frame.
-      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 64, 54, sign, mirror, "top");
+      // Full 96×80, matching Tier 1's own body sheets. An earlier pass had trimmed this to
+      // 64×54 and its own comment conceded the trade: "a little smoothness in the noise-driven
+      // tear silhouette." That is the wrong thing to spend on this tier in particular — Vault
+      // Break is the pricier pack and the rip is the moment it sells. The per-frame cost is
+      // handled instead by deforming only on frames where the tear actually moved (setProgress's
+      // dirty guard) and by skipping the liner entirely while it is occluded.
+      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 96, 80, sign, mirror, "top");
       const m = new THREE.Mesh(s.geometry, mat);
       m.name = name;
       m.position.set(s.center[0], s.center[1], 0);
@@ -243,8 +242,10 @@ export function buildVaultPackObject(
   const lidMatBack = backMat.clone();
   lidMatBack.name = "foilLidBack";
   disposeMat.push(lidMat, lidMatBack);
-  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 64, 20, 1, false, "bottom");
-  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 64, 20, -1, true, "bottom");
+  // Full 96×30, matching Tier 1 — the peeling strip's crinkle runs at `sin(u · π · 13)` across
+  // X, so column count is directly what makes the foil gather into creases rather than ripple.
+  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, 1, false, "bottom");
+  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, -1, true, "bottom");
   const lid = new THREE.Group();
   lid.name = "packTopStrip";
   const lidFace = new THREE.Mesh(lidS.geometry, lidMat);

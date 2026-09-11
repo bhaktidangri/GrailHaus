@@ -1,54 +1,51 @@
 // Keeps a reveal scene inside its frame budget on hardware we can't test on.
 //
-// Everything else in the performance pass is static: fewer vertices, precomputed tables, a
-// capped render resolution, shadow maps that only redraw when something moved. Those choices are
-// made once, for a device we guessed at. This is the part that reacts to the device actually in
-// someone's hand — because "never below 60fps on an average device" is a claim about a
-// distribution of hardware, and the bottom of that distribution is always slower than the bench
-// it was tuned on.
+// The rest of the performance work is unconditional and costs nothing visually: deform only on
+// frames where the tear actually moved, precompute the per-vertex terms that never change, skip
+// the liner while it is occluded, stop re-rendering the shadow map when nothing has moved. Full
+// geometry, full shadow resolution and full native render resolution are all kept.
 //
-// How it works: sample real frame times, and if the scene is persistently missing the budget,
-// step the render resolution down. Resolution is the right lever because these scenes are
-// fill-rate bound — big lit foil surfaces, soft shadows, and on Black Label additive particle
-// layers that overdraw the same pixels repeatedly — so pixels are the dominant cost and scaling
-// them is close to a linear win. It also degrades gracefully: a slightly softer pack that holds
-// 60fps reads far better than a crisp one that hitches, and unlike dropping geometry or lights
-// it changes nothing about the choreography, so the tear still looks and feels like itself.
+// This is the backstop for the case those are not enough on some specific device. "Never below
+// 60fps on an average device" is a claim about a distribution of hardware, and the bottom of
+// that distribution is always slower than whatever it was tuned on — so rather than pre-emptively
+// degrading the rip for everyone, the scene starts at full quality and only gives something up
+// on a device that is measurably missing frames.
 //
-// Deliberately conservative in three ways, because a governor that thrashes is worse than none:
-//   - It only ever steps DOWN. A scene lasts a few seconds; recovering resolution mid-tear would
-//     mean a visible resolution pop in the middle of the one animation the user is watching.
-//   - It ignores the first samples outright. The opening frames of a reveal include shader
-//     compilation, texture upload and the intro dolly — never representative, and reacting to
-//     them would down-res every device on principle.
+// Resolution is the only thing it gives up, and that is deliberate: it is the single lever that
+// leaves the animation itself untouched. The torn silhouette, the crinkle folds, the gape, the
+// physics, the timing are bit-identical at every rung — only the pixel count the same frame is
+// drawn into changes. Cutting geometry or lights instead would change what the tear *is*.
+//
+// Deliberately conservative in four ways, because a governor that thrashes is worse than none:
+//   - It starts at the device's NATIVE ratio. No device is capped on suspicion.
+//   - It ignores the opening frames outright. Shader compilation, texture upload and the intro
+//     dolly all land there and none of them represent steady-state cost.
 //   - It needs a sustained run of slow frames, not a spike. One long frame is a GC pause or an
-//     OS interrupt; a scene that genuinely can't hold the budget misses it consistently.
+//     OS interrupt; a scene that genuinely cannot hold the budget misses consistently.
+//   - It only ever steps DOWN, once per window. A scene lasts seconds; recovering resolution
+//     mid-tear would mean a visible resolution pop in the middle of the one animation the user
+//     is watching.
 import { useEffect, useRef } from "react";
-import { PixelRatio } from "react-native";
 import { useFrame, useThree } from "@react-three/fiber/native";
-import { MAX_RENDER_PIXEL_RATIO } from "./clampRenderResolution";
+import { RESOLUTION_RUNGS, resolveRung } from "./clampRenderResolution";
 
 /** Frame budget to defend, in milliseconds. 60fps is 16.67ms; the threshold sits slightly above
- * it so a scene that is merely *at* the budget isn't treated as failing it. */
+ * it so a scene merely *at* the budget is not treated as failing it. */
 const BUDGET_MS = 18;
 
-/** Frames to discard at the start of a scene — shader compilation, texture upload and the intro
+/** Frames discarded at the start of a scene — shader compilation, texture upload and the intro
  * dolly all land here and none of them represent steady-state cost. */
 const WARMUP_FRAMES = 45;
 
 /** How many frames each decision is averaged over. At 60fps this is half a second: long enough
- * that a single GC pause can't trip it, short enough to react within the tear itself. */
+ * that a single GC pause cannot trip it, short enough to react within the tear itself. */
 const WINDOW = 30;
 
 /** Fraction of a window that must miss the budget before stepping down. */
 const MISS_RATIO = 0.5;
 
-/** Resolution rungs, highest first. Never goes below 1 — past that the pack stops reading as
- * foil at all, and a scene that can't hold 60fps at 1x has a problem this can't fix. */
-const RUNGS = [MAX_RENDER_PIXEL_RATIO, 1.5, 1.25, 1];
-
 /**
- * Watches this Canvas's real frame times and steps the render resolution down if it is
+ * Watches this Canvas's real frame times and steps render resolution down only if the scene is
  * persistently missing the frame budget. Mount once inside a `<Canvas>`; renders nothing.
  *
  * Returns nothing on purpose — nothing in the scene should branch on the current quality level.
@@ -61,19 +58,20 @@ export function useAdaptiveQuality() {
   const misses = useRef(0);
   const rung = useRef(0);
 
+  // Start explicitly at the device's native ratio (rung 0 === Infinity === native). r3f already
+  // configures this, but setting it here makes the starting point of the ladder unambiguous and
+  // means a remount always begins at full quality rather than inheriting a previous scene's
+  // stepped-down state.
   useEffect(() => {
-    // A device already below the cap starts at its own ratio; there is no headroom to give back
-    // and stepping down from a rung it never occupied would be wrong.
-    const native = PixelRatio.get();
-    rung.current = RUNGS.findIndex((r) => r <= native);
-    if (rung.current < 0) rung.current = RUNGS.length - 1;
-  }, []);
+    rung.current = 0;
+    gl.setPixelRatio(resolveRung(RESOLUTION_RUNGS[0]));
+  }, [gl]);
 
   useFrame((_state, delta) => {
     frames.current++;
     if (frames.current <= WARMUP_FRAMES) return;
 
-    // `delta` is seconds since the previous frame — i.e. the frame time this is defending.
+    // `delta` is seconds since the previous frame — the frame time being defended.
     if (delta * 1000 > BUDGET_MS) misses.current++;
 
     const n = frames.current - WARMUP_FRAMES;
@@ -83,13 +81,19 @@ export function useAdaptiveQuality() {
     misses.current = 0;
     if (missed < WINDOW * MISS_RATIO) return;
 
-    // Sustained miss: drop a rung, if there is one left.
+    // Sustained miss: step down, if there is a rung left that is actually below where we are.
     const next = rung.current + 1;
-    if (next >= RUNGS.length) return;
+    if (next >= RESOLUTION_RUNGS.length) return;
+    const current = resolveRung(RESOLUTION_RUNGS[rung.current]);
+    const target = resolveRung(RESOLUTION_RUNGS[next]);
     rung.current = next;
-    gl.setPixelRatio(RUNGS[next]);
-    // The shadow map is sized off the renderer, and PackTearMesh may have parked it with
-    // autoUpdate off — force one redraw so it isn't left at the previous resolution.
+    // On a device whose native ratio already sits at or below this rung, stepping "down" would
+    // be a no-op — skip the renderer call (which forces a full buffer reallocation) and let the
+    // next window try the rung below instead.
+    if (target >= current) return;
+    gl.setPixelRatio(target);
+    // The shadow map is sized off the renderer and PackTearMesh may have parked it with
+    // autoUpdate off — force one redraw so it is not left at the previous resolution.
     gl.shadowMap.needsUpdate = true;
   });
 

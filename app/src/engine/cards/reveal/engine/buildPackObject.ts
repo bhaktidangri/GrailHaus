@@ -134,14 +134,13 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   const bodySheets: (SheetData & { sign: number })[] = [];
   ([[1, false, frontMat, 'bodyFrontSheet'], [-1, true, backMat, 'bodyBackSheet']] as const).forEach(
     ([sign, mirror, mat, name]) => {
-      // Segment counts cut from the ported 96×80. deformBody rewrites every vertex of both of
-      // these sheets and recomputes their normals on every frame the tear is moving; at 96×80
-      // that was 7,857 vertices *per sheet*, and this pack is ~0.068 units wide on screen — far
-      // below the density where that tessellation is distinguishable. 48×40 keeps the gape's
-      // curvature and the noise-driven tear silhouette while cutting the per-frame vertex work
-      // to a quarter. Matches the same trade Vault Break already made (see
-      // ../../vaultReveal/engine/buildVaultPackObject.ts's own note on its 64×54).
-      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 48, 40, sign, mirror, 'top');
+      // Full 96×80, as designed. This tessellation is not decoration: the torn edge's
+      // silhouette is sampled per-vertex from noise() along X, and the gape's lip curve is
+      // resolved per-column — dropping columns visibly coarsens the rip. The per-frame cost of
+      // carrying it is handled by only deforming on frames where the tear actually moved (see
+      // setProgress's dirty guard), not by throwing away the geometry that makes the tear
+      // read as torn foil.
+      const s = sheet(-W / 2, W / 2, -H / 2, seamY, 96, 80, sign, mirror, 'top');
       const m = new THREE.Mesh(s.geometry, mat);
       m.name = name;
       m.position.set(s.center[0], s.center[1], 0);
@@ -182,10 +181,12 @@ export function buildPackObject(personality: CategoryPersonality, logo: SkImage 
   const lidMatBack = backMat.clone();
   lidMatBack.name = 'foilLidBack';
   disposeMat.push(lidMat, lidMatBack);
-  // Same reasoning as the body sheets above — the lid is the strip that actually peels, so it
-  // keeps proportionally more resolution across X (where the crinkle folds run) than down Y.
-  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 56, 16, 1, false, 'bottom');
-  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 56, 16, -1, true, 'bottom');
+  // Full 96×30. The lid is the strip the user actually watches peel, and its crinkle runs at
+  // `sin(u * π * 13)` across X — 96 columns gives ~7 samples per fold, which is what makes the
+  // foil gather into creases instead of rippling smoothly. Fewer columns undersample exactly
+  // the detail this beat exists to show.
+  const lidS = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, 1, false, 'bottom');
+  const lidSB = sheet(-W / 2, W / 2, seamY, H / 2, 96, 30, -1, true, 'bottom');
   const lid = new THREE.Group();
   lid.name = 'packTopStrip';
   const lidFace = new THREE.Mesh(lidS.geometry, lidMat);

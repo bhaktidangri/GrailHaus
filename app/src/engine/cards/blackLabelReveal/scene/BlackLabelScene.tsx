@@ -134,6 +134,20 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
     if (spotRef.current && spotTargetRef.current) spotRef.current.target = spotTargetRef.current;
   }, []);
 
+  // A directional light's shadow camera defaults to a frustum sized for a whole outdoor scene,
+  // which would clip this ~0.072-unit-wide pack to nothing — every castShadow/receiveShadow flag
+  // in the scene would silently draw no shadow at all. Same setup Tier 1 does for the same
+  // reason (see CardFlowEngine's own IntroductionView effect), widened a little for this tier's
+  // slightly larger pack.
+  useEffect(() => {
+    const light = keyRef.current;
+    if (!light) return;
+    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.bias = -0.0004;
+    Object.assign(light.shadow.camera, { left: -0.13, right: 0.13, top: 0.13, bottom: -0.13 });
+    light.shadow.camera.updateProjectionMatrix();
+  }, []);
+
   useEffect(() => () => pack.dispose(), [pack]);
 
   useImperativeHandle(ref, () => ({
@@ -359,14 +373,13 @@ export const BlackLabelScene = memo(forwardRef<BlackLabelSceneHandle, BlackLabel
   return (
     <>
       <hemisphereLight ref={hemiRef} args={[personality.lighting.hemiSky, personality.lighting.hemiGround, 0.4]} />
-      {/* No castShadow. This tier's Canvas (BlackLabelTearStage) never enables `shadows`, so
-          the flag bought nothing — the renderer's shadow pass stays off and nothing is ever
-          drawn from it — while still having three.js allocate this light's shadow map and
-          carry it through per-light setup. The floor's `receiveShadow` below is inert for the
-          same reason and is left only because it costs nothing. The fire's own point lights
-          and the ember rim are what actually ground this pack visually here, not a cast
-          shadow. */}
-      <directionalLight ref={keyRef} color={personality.lighting.key} intensity={2.1} position={[0.17, 0.3, 0.3]} />
+      {/* castShadow, now actually wired up: this scene's Canvas had never enabled `shadows`, so
+          this flag and the floor's `receiveShadow` below were both silently inert — the pack
+          cast nothing onto its own floor on the tier that should look the most expensive. The
+          Canvas now enables shadows (see BlackLabelTearStage) and the shadow camera is framed
+          for this pack's scale in the effect above, so the contact shadow under the pack and
+          the falling strip renders here the way it does on Tier 1. */}
+      <directionalLight ref={keyRef} color={personality.lighting.key} intensity={2.1} position={[0.17, 0.3, 0.3]} castShadow />
       <directionalLight ref={fillRef} color={0x8c2408} intensity={0.9} position={[-0.3, 0.1, -0.2]} />
       <directionalLight ref={emberRimRef} color={personality.lighting.rim} intensity={1.15} position={[0.06, -0.16, 0.34]} />
       <spotLight

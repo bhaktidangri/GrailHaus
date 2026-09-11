@@ -9,7 +9,6 @@ import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
 import { GestureLayer } from "../core/GestureLayer";
 import { Renderer3DBoundary } from "../core/Renderer3DBoundary";
-import { clampRenderResolution } from "../core/clampRenderResolution";
 import { AdaptiveQuality } from "../core/useAdaptiveQuality";
 import { useDeviceTilt, type DeviceTilt } from "../core/useDeviceTilt";
 import type { CategoryRevealConfig } from "../core/types";
@@ -429,11 +428,7 @@ function IntroductionView({
   useEffect(() => {
     const light = keyLightRef.current;
     if (!light) return;
-    // 512 rather than 1024: the shadow camera's frustum below is only 0.24 units across, so
-    // even at 512 each texel covers well under half a millimetre of the scene — far finer than
-    // the soft contact shadow this actually draws needs. A 1024 map is 4x the depth-pass
-    // fragments and 4x the GPU memory for detail that cannot be seen at this scale.
-    light.shadow.mapSize.set(512, 512);
+    light.shadow.mapSize.set(1024, 1024);
     light.shadow.bias = -0.0004;
     Object.assign(light.shadow.camera, { left: -0.12, right: 0.12, top: 0.12, bottom: -0.12 });
     light.shadow.camera.updateProjectionMatrix();
@@ -469,21 +464,15 @@ function IntroductionView({
                   camera and its own lighting recipe than the old placeholder's 1.4-unit plane —
                   matched to the prototype's own PackScene.tsx setup (warm key + violet rim, no
                   flat ambient wash), not cardsConfig's generic ambient+directional pair. */}
-              {/* Antialias off and the render resolution capped (see clampRenderResolution).
-                  r3f's native Canvas hardcodes `dpr: PixelRatio.get()` and omits the `dpr`
-                  prop entirely, so on a 3x phone this renders ~9x the fragments of a 1x buffer
-                  for a scene made almost entirely of large, lit, soft-shaded foil — it is
-                  fill-rate bound, so that lands close to a straight multiplier on frame time
-                  for detail invisible at this pack's on-screen size. MSAA would add another
-                  resolve pass per frame on top; the other two tiers already ran
-                  `antialias: false` and this one had been left on three.js's default (true).
-                  `shadows` stays on — the torn strip landing on something is what sells the
-                  drop — but the map is no longer re-rendered every frame; see PackTearMesh,
-                  which drives it manually. */}
+              {/* Full quality: native render resolution, MSAA on, shadows on. Nothing is
+                  traded away up front — the per-frame cost is handled by not repeating work
+                  (see PackTearMesh's manual shadow-map updates and buildPackObject's dirty
+                  guard), and AdaptiveQuality below steps resolution down only on a device that
+                  is measurably missing frames. `powerPreference` asks the platform for the
+                  discrete/performance GPU where there is a choice; it costs nothing. */}
               <Canvas
                 shadows
-                gl={{ antialias: false, powerPreference: "high-performance" }}
-                onCreated={clampRenderResolution}
+                gl={{ antialias: true, powerPreference: "high-performance" }}
                 camera={{ position: [0, 0.01, 0.22], fov: 35 }}
               >
                 <hemisphereLight args={["#2a1b47", "#090610", 0.7]} />
