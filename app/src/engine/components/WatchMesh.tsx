@@ -48,6 +48,13 @@ const VELVET_EMISSIVE = "#280a10";
 const VELVET_LINING = "#c9a97c";
 const LEATHER = "#5a3a1f";
 const LEATHER_EMISSIVE = "#1c0f06";
+// Same underlying problem as WALNUT/VELVET/LEATHER above, on a different material property this
+// time: a near-1.0 metalness with no environment map to reflect (this scene has none — no cost
+// budget for a PMREM/cubemap on mobile GL) renders almost entirely black, since a real metal's
+// visible color comes from reflected environment light, not its own diffuse albedo. That's what
+// was reading as a plain black ring instead of a steel band/case. Metalness pulled down to a
+// satin/brushed-metal range instead, which still looks like metal but derives its brightness from
+// the scene's actual point/directional lights rather than reflections that don't exist here.
 const STEEL = "#c7cdd2";
 const HAND_DARK = "#2c2c2c";
 const GLINT = "#fff6df";
@@ -183,6 +190,18 @@ export function WatchMesh({
         <boxGeometry args={[W, BODY_H, D]} />
         <meshStandardMaterial color={WALNUT} emissive={WALNUT_EMISSIVE} emissiveIntensity={0.22} roughness={0.4} metalness={0.05} />
       </mesh>
+
+      {/* Front nameplate — brand presence on the case itself, visible closed or open (the
+          medallion inside the lid, below, only shows once opened). Plain brass strip, same
+          "medallion not lettering" reasoning as that one. */}
+      <mesh position={[0, BODY_H * 0.32, D / 2 + 0.001]}>
+        <boxGeometry args={[W * 0.5, BODY_H * 0.16, 0.006]} />
+        <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.5} />
+      </mesh>
+      <mesh position={[0, BODY_H * 0.32, D / 2 + 0.004]}>
+        <boxGeometry args={[W * 0.42, BODY_H * 0.04, 0.004]} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
+      </mesh>
       <mesh position={[0, BODY_H - RECESS / 2, 0]}>
         <boxGeometry args={[W - WALL * 2, RECESS, D - WALL * 2]} />
         <meshStandardMaterial color={VELVET} emissive={VELVET_EMISSIVE} emissiveIntensity={0.28} roughness={0.95} metalness={0} />
@@ -191,29 +210,29 @@ export function WatchMesh({
           continuous inlay ring without an extruded hollow shape. */}
       <mesh position={[0, BODY_H + 0.005, D / 2 - 0.015]}>
         <boxGeometry args={[W - 0.02, 0.02, 0.03]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.9} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
       </mesh>
       <mesh position={[0, BODY_H + 0.005, -(D / 2 - 0.015)]}>
         <boxGeometry args={[W - 0.02, 0.02, 0.03]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.9} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
       </mesh>
       <mesh position={[W / 2 - 0.015, BODY_H + 0.005, 0]}>
         <boxGeometry args={[0.03, 0.02, D - 0.02]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.9} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
       </mesh>
       <mesh position={[-(W / 2 - 0.015), BODY_H + 0.005, 0]}>
         <boxGeometry args={[0.03, 0.02, D - 0.02]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.9} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
       </mesh>
 
       {/* Hinge barrels */}
       <mesh position={[0.35, BODY_H - 0.02, -D / 2 - 0.02]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.03, 0.03, 0.18, 16]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.45} metalness={0.95} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.45} metalness={0.55} />
       </mesh>
       <mesh position={[-0.35, BODY_H - 0.02, -D / 2 - 0.02]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.03, 0.03, 0.18, 16]} />
-        <meshStandardMaterial color={BRASS_DARK} roughness={0.45} metalness={0.95} />
+        <meshStandardMaterial color={BRASS_DARK} roughness={0.45} metalness={0.55} />
       </mesh>
 
       {/* Lid — pivots at the back-top hinge line (group origin), same offset-mesh-inside-a-
@@ -230,23 +249,47 @@ export function WatchMesh({
         </mesh>
         <mesh position={[0, LID_H + 0.011, D / 2]}>
           <cylinderGeometry args={[0.09, 0.09, 0.02, 32]} />
-          <meshStandardMaterial color={BRASS} roughness={0.35} metalness={0.9} />
+          <meshStandardMaterial color={BRASS} roughness={0.35} metalness={0.5} />
         </mesh>
         <mesh position={[0, LID_H + 0.021, D / 2]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.095, 0.008, 8, 32]} />
-          <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.9} />
+          <meshStandardMaterial color={BRASS_DARK} roughness={0.4} metalness={0.5} />
         </mesh>
         <mesh position={[0, 0.03, D - 0.02]}>
           <boxGeometry args={[0.12, 0.05, 0.02]} />
-          <meshStandardMaterial color={BRASS} roughness={0.35} metalness={0.9} />
+          <meshStandardMaterial color={BRASS} roughness={0.35} metalness={0.5} />
+        </mesh>
+
+        {/* Maker's medallion — the traditional spot for a jewelry case's own mark, on the lid's
+            interior where it's revealed the moment the case opens. Two concentric brass rings
+            around a plain disc rather than literal lettering: legible 3D text needs a font-glyph
+            library (@react-three/drei's Text relies on troika-three-text, which needs a browser
+            canvas context this native renderer doesn't have, and isn't a dependency this app
+            actually declares) — a clean medallion reads as a real maker's mark without that risk. */}
+        <mesh position={[0, 0.032, D * 0.15]}>
+          <cylinderGeometry args={[0.12, 0.12, 0.004, 32]} />
+          <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.035, D * 0.15]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.1, 0.006, 8, 32]} />
+          <meshStandardMaterial color={BRASS_DARK} roughness={0.35} metalness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.035, D * 0.15]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.055, 0.005, 8, 32]} />
+          <meshStandardMaterial color={BRASS_DARK} roughness={0.35} metalness={0.5} />
         </mesh>
       </group>
 
       {/* Platform — the cushion and the watch rise as one piece; only `watchPivot` (below)
-          tilts, so the cushion itself stays put under it, exactly as in the source. */}
+          tilts, so the cushion itself stays put under it, exactly as in the source.
+          Length was 0.55 (plus its own two 0.14-radius rounded caps ≈ 0.83 total span) — nearly
+          1.5x wider than the bracelet's own reach (radius 0.24 + tube 0.04 = 0.28), so the band
+          was never actually visible: it sat entirely inside the cushion's own silhouette
+          regardless of its own size. Shortened to a snug pad the watch head sits on, not a full
+          pillow bar, so the band drawn below now genuinely extends past both its ends. */}
       <group position={[0, PLATFORM_BASE_Y, 0]} ref={platformRef}>
         <mesh rotation={[0, 0, Math.PI / 2]}>
-          <capsuleGeometry args={[CUSHION_R, 0.55, 8, 16]} />
+          <capsuleGeometry args={[CUSHION_R, 0.18, 8, 16]} />
           <meshStandardMaterial color={LEATHER} emissive={LEATHER_EMISSIVE} emissiveIntensity={0.22} roughness={0.85} metalness={0.05} />
         </mesh>
 
@@ -254,11 +297,11 @@ export function WatchMesh({
           {/* Case + bezel */}
           <mesh position={[0, 0.045, 0]}>
             <cylinderGeometry args={[0.16, 0.16, 0.09, 32]} />
-            <meshStandardMaterial color={STEEL} roughness={0.25} metalness={0.9} />
+            <meshStandardMaterial color={STEEL} roughness={0.25} metalness={0.5} />
           </mesh>
           <mesh position={[0, 0.09, 0]} rotation={[Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.16, 0.018, 10, 32]} />
-            <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.9} />
+            <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.5} />
           </mesh>
           {/* Crystal */}
           <mesh position={[0, 0.096, 0]}>
@@ -283,17 +326,17 @@ export function WatchMesh({
           {/* Crown */}
           <mesh position={[0.18, 0.045, 0]} rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.02, 0.02, 0.04, 16]} />
-            <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.9} />
+            <meshStandardMaterial color={BRASS} roughness={0.3} metalness={0.5} />
           </mesh>
-          {/* Bracelet loop — was radius 0.16 (identical to the case's own 0.16 cylinder) sitting
-              at y=-0.02, i.e. almost exactly the case's own footprint, low enough to be buried
-              inside the cushion mesh beneath it: correct geometry, invisible in practice. Wider
-              than the case now (0.24 vs 0.16, so it visibly extends past both sides) and raised
-              to the case's own vertical center, so it reads as a band the case sits inside of,
-              not a ring hiding underneath it. */}
+          {/* Bracelet loop — the real bug wasn't this mesh's own size, it was the cushion beneath
+              it (see PLATFORM's own comment): at any radius up to ~0.4 the band still sat
+              entirely inside the cushion's former ±0.415 silhouette. With the cushion shortened
+              to ±0.23, radius 0.26 (+0.04 tube = ±0.30 reach) now clears both ends with real
+              margin, and sits at the case's own vertical center so it frames the case rather
+              than hiding under it. */}
           <mesh position={[0, 0.045, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.24, 0.04, 10, 32]} />
-            <meshStandardMaterial color={STEEL} roughness={0.3} metalness={0.85} />
+            <torusGeometry args={[0.26, 0.04, 10, 32]} />
+            <meshStandardMaterial color={STEEL} roughness={0.3} metalness={0.45} />
           </mesh>
           {/* Glint — a single unlit highlight sweeping the crystal once, cheap on purpose
               (meshBasicMaterial skips lighting entirely; a glint should read as blown-out

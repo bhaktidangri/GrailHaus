@@ -8,6 +8,14 @@ interface GestureLayerProps {
   gesture: CategoryRevealConfig["gesture"];
   onComplete: () => void;
   children: (openProgress: SharedValue<number>) => ReactNode;
+  /** True by default. Once a caller has its own reason to stop listening for this gesture (e.g.
+   * RevealEngine, once the tear/lift is done and a *different* gesture — ExploreOrbit's own drag-
+   * to-rotate — takes over the same screen region), pass false to drop just the touch-catching
+   * overlay below, not `children` itself: unmounting `children` here would tear down and rebuild
+   * the whole Canvas subtree (losing every ref/animation-state the 3D mesh was holding, since it's
+   * a fresh instance in a fresh position in the tree), where all that's actually needed is for
+   * this gesture to stop competing for the same touches as whatever comes after it. */
+  enabled?: boolean;
 }
 
 /**
@@ -34,7 +42,7 @@ interface GestureLayerProps {
  * every touch in this region for itself before it can ever reach whatever the Canvas does
  * internally beneath it — nothing below it is deep enough in the responder chain to contest that.
  */
-export function GestureLayer({ gesture, onComplete, children }: GestureLayerProps) {
+export function GestureLayer({ gesture, onComplete, children, enabled = true }: GestureLayerProps) {
   const openProgress = useSharedValue(0);
   const axis = gesture.mode === "tear" ? "x" : "y";
 
@@ -59,9 +67,11 @@ export function GestureLayer({ gesture, onComplete, children }: GestureLayerProp
   return (
     <View style={{ flex: 1 }}>
       {children(openProgress)}
-      <GestureDetector gesture={pan}>
-        <View style={StyleSheet.absoluteFill} />
-      </GestureDetector>
+      {enabled && (
+        <GestureDetector gesture={pan}>
+          <View style={StyleSheet.absoluteFill} />
+        </GestureDetector>
+      )}
     </View>
   );
 }

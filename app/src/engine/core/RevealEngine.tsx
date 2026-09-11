@@ -179,7 +179,7 @@ export function RevealEngine({
       </View>
 
       <View style={{ flex: 1 }}>
-        <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")}>
+        <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")} enabled={phase === "idle"}>
           {(openProgress) => (
             // Every card-tier tear already goes through this same boundary (see
             // CardFlowEngine.IntroductionView) — RevealEngine's own Canvas never did, which meant
