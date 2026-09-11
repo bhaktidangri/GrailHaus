@@ -48,8 +48,11 @@ export function RevealScreen() {
   }
 
   function handleViewCollection() {
+    // Captured before finishFlow() clears the flow's own state — whatever pack is still on
+    // screen right now is what the portfolio should highlight as "just landed here".
+    const justAddedIds = flow.items?.map((i) => i.ownedItemId) ?? [];
     flow.finishFlow();
-    rootNavigate("Tabs", { screen: "Portfolio" });
+    rootNavigate("Tabs", { screen: "Portfolio", params: { screen: "Collection", params: { justAddedIds } } });
   }
 
   /** A genuinely new POST /purchase for the same SKU — not a client-side re-roll of the pack(s)
@@ -144,6 +147,10 @@ export function RevealScreen() {
           key={flow.purchaseId ?? undefined}
           sku={flow.sku}
           items={flow.items}
+          // Black Label IS bulk-eligible (see BlackLabelFlowEngine's own header) — without these
+          // two, a 10-pack Black Label buy silently rendered as if it were a single pack.
+          batchContext={flow.isBatch ? { index: flow.currentPackIndex, total: flow.quantity } : undefined}
+          onSkipToResults={flow.isBatch ? flow.skipToResults : undefined}
           onFinished={handleFinished}
           onRipAgain={() => handleRipAgain(1)}
           onGoHome={handleGoHome}

@@ -4,14 +4,6 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Canvas, useFrame } from "@react-three/fiber/native";
 import type { DirectionalLight } from "three";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
 import type { ItemDetail, PackSku } from "@grailhaus/shared";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
@@ -22,15 +14,16 @@ import type { CategoryRevealConfig } from "../core/types";
 import { PackTearMesh } from "./reveal/PackTearMesh";
 import { PackTear2D } from "./reveal/PackTear2D";
 import { cardPackPersonality } from "./reveal/config/cardPack.config";
+import { CardPackFanReveal } from "./reveal/CardPackFanReveal";
 import { playHapticTrack } from "../core/HapticsTrack";
 import { PackFace } from "../../components/PackFace";
 import { ProgressRing } from "../../components/ProgressRing";
 import { StatBox } from "../../components/StatBox";
 import { ART_GRADIENT, tierLabel } from "../../components/PackTile";
-import { accents, fonts, ink, spacing } from "../../theme/tokens";
+import { accents, fonts, ink, shadow, spacing } from "../../theme/tokens";
 import { cardFlow as copy } from "../../content/copy";
 
-type Step = "processing" | "ready" | "introduction" | "card" | "final" | "summary";
+type Step = "processing" | "ready" | "introduction" | "cards" | "summary";
 
 const PROCESSING_DURATION_MS = 2000;
 
@@ -46,10 +39,14 @@ export interface BatchContext {
 
 /**
  * The Cards journey's post-payment flow: Processing → Ready → Introduction →
- * per-card 2D swipe reveal → hold-to-reveal on the final (rarest) card →
- * Pack Complete summary. Replaces `RevealEngine`'s cards branch. Keeps the
- * 3D `CardMesh` + `GestureLayer` for exactly one beat — the pack tear in
- * Introduction — everything else here is flat 2D per the newer mockup.
+ * press-and-hold-per-card fan reveal → Pack Complete summary. Replaces
+ * `RevealEngine`'s cards branch. Keeps the 3D `CardMesh` + `GestureLayer` for
+ * exactly one beat — the pack tear in Introduction — everything else here is
+ * flat 2D. The card reveal itself (CardPackFanReveal, in ./reveal/) is the
+ * same shared engine Vault Break and Black Label use for their own post-tear
+ * reveal (see reveal/holdToOpen/HoldToOpenFanReveal.tsx) — every tier now
+ * reveals its cards the same deliberate way, only the pack tear before it and
+ * the card art itself differ per tier.
  *
  * Also the engine a bulk (10-pack) batch runs, one pack at a time — `batchContext`/`onNextPack`
  * are the only things that change for that case (see RevealScreen, which mounts a fresh instance
@@ -110,7 +107,6 @@ export function CardFlowEngine({
     resumedToSummary ? "summary" : skipProcessing ? "ready" : "processing"
   );
   const [visibleStatusRows, setVisibleStatusRows] = useState(0);
-  const [cardIndex, setCardIndex] = useState(0);
   const tearCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -169,22 +165,33 @@ export function CardFlowEngine({
     // which read as "nothing lands." 2500ms comfortably covers a full multi-bounce settle.
     playHapticTrack(config.hapticTrack("opening", false));
     tearCompleteTimer.current = setTimeout(() => {
-      setStep("card");
-      setCardIndex(0);
+      // Bulk purchase: one tear stands for the whole batch — sitting through nine more of these
+      // (plus fifty individual card reveals) isn't practical, and every pack's contents already
+      // exist regardless of how many get watched play out. So the *one* physical tear here (this
+      // is always pack index 0 — no other pack of the batch ever reaches this step, since this
+      // branch never lets one) hands straight off to the terminal batch summary: all 50 cards
+      // together, the best pull surfaced as the hero (BatchSummaryScreen), same screen
+      // "Skip to results" already jumps to mid-batch. A standalone pack is unaffected — it has
+      // no `onSkipToResults` at all, so it always falls through to the normal per-card reveal.
+      if (batchContext && onSkipToResults) {
+        onSkipToResults();
+      } else {
+        setStep("cards");
+      }
     }, 2500);
   }
 
-  function handleAdvanceCard() {
-    if (cardIndex + 1 >= orderedItems.length) {
-      setStep("final");
+  function handleCardsDone() {
+    // Mid-batch, every pack still needs its own recap + "next pack" handoff (SummaryView) —
+    // there's more of the purchase left to show. A standalone pack has nothing left to hand off
+    // to, so its own "Continue"/swipe-up on the reveal screen goes straight to the portfolio
+    // instead of a results screen the user would just have to tap through again.
+    if (batchContext) {
+      setStep("summary");
+      setPhase("summary");
     } else {
-      setCardIndex((i) => i + 1);
+      onViewCollection();
     }
-  }
-
-  function handleFinalRevealed() {
-    setStep("summary");
-    setPhase("summary");
   }
 
   if (step === "processing") {
@@ -209,40 +216,26 @@ export function CardFlowEngine({
   }
 
   if (step === "introduction") {
-    return <IntroductionView sku={sku} gesture={config.gesture} onTearComplete={handleTearComplete} />;
+    return (
+      <IntroductionView sku={sku} gesture={config.gesture} batchContext={batchContext} onTearComplete={handleTearComplete} />
+    );
   }
 
-  if (step === "card" || step === "final") {
-    const item = step === "final" ? orderedItems[orderedItems.length - 1] : orderedItems[cardIndex];
-    const priorCount = priorCountById.get(item.id) ?? 0;
-    const occurrenceSoFar = orderedItems.slice(0, cardIndex + 1).filter((i) => i.id === item.id).length;
-    const holdCount = priorCount + occurrenceSoFar;
-    const runningTotalCents = orderedItems.slice(0, cardIndex + 1).reduce((sum, i) => sum + i.baseValueCents, 0);
-    const tier = sku.rarityTiers.find((t) => t.level === item.rarityTierLevel) ?? null;
-
-    return step === "final" ? (
-      <FinalCardView
-        item={item}
-        tier={tier}
-        holdCount={holdCount}
-        total={orderedItems.length}
-        onRevealed={handleFinalRevealed}
-      />
-    ) : (
-      // Keyed by index so each card gets a fresh mount — CardView's own `translateX` shared
-      // value ends a swipe at -500 (off-screen) and never resets on its own; without a key
-      // change here, advancing to the next card reuses the same instance and that same
-      // already-off-screen position, rendering a "blank" card that's actually just invisible.
-      <CardView
-        key={cardIndex}
-        item={item}
-        tier={tier}
-        index={cardIndex}
-        total={orderedItems.length}
-        holdCount={holdCount}
-        isNew={holdCount === 1}
-        runningTotalCents={runningTotalCents}
-        onAdvance={handleAdvanceCard}
+  if (step === "cards") {
+    // Pack one of a batch still plays the full ritual — only pack two onward compresses, so the
+    // choreography is established once before it starts tightening up. Auto-advance, though,
+    // applies to the whole batch including pack one: sitting through 50 taps across 10 packs
+    // isn't practical regardless of which pack it is, so every pack of a batch auto-cascades
+    // through its commons/rares, leaving only the chase pull requiring a real tap.
+    const compressed = (batchContext?.index ?? 0) > 0;
+    const autoAdvance = batchContext != null;
+    return (
+      <CardPackFanReveal
+        items={orderedItems}
+        sku={sku}
+        compressed={compressed}
+        autoAdvance={autoAdvance}
+        onDone={handleCardsDone}
       />
     );
   }
@@ -303,15 +296,50 @@ export function ReadyView({
   onSkipToResults?: () => void;
 }) {
   const art = ART_GRADIENT[sku.tier] ?? ART_GRADIENT.street_rip;
+  // A batch purchase is one tear standing in for the whole ten (see CardFlowEngine's own
+  // handleTearComplete) — this screen is the one and only place that tear gets set up, so it
+  // needs to read as "one big pack holding everything," not "pack 1 of 10, nine more to go."
+  // Deliberately blunt about it: the pack itself is physically bigger than a single-pack purchase
+  // ever renders (266x368 vs 206x286 — not a subtle few-percent bump), with a visible slab of
+  // stacked edges behind it (offsets big enough to read at a glance, not a faint few-pixel hint)
+  // and a bold ×N badge. `bigPackGhosts` are inert PackFaces with no state of their own.
+  const bigPackGhosts = batchContext ? [4, 3, 2, 1] : [];
+  const BIG_W = 266, BIG_H = 368;
   return (
     <View style={styles.fill}>
       <View style={styles.readyCenter}>
-        <Text style={styles.eyebrow}>
-          {batchContext ? `PACK ${batchContext.index + 1} OF ${batchContext.total}` : copy.ready.title}
+        <Text style={styles.eyebrow}>{batchContext ? `${batchContext.total}-PACK BATCH` : copy.ready.title}</Text>
+        <Text style={styles.readyHeading}>
+          {batchContext ? `All ${batchContext.total} packs, sealed into one.` : copy.ready.heading}
         </Text>
-        <Text style={styles.readyHeading}>{copy.ready.heading}</Text>
-        <PackFace art={art} width={206} height={286} radius={16} crimp label={sku.name} />
-        <StatBox label={copy.ready.insideLabel} value={copy.ready.insideValue(sku.itemCount)} bordered={false} />
+        {batchContext ? (
+          <View style={[styles.bigPackStack, { width: BIG_W + 24, height: BIG_H + 24 }]}>
+            {bigPackGhosts.map((d) => (
+              <View
+                key={d}
+                style={[
+                  styles.bigPackGhost,
+                  { transform: [{ translateX: d * 6 }, { translateY: -d * 6 }], opacity: 1 - d * 0.16 },
+                ]}
+              >
+                <PackFace art={art} width={BIG_W} height={BIG_H} radius={18} crimp />
+              </View>
+            ))}
+            <View style={styles.bigPackGhost}>
+              <PackFace art={art} width={BIG_W} height={BIG_H} radius={18} crimp label={sku.name} />
+            </View>
+            <View style={styles.bigPackBadge}>
+              <Text style={styles.bigPackBadgeText}>×{batchContext.total} PACKS</Text>
+            </View>
+          </View>
+        ) : (
+          <PackFace art={art} width={206} height={286} radius={16} crimp label={sku.name} />
+        )}
+        <StatBox
+          label={copy.ready.insideLabel}
+          value={copy.ready.insideValue(batchContext ? sku.itemCount * batchContext.total : sku.itemCount)}
+          bordered={false}
+        />
       </View>
       <View style={styles.footer}>
         <Pressable onPress={onBeginRip}>
@@ -364,10 +392,12 @@ function TiltCardLights({
 function IntroductionView({
   sku,
   gesture,
+  batchContext,
   onTearComplete,
 }: {
   sku: PackSku;
   gesture: CategoryRevealConfig["gesture"];
+  batchContext?: BatchContext;
   onTearComplete: () => void;
 }) {
   const keyLightRef = useRef<DirectionalLight>(null);
@@ -390,8 +420,16 @@ function IntroductionView({
 
   return (
     <View style={styles.fill}>
-      <Text style={styles.introHeading}>{copy.introduction.heading(sku.itemCount)}</Text>
-      <Text style={styles.introBody}>{copy.introduction.body}</Text>
+      <Text style={styles.introHeading}>
+        {batchContext
+          ? copy.introduction.heading(sku.itemCount * batchContext.total)
+          : copy.introduction.heading(sku.itemCount)}
+      </Text>
+      <Text style={styles.introBody}>
+        {batchContext
+          ? `Tear this one open and all ${batchContext.total} packs unseal with it — nothing left to tear one at a time.`
+          : copy.introduction.body}
+      </Text>
       <View style={styles.tearCanvas}>
         <GestureLayer gesture={gesture} onComplete={onTearComplete}>
           {(openProgress) => (
@@ -430,177 +468,6 @@ function IntroductionView({
       <View style={styles.introFooter}>
         <Text style={styles.hint}>{copy.introduction.hint}</Text>
         <View style={styles.dragHandle} />
-      </View>
-    </View>
-  );
-}
-
-export function CardView({
-  item,
-  tier,
-  index,
-  total,
-  holdCount,
-  isNew,
-  runningTotalCents,
-  onAdvance,
-}: {
-  item: ItemDetail;
-  tier: { colorHex: string; name: string } | null;
-  index: number;
-  total: number;
-  holdCount: number;
-  isNew: boolean;
-  runningTotalCents: number;
-  onAdvance: () => void;
-}) {
-  const translateX = useSharedValue(0);
-  const color = tier?.colorHex ?? ink.textMuted;
-
-  const pan = Gesture.Pan()
-    .onUpdate((e) => {
-      "worklet";
-      translateX.value = Math.min(0, e.translationX);
-    })
-    .onEnd((e) => {
-      "worklet";
-      if (e.translationX < -80 || e.velocityX < -600) {
-        translateX.value = withTiming(-500, { duration: 220 }, () => runOnJS(onAdvance)());
-      } else {
-        translateX.value = withSpring(0);
-      }
-    });
-
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { rotate: `${translateX.value / 20}deg` }],
-  }));
-
-  return (
-    <View style={styles.fill}>
-      <View style={styles.cardHud}>
-        <Text style={styles.eyebrow}>{copy.card.title(index + 1, total)}</Text>
-        <View style={styles.dotRow}>
-          {Array.from({ length: total }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                i < index && styles.dotDone,
-                i === index && styles.dotCurrent,
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.cardCenter}>
-        <GestureDetector gesture={pan}>
-          <Animated.View style={cardStyle}>
-            <PackFace
-              art={[color, "rgba(0,0,0,0.55)"]}
-              imageUrl={item.textureUrl}
-              width={220}
-              height={298}
-              radius={16}
-              tier={tier?.name.toUpperCase()}
-              label={item.name}
-            />
-          </Animated.View>
-        </GestureDetector>
-      </View>
-
-      <View style={styles.cardFooter}>
-        <View style={styles.statusRow}>
-          <View>
-            <Text style={styles.statusLabel}>{copy.card.statusLabel}</Text>
-            <Text style={styles.statusValue}>
-              {isNew ? copy.card.newLabel : copy.card.duplicateLabel(holdCount)}
-            </Text>
-          </View>
-          <View style={styles.statusRight}>
-            <Text style={styles.statusLabel}>{copy.card.runningTotalLabel}</Text>
-            <Text style={styles.statusValue}>${(runningTotalCents / 100).toFixed(0)}</Text>
-          </View>
-        </View>
-        <Text style={styles.hint}>{copy.card.hint}</Text>
-      </View>
-    </View>
-  );
-}
-
-const HOLD_DURATION_MS = 1400;
-
-export function FinalCardView({
-  item,
-  tier,
-  holdCount,
-  total,
-  onRevealed,
-}: {
-  item: ItemDetail;
-  tier: { colorHex: string; name: string } | null;
-  holdCount: number;
-  total: number;
-  onRevealed: () => void;
-}) {
-  const [revealed, setRevealed] = useState(false);
-  const progress = useSharedValue(0);
-  const color = tier?.colorHex ?? accents.cards.top;
-
-  const ringStyle = useAnimatedStyle(() => ({ opacity: 0.3 + progress.value * 0.7 }));
-
-  function startHold() {
-    progress.value = withTiming(1, { duration: HOLD_DURATION_MS }, (finished) => {
-      if (finished) runOnJS(setRevealed)(true);
-    });
-  }
-
-  function cancelHold() {
-    if (!revealed) progress.value = withTiming(0, { duration: 200 });
-  }
-
-  return (
-    <View style={styles.fill}>
-      <View style={styles.cardHud}>
-        <Text style={styles.eyebrow}>{copy.final.title(total)}</Text>
-        {!revealed && <Text style={styles.holdLabel}>{copy.final.hold}</Text>}
-      </View>
-
-      <View style={styles.cardCenter}>
-        {!revealed ? (
-          <Pressable onPressIn={startHold} onPressOut={cancelHold}>
-            <Animated.View style={ringStyle}>
-              <PackFace art={[color, "rgba(0,0,0,0.6)"]} width={236} height={326} radius={18} crimp />
-            </Animated.View>
-          </Pressable>
-        ) : (
-          <PackFace
-            art={[color, "rgba(0,0,0,0.6)"]}
-            imageUrl={item.textureUrl}
-            width={236}
-            height={326}
-            radius={18}
-            tier={tier?.name.toUpperCase()}
-            label={item.name}
-          />
-        )}
-      </View>
-
-      <View style={styles.cardFooter}>
-        {revealed ? (
-          <>
-            <View style={styles.newBinderNote}>
-              <Text style={styles.newBinderText}>
-                {holdCount === 1 ? copy.final.newToBinder : copy.card.duplicateLabel(holdCount)}
-              </Text>
-            </View>
-            <Pressable onPress={onRevealed}>
-              <Text style={styles.hint}>{copy.final.continueHint}</Text>
-            </Pressable>
-          </>
-        ) : (
-          <Text style={styles.hint}>{copy.final.holdHint}</Text>
-        )}
       </View>
     </View>
   );
@@ -749,6 +616,21 @@ export const styles = StyleSheet.create({
 
   readyCenter: { alignItems: "center", gap: spacing.lg, marginTop: 24 },
   readyHeading: { fontFamily: fonts.black, fontSize: 26, color: ink.text, textAlign: "center" },
+  bigPackStack: { marginTop: 7 },
+  bigPackGhost: { position: "absolute", top: 0, left: 0 },
+  bigPackBadge: {
+    position: "absolute",
+    top: -16,
+    right: -20,
+    backgroundColor: accents.cards.top,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.5)",
+    ...shadow.glow(accents.cards.glow),
+  },
+  bigPackBadgeText: { fontFamily: fonts.black, fontSize: 15, letterSpacing: 0.5, color: "#160a24" },
 
   footer: { position: "absolute", bottom: 40, left: 20, right: 20, gap: spacing.md, alignItems: "center" },
   primaryButton: {

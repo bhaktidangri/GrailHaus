@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,12 +8,22 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import type { FlatList } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
 import type { CategoryReveal, RarityTier } from "@grailhaus/shared";
 import {
   usePortfolioViewModel,
@@ -39,6 +49,11 @@ import { collection as copy } from "../../content/copy";
 import type { CollectionStackParamList } from "../../navigation/CollectionStack";
 
 type Nav = NativeStackNavigationProp<CollectionStackParamList, "Collection">;
+type Rt = RouteProp<CollectionStackParamList, "Collection">;
+
+// How long the "N new" banner and the per-cell glow stay up before settling back to a normal
+// grid — long enough to register, short enough not to nag on a screen you might revisit often.
+const JUST_ADDED_BANNER_MS = 4200;
 
 const CARDS_TINT = "#B14BFF";
 const WATCHES_TINT = "#F2C46B";
@@ -90,10 +105,58 @@ function rootNavigateExplore(navigation: Nav) {
  */
 export function CollectionScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<Rt>();
   const insets = useSafeAreaInsets();
   const vm = usePortfolioViewModel();
   const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
+
+  // Set only when this screen was landed on right off a reveal's "deal away" exit — see
+  // CollectionStackParamList's own comment. Keyed off the params themselves (not computed once
+  // at mount) because the Portfolio tab's screen instance persists across visits — ripping a
+  // second pack in the same session navigates here again with fresh params on the *same*
+  // mounted screen, and that should re-trigger the highlight too, not just the first arrival.
+  const justAddedIds = useMemo(() => new Set(route.params?.justAddedIds ?? []), [route.params?.justAddedIds]);
+  const [showJustAddedBanner, setShowJustAddedBanner] = useState(justAddedIds.size > 0);
+  const listRef = useRef<FlatList<Position>>(null);
+  // Scrolling to offset 0 only lands on top of `ListHeaderComponent` (the hero card + stat tiles
+  // + allocation + world tiles + filter/sort rows) — that's a lot of vertical space, and it left
+  // the actual highlighted cells still below the fold, unseen. Measuring the header's own real
+  // rendered height (below) and scrolling to *that* offset instead lands right at row one of the
+  // grid, which is the whole point.
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  // The banner doubles as a "take me there" control — tappable any time it's up, not just a
+  // passive label, since the whole point is proving the highlighted cells are actually reachable
+  // and visible, not just technically present in the (possibly scrolled-away) list underneath.
+  function showJustAdded() {
+    if (justAddedIds.size === 0) return;
+    setShowJustAddedBanner(true);
+    vm.setSort("recent");
+    vm.setFilter("all");
+    listRef.current?.scrollToOffset({ offset: headerHeight, animated: true });
+  }
+
+  // The header's height isn't known until its own first layout pass, which can land after the
+  // arrival effect below already tried to scroll (and undershot, since headerHeight was still 0
+  // then) — this re-scrolls once the real height comes in, while the banner's still up, so the
+  // grid still ends up in the right place instead of stuck wherever the first attempt landed.
+  useEffect(() => {
+    if (justAddedIds.size === 0 || headerHeight === 0 || !showJustAddedBanner) return;
+    listRef.current?.scrollToOffset({ offset: headerHeight, animated: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerHeight]);
+
+  useEffect(() => {
+    if (justAddedIds.size === 0) return;
+    // Forced on each arrival (the Portfolio tab's screen instance persists across visits, so a
+    // second pull in the same session re-runs this rather than remounting) — the user's own
+    // later sort/filter/scroll choices in between are left alone.
+    showJustAdded();
+    const t = setTimeout(() => setShowJustAddedBanner(false), JUST_ADDED_BANNER_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justAddedIds]);
   // Matches the grid's 20px side padding + the 12px inter-column gap, so a lone cell in the last
   // row sits at half width instead of stretching (the same fix MarketplaceScreen documents).
   const { width: windowWidth } = useWindowDimensions();
@@ -110,6 +173,15 @@ export function CollectionScreen() {
   const tiersByCategory = useRarityTiersByCategory(heldCategoryIds);
 
   const categoryCount = vm.positionsByCategory.filter((c) => c.positions.length > 0).length;
+
+  const bannerOpacity = useSharedValue(0);
+  useEffect(() => {
+    bannerOpacity.value = withTiming(showJustAddedBanner ? 1 : 0, { duration: 280 });
+  }, [showJustAddedBanner, bannerOpacity]);
+  const bannerStyle = useAnimatedStyle(() => ({
+    opacity: bannerOpacity.value,
+    transform: [{ translateY: (1 - bannerOpacity.value) * -6 }],
+  }));
 
   function openDetail(position: Position) {
     // Cards gets its own dedicated detail screen; every other category (watches, and anything
@@ -144,6 +216,18 @@ export function CollectionScreen() {
         )}
       </View>
 
+      {justAddedIds.size > 0 && (
+        <Animated.View style={[styles.justAddedBanner, bannerStyle]}>
+          <Pressable style={styles.justAddedTap} onPress={showJustAdded} hitSlop={8}>
+            <Ionicons name="sparkles" size={13} color={colors.violetTop} />
+            <Text style={styles.justAddedText}>
+              {justAddedIds.size === 1 ? "1 new, right below" : `${justAddedIds.size} new, right below`}
+            </Text>
+            <Ionicons name="arrow-up-circle" size={14} color={colors.violetTop} />
+          </Pressable>
+        </Animated.View>
+      )}
+
       {!vm.isSignedIn ? (
         <SignInPrompt title={copy.signInTitle} body={copy.signInBody} />
       ) : vm.isLoading ? (
@@ -152,6 +236,7 @@ export function CollectionScreen() {
         <EmptyCollectionState onExplore={() => rootNavigateExplore(navigation)} />
       ) : (
         <Animated.FlatList
+          ref={listRef}
           data={vm.visible}
           keyExtractor={(p: Position) => p.owned.ownedItemId}
           numColumns={2}
@@ -164,16 +249,18 @@ export function CollectionScreen() {
             <RefreshControl refreshing={vm.isRefreshing} onRefresh={vm.refresh} tintColor={colors.textSecondary} />
           }
           ListHeaderComponent={
-            <PortfolioHeader
-              vm={vm}
-              width={windowWidth}
-              categoriesById={categoriesById}
-              onOpenBinder={() => navigation.navigate("Binder", undefined)}
-              onOpenVault={() => navigation.navigate("Vault")}
-            />
+            <View onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+              <PortfolioHeader
+                vm={vm}
+                width={windowWidth}
+                categoriesById={categoriesById}
+                onOpenBinder={() => navigation.navigate("Binder", undefined)}
+                onOpenVault={() => navigation.navigate("Vault")}
+              />
+            </View>
           }
           ListEmptyComponent={<Text style={styles.emptyFiltered}>{copy.tracker.emptyFiltered}</Text>}
-          renderItem={({ item: position }: { item: Position }) => (
+          renderItem={({ item: position, index }: { item: Position; index: number }) => (
             <HoldingCell
               position={position}
               width={cellWidth}
@@ -181,6 +268,8 @@ export function CollectionScreen() {
               tint={categoryTint(position.owned.item.category, categoriesById)}
               onOpen={() => openDetail(position)}
               onSell={() => navigation.navigate("SellItem", { owned: position.owned })}
+              justAdded={justAddedIds.has(position.owned.ownedItemId)}
+              justAddedIndex={index}
             />
           )}
         />
@@ -535,6 +624,8 @@ function HoldingCell({
   tint,
   onOpen,
   onSell,
+  justAdded = false,
+  justAddedIndex = 0,
 }: {
   position: Position;
   width: number;
@@ -542,6 +633,14 @@ function HoldingCell({
   tint: string;
   onOpen: () => void;
   onSell: () => void;
+  /** True for a holding that's part of the pull this screen was just landed on from (see
+   * CollectionScreen's own `justAddedIds`) — gets a brief landing pop + pulsing glow so it's
+   * obvious at a glance "this is one of the ones that just came in", not just a silently new row. */
+  justAdded?: boolean;
+  /** Position within the just-added group (not the whole grid) — staggers the landing pop so a
+   * multi-card pull visibly deals into the grid one after another instead of every cell popping
+   * in unison. Ignored when `justAdded` is false. */
+  justAddedIndex?: number;
 }) {
   const { owned, valueCents, pnlCents, pnlPercent, isListed } = position;
   const item = owned.item;
@@ -551,8 +650,39 @@ function HoldingCell({
   const isCards = item.category === "cards";
   const artHeight = width * 1.3;
 
+  // Land + pulse, then settle — a small entrance pop (like the card actually dropping into this
+  // slot) followed by two glow pulses around the cell's own tint, then fades to a normal,
+  // unhighlighted cell. Capped stagger so a big pull doesn't drag the last cells' pop out for
+  // seconds; they've all landed by then either way.
+  // `land` overshoots past 1 and settles (a spring, not an eased tween) — reads as the card
+  // actually dropping into this exact grid slot and bouncing on landing, not just fading up.
+  // `fallHeight` scales with the stagger delay so a card further back in the deal also *looks*
+  // like it fell from further away, not just later.
+  const land = useSharedValue(justAdded ? 0 : 1);
+  const glow = useSharedValue(0);
+  const fallHeight = 46 + Math.min(justAddedIndex, 8) * 5;
+  useEffect(() => {
+    if (!justAdded) return;
+    const delay = Math.min(justAddedIndex, 8) * 80;
+    land.value = withDelay(delay, withSpring(1, { damping: 10, stiffness: 140, mass: 0.7 }));
+    glow.value = withDelay(
+      delay + 220,
+      withSequence(
+        withRepeat(withSequence(withTiming(1, { duration: 360 }), withTiming(0.35, { duration: 360 })), 3, true),
+        withTiming(0, { duration: 500 })
+      )
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const landStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, land.value),
+    transform: [{ scale: 0.82 + land.value * 0.18 }, { translateY: (1 - land.value) * -fallHeight }],
+  }));
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value, borderColor: tint }));
+
   return (
-    <View style={[styles.cell, { width }]}>
+    <Animated.View style={[styles.cell, { width }, landStyle]}>
+      {justAdded ? <Animated.View pointerEvents="none" style={[styles.justAddedGlow, glowStyle]} /> : null}
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={displayName(position)}>
         <View style={[styles.art, { height: artHeight }]}>
           {isCards ? (
@@ -631,7 +761,7 @@ function HoldingCell({
           </Text>
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -666,6 +796,22 @@ const styles = StyleSheet.create({
   },
   title: typography.heroWordmark,
   sub: { ...typography.sectionSub, marginTop: 4 },
+  justAddedBanner: {
+    alignSelf: "center",
+    marginTop: 10,
+  },
+  justAddedTap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(177,75,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(177,75,255,0.4)",
+  },
+  justAddedText: { fontFamily: fonts.bold, fontSize: 11.5, color: "#e7d4ff" },
   balancePill: {
     height: 34,
     paddingHorizontal: 14,
@@ -816,6 +962,15 @@ const styles = StyleSheet.create({
   sortChipTextActive: { color: "#fff" },
 
   cell: { gap: 5 },
+  // The pulsing "this one just landed" ring — an absolute-fill overlay sitting behind the cell's
+  // own content (added first, before the Pressable, so it paints underneath) rather than a real
+  // border on the cell itself, so it never nudges the art/text layout while it pulses.
+  justAddedGlow: {
+    position: "absolute",
+    top: -4, left: -4, right: -4, bottom: -4,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
   art: { position: "relative", justifyContent: "center" },
   watchArt: {
     flex: 1,

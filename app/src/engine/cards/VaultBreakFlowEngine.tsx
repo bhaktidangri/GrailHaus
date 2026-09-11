@@ -88,9 +88,11 @@ export function VaultBreakFlowEngine({
     setStep("cards");
   }
 
+  // Vault Break is never batched (see this file's header) — its own reveal's "Continue"/swipe-up
+  // goes straight to the portfolio instead of the results screen (SummaryView), same as a
+  // standalone CardFlowEngine pack.
   function handleCardsDone() {
-    setStep("summary");
-    setPhase("summary");
+    onViewCollection();
   }
 
   if (step === "processing") {

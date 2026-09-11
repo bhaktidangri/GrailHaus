@@ -42,6 +42,7 @@ import {
   drawTrackedText,
 } from "../../reveal/art/canvasHelpers";
 import { metalShader, hairlines, guilloche, microBlock } from "./artUtil";
+import { typeVisualOf } from "../../reveal/art/typeVisual";
 import type { CardRarity, VaultCardData } from "../config/types";
 
 export interface PixelImage {
@@ -272,6 +273,17 @@ function paintCardFace(canvas: SkCanvas, card: VaultCardData) {
   canvas.drawRect(Skia.XYWHRect(0, 0, CW, CH), linearGradientPaint(0, 0, CW, CH, [
     [0, stock[0]], [0.5, stock[1]], [1, stock[2]],
   ]));
+  // A subtle type-tinted wash, bottom-anchored, fading out by the card's midpoint — only for
+  // cards whose category actually carries a real Pokémon type (card.type; see
+  // adaptBlackLabelDeck.ts). Only ever visible on this Skia-rendered fallback face — a real
+  // pulled item with a catalog photo (textureUrl) skips this whole raster in favor of the real
+  // image (see HoldToOpenFanReveal.tsx), so this alone is a small assist, not the main effect.
+  if (card.type) {
+    const visual = typeVisualOf(card.type);
+    canvas.drawRect(Skia.XYWHRect(0, 0, CW, CH), linearGradientPaint(0, CH, 0, CH * 0.55, [
+      [0, `rgba(${visual.rgb},0.22)`], [1, `rgba(${visual.rgb},0)`],
+    ]));
+  }
   hairlines(canvas, 0, 0, CW, CH, { step: 6, angle: -0.4, alpha: 0.035 });
 
   canvas.drawRect(Skia.XYWHRect(3, 3, CW - 6, CH - 6), strokePaint(ribbon[1], 5 + rar.glow * 2));

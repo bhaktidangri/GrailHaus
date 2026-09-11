@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type { PackSku, PulledOwnedItem } from "@grailhaus/shared";
 import { usePackFlowStore } from "../../state/packFlowStore";
 import { useCollectionViewModel } from "../../viewmodels/useCollectionViewModel";
-import { ProcessingView, ReadyView, SummaryView } from "./CardFlowEngine";
+import { ProcessingView, ReadyView, SummaryView, type BatchContext } from "./CardFlowEngine";
 import { BlackLabelTearStage } from "./blackLabelReveal/BlackLabelTearStage";
 import { BlackLabelFanReveal } from "./blackLabelReveal/BlackLabelFanReveal";
 
@@ -16,22 +16,33 @@ type Step = "processing" | "ready" | "tear" | "cards" | "summary";
  * BlackLabelTearStage/BlackLabelFanReveal (this tier's own bronze-on-onyx personality/art)
  * instead of Vault Break's. Every other card tier still keeps CardFlowEngine's own tear +
  * swipe-through-cards flow unchanged.
+ *
+ * Black Label IS bulk-eligible (PackDetailScreen's own `bulkEligible` check — only vault_break is
+ * excluded) — `batchContext`/`onSkipToResults` exist here for exactly that: a 10-pack Black Label
+ * buy needs the same "one big pack" ready screen and one-tear-then-straight-to-batch-summary
+ * handoff CardFlowEngine.tsx just got, or it silently renders as if it were a single pack (the
+ * bug this fixes — RevealScreen was routing bulk Black Label purchases here without ever telling
+ * this component a batch existed).
  */
 export function BlackLabelFlowEngine({
   sku,
   items,
+  batchContext,
   onFinished,
   onRipAgain,
   onGoHome,
   onViewCollection,
+  onSkipToResults,
   isRipAgainWorking,
 }: {
   sku: PackSku;
   items: PulledOwnedItem[];
+  batchContext?: BatchContext;
   onFinished: () => void;
   onRipAgain: () => void;
   onGoHome: () => void;
   onViewCollection: () => void;
+  onSkipToResults?: () => void;
   isRipAgainWorking: boolean;
 }) {
   const setPhase = usePackFlowStore((s) => s.setPhase);
@@ -75,12 +86,23 @@ export function BlackLabelFlowEngine({
   }
 
   function handleTearComplete() {
-    setStep("cards");
+    // Bulk purchase: same fix as CardFlowEngine's own handleTearComplete — one tear stands for
+    // the whole batch (every pack's contents already exist regardless of how many get watched),
+    // so it hands straight off to the terminal batch summary instead of this pack's own 5-card
+    // reveal. A standalone purchase has no `onSkipToResults` and falls through unchanged.
+    if (batchContext && onSkipToResults) {
+      onSkipToResults();
+    } else {
+      setStep("cards");
+    }
   }
 
+  // A standalone pack's own reveal goes straight to the portfolio instead of the results screen
+  // (SummaryView) once it's done — a batch pack never reaches "cards" at all now (see
+  // handleTearComplete above), so this only ever fires for the standalone case in practice; kept
+  // simple rather than branching on batchContext for a path it can't actually take.
   function handleCardsDone() {
-    setStep("summary");
-    setPhase("summary");
+    onViewCollection();
   }
 
   if (step === "processing") {
@@ -88,7 +110,15 @@ export function BlackLabelFlowEngine({
   }
 
   if (step === "ready") {
-    return <ReadyView sku={sku} onBeginRip={handleBeginRip} onOpenLater={handleOpenLater} />;
+    return (
+      <ReadyView
+        sku={sku}
+        batchContext={batchContext}
+        onBeginRip={handleBeginRip}
+        onOpenLater={handleOpenLater}
+        onSkipToResults={batchContext ? onSkipToResults : undefined}
+      />
+    );
   }
 
   if (step === "tear") {

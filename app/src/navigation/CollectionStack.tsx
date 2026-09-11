@@ -15,7 +15,11 @@ import { SellItemScreen } from "../screens/marketplace/SellItemScreen";
  * item, so it lives under the Marketplace feature and is just re-used here.
  */
 export type CollectionStackParamList = {
-  Collection: undefined;
+  /** `justAddedIds` — set only when this screen is landed on right off a reveal's "deal away"
+   * exit (see RevealScreen.handleViewCollection) — the `ownedItemId`s of what was just pulled,
+   * so the grid can sort them to the top and give them a brief landing/highlight animation
+   * ("this is where your cards went") instead of just silently having new rows appear. */
+  Collection: { justAddedIds?: string[] } | undefined;
   Binder: { collectionFilter?: string } | undefined;
   CardDetail: { owned: OwnedItem };
   Vault: undefined;
