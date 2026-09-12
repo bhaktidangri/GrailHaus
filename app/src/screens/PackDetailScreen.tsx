@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { usePackDetailViewModel } from "../viewmodels/usePackDetailViewModel";
-import { useTabBarClearance } from "../navigation/tabBarVisibility";
+import { useActionBarPadding } from "../navigation/tabBarVisibility";
 import { useSessionViewModel } from "../viewmodels/useSessionViewModel";
 import { usePackFlowViewModel } from "../viewmodels/usePackFlowViewModel";
 import { useAuthStore } from "../state/authStore";
@@ -47,7 +47,7 @@ export function PackDetailScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [quantity, setQuantity] = useState<1 | 10>(1);
   const isRippingRef = useRef(false);
-  const tabBarClearance = useTabBarClearance();
+  const actionBarPadding = useActionBarPadding();
 
   // Bulk ripping (PRD §46) is offered here — the evergreen shelf's own detail screen — for every
   // card tier. This used to exclude Vault Break, because a batch meant replaying that tier's
@@ -104,6 +104,8 @@ export function PackDetailScreen() {
         <View style={styles.iconButton} />
       </View>
 
+      {/* The footer here is a flex sibling, not an overlay, so the scroll content needs no
+          extra clearance of its own — it simply ends where the action bar begins. */}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <PackFace art={art} width={110} height={152} radius={14} crimp />
@@ -126,7 +128,7 @@ export function PackDetailScreen() {
         <ExpectedValueNote sku={sku} linkLabel={copy.fullOdds} accentColor={accents.cards.top} />
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: tabBarClearance }]}>
+      <View style={[styles.footer, { paddingBottom: actionBarPadding }]}>
         <Pressable onPress={handleOpenSheet} style={styles.ripButtonWrap}>
           <LinearGradient colors={[accents.cards.top, accents.cards.bottom]} style={styles.ripButton}>
             <Text style={styles.ripLabel}>{copy.ripNow}</Text>
@@ -186,7 +188,7 @@ const styles = StyleSheet.create({
   body: { fontFamily: fonts.regular, fontSize: 13.5, lineHeight: 20, color: "rgba(255,255,255,0.6)" },
   statRow: { flexDirection: "row", gap: 10 },
 
-  footer: { padding: 20, paddingTop: 0, gap: 10, alignItems: "center" },
+  footer: { paddingHorizontal: 20, paddingTop: 12, gap: 10, alignItems: "center" },
   bulkHint: { fontFamily: fonts.semibold, fontSize: 11.5, color: "rgba(255,255,255,0.45)" },
   ripButtonWrap: { borderRadius: 18, alignSelf: "stretch" },
   ripButton: {
