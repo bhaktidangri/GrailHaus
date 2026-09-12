@@ -16,6 +16,7 @@ import { marketplaceRoutes } from "./modules/marketplace/marketplace.routes.js";
 import { packsAdminRoutes } from "./modules/packs/packs.admin.routes.js";
 import { activityRoutes } from "./modules/activity/activity.routes.js";
 import { categoriesRoutes } from "./modules/categories/categories.routes.js";
+import { walletRoutes } from "./modules/wallet/wallet.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -45,6 +46,7 @@ export async function buildApp() {
   await app.register(usernameRoutes);
   await app.register(purchaseRoutes);
   await app.register(portfolioRoutes);
+  await app.register(walletRoutes);
 
   // Mixed — browsing listings is public (like /packs), listing/delisting/buying require a session.
   await app.register(marketplaceRoutes);

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Canvas } from "@react-three/fiber/native";
+import { runOnJS, useAnimatedReaction, type SharedValue } from "react-native-reanimated";
 import type { OwnedItem, PulledOwnedItem, RarityTier } from "@grailhaus/shared";
 import type { CategoryRevealConfig, RevealPhase } from "./types";
 import { GestureLayer } from "./GestureLayer";
@@ -58,6 +59,43 @@ function resolveTier(rarityTiers: RarityTier[], level: number): RarityTier {
   );
 }
 
+// The 5-state progression from the original lift-lid design handoff (heritage-case.html's
+// `.states` list: Closed / Lid opening / Lid fully open / Watch emergence / Inspection) — ported
+// as a `gesture.mode === "lift-lid"` only enrichment (watches, handbags), never shown for `"tear"`
+// (cards keep their own existing dot row). "Closed"/"Lid opening" both happen inside RevealEngine's
+// own `"idle"` phase (the gesture hasn't completed yet) and are told apart by `liftDragActive`
+// below; "Lid fully open"/"Watch emergence" both happen inside `"opening"` and are told apart by
+// `openingSubPhase`, timed against the same dwell-before-rise beat WatchMesh's own `DWELL_S`
+// already animates, so the label change and the on-screen motion land together.
+const LID_STATES = ["Closed", "Lid opening", "Lid fully open", "Watch emergence", "Inspection"] as const;
+
+/**
+ * Bridges the gesture's UI-thread `openProgress` shared value to a one-shot JS boolean the
+ * instant a lift-lid drag actually starts moving — not a live-updating number (that would
+ * re-render this screen every frame of the drag for no visual payoff), just the single
+ * Closed→"Lid opening" transition the states list needs. Renders nothing.
+ */
+function LiftLidDragWatcher({
+  openProgress,
+  active,
+  onDragStart,
+}: {
+  openProgress: SharedValue<number>;
+  active: boolean;
+  onDragStart: () => void;
+}) {
+  useAnimatedReaction(
+    () => openProgress.value,
+    (value, prev) => {
+      if (active && value > 0.03 && (prev == null || prev <= 0.03)) {
+        runOnJS(onDragStart)();
+      }
+    },
+    [active]
+  );
+  return null;
+}
+
 /**
  * Written once, shared by every category. A category personality is
  * entirely `config` — geometry, materials, lighting, camera, timing,
@@ -92,6 +130,13 @@ export function RevealEngine({
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<RevealPhase>(resumedToSummary ? "summary" : "idle");
   const [beatLabel, setBeatLabel] = useState<string | null>(null);
+  // Lift-lid-only states-list progression (see LID_STATES above) — both reset per item so a
+  // second lift-lid pull in the same pack (handbags can have several; watches never do, per
+  // PRD §21) starts back at "Closed" rather than carrying over the previous item's progress.
+  const [liftDragActive, setLiftDragActive] = useState(false);
+  const [openingSubPhase, setOpeningSubPhase] = useState<0 | 1>(0);
+  const [momentVisible, setMomentVisible] = useState(false);
+  const momentOpacity = useRef(new Animated.Value(0)).current;
 
   const maxTierLevel = useMemo(() => Math.max(...rarityTiers.map((t) => t.level), 1), [rarityTiers]);
 
@@ -109,12 +154,42 @@ export function RevealEngine({
     setBeatLabel(beats[0]?.label ?? null);
     const beatTimers = beats.slice(1).map((beat) => setTimeout(() => setBeatLabel(beat.label), beat.atMs));
     const timer = setTimeout(() => setPhase("settled"), holdMs);
+    // "Lid fully open" → "Watch emergence": same dwell WatchMesh's own DWELL_S (0.45s) spends
+    // motionless before the platform starts rising, capped to a third of a short common-pull
+    // hold so the label change never outlasts the hold itself.
+    setOpeningSubPhase(0);
+    const dwellMs = Math.min(450, holdMs / 3);
+    const subPhaseTimer = setTimeout(() => setOpeningSubPhase(1), dwellMs);
     return () => {
       cancel();
       beatTimers.forEach(clearTimeout);
       clearTimeout(timer);
+      clearTimeout(subPhaseTimer);
     };
   }, [phase, current, isRare, config]);
+
+  // The states list resets to "Closed" at the start of every fresh idle phase (a new item, or —
+  // for watches specifically — the only item), and the "Heritage moment" word (see `.moment` in
+  // the original design's heritage-case.html: a single word + brass hairline, nothing else) plays
+  // once, automatically, right as the piece settles into view — never gating anything, never
+  // reappearing until the next item.
+  useEffect(() => {
+    if (phase === "idle") setLiftDragActive(false);
+    if (phase === "settled") {
+      setMomentVisible(true);
+      const t = setTimeout(() => setMomentVisible(false), 2200);
+      return () => clearTimeout(t);
+    }
+    setMomentVisible(false);
+  }, [phase, index]);
+
+  useEffect(() => {
+    Animated.timing(momentOpacity, {
+      toValue: momentVisible ? 1 : 0,
+      duration: momentVisible ? 700 : 900,
+      useNativeDriver: true,
+    }).start();
+  }, [momentVisible, momentOpacity]);
 
   // Was a flat 500ms auto-advance out of "settled" — the one phase where the user is actually
   // looking at what they got, with nothing left to build toward. A fixed timer here is exactly
@@ -148,6 +223,10 @@ export function RevealEngine({
 
   const isTear = config.gesture.mode === "tear";
   const hintLabel = isTear ? "SWIPE UP TO TEAR" : "LIFT THE LID";
+  // See LID_STATES above — idle/opening each cover two named states, told apart by
+  // `liftDragActive`/`openingSubPhase`; settled is always "Inspection".
+  const liftStateIndex =
+    phase === "idle" ? (liftDragActive ? 1 : 0) : phase === "opening" ? (openingSubPhase === 0 ? 2 : 3) : 4;
 
   return (
     <View style={[styles.container, { backgroundColor: config.palette.background }]}>
@@ -157,11 +236,13 @@ export function RevealEngine({
             <Text style={styles.hudEyebrow}>
               {config.label.toUpperCase()} · {isTear ? "SEALED" : "LIFT THE LID"}
             </Text>
-            <View style={styles.dotRow}>
-              {orderedItems.map((item, i) => (
-                <View key={item.id ?? i} style={[styles.dot, i === index && styles.dotActive]} />
-              ))}
-            </View>
+            {isTear && (
+              <View style={styles.dotRow}>
+                {orderedItems.map((item, i) => (
+                  <View key={item.id ?? i} style={[styles.dot, i === index && styles.dotActive]} />
+                ))}
+              </View>
+            )}
           </>
         ) : phase === "opening" ? (
           // Rarity intentionally withheld here — the RarityBadge only appears once "settled",
@@ -181,38 +262,80 @@ export function RevealEngine({
       <View style={{ flex: 1 }}>
         <GestureLayer gesture={config.gesture} onComplete={() => setPhase("opening")} enabled={phase === "idle"}>
           {(openProgress) => (
-            // Every card-tier tear already goes through this same boundary (see
-            // CardFlowEngine.IntroductionView) — RevealEngine's own Canvas never did, which meant
-            // a broken/unavailable 3D context here (expo-gl init failure, an r3f reconciler error —
-            // Renderer3DBoundary's own header names on-device iOS as a real, seen failure mode) had
-            // no fallback at all: gesture physics still ran (GestureLayer owns that, unconditionally),
-            // but there was nothing for the user to actually see or feel respond to it.
-            <Renderer3DBoundary
-              fallback={
-                isTear ? (
-                  <PackTear2D
-                    openProgress={openProgress}
-                    topColor={config.palette.accent}
-                    bottomColor={config.palette.background}
-                    wordmark={config.label.toUpperCase()}
-                    badge={config.label}
-                  />
-                ) : (
-                  <LiftLid2D openProgress={openProgress} accentColor={config.palette.accent} caseColor={config.palette.background} />
-                )
-              }
-            >
-              <Canvas camera={{ position: config.camera.position, fov: config.camera.fov }}>
-                <TiltLights lighting={config.lighting} tilt={tilt} />
-                <ExploreOrbitGroup handle={orbit}>
-                  {config.buildMesh(current, { openProgress, tierColor: currentTier.colorHex })}
-                </ExploreOrbitGroup>
-              </Canvas>
-            </Renderer3DBoundary>
+            <>
+              {!isTear && (
+                <LiftLidDragWatcher
+                  openProgress={openProgress}
+                  active={phase === "idle"}
+                  onDragStart={() => setLiftDragActive(true)}
+                />
+              )}
+              {/* Every card-tier tear already goes through this same boundary (see
+                  CardFlowEngine.IntroductionView) — RevealEngine's own Canvas never did, which meant
+                  a broken/unavailable 3D context here (expo-gl init failure, an r3f reconciler error —
+                  Renderer3DBoundary's own header names on-device iOS as a real, seen failure mode) had
+                  no fallback at all: gesture physics still ran (GestureLayer owns that, unconditionally),
+                  but there was nothing for the user to actually see or feel respond to it. */}
+              <Renderer3DBoundary
+                fallback={
+                  isTear ? (
+                    <PackTear2D
+                      openProgress={openProgress}
+                      topColor={config.palette.accent}
+                      bottomColor={config.palette.background}
+                      wordmark={config.label.toUpperCase()}
+                      badge={config.label}
+                    />
+                  ) : (
+                    <LiftLid2D openProgress={openProgress} accentColor={config.palette.accent} caseColor={config.palette.background} />
+                  )
+                }
+              >
+                <Canvas camera={{ position: config.camera.position, fov: config.camera.fov }}>
+                  <TiltLights lighting={config.lighting} tilt={tilt} />
+                  <ExploreOrbitGroup handle={orbit}>
+                    {config.buildMesh(current, { openProgress, tierColor: currentTier.colorHex })}
+                  </ExploreOrbitGroup>
+                </Canvas>
+              </Renderer3DBoundary>
+            </>
           )}
         </GestureLayer>
         <ExploreOrbitSurface handle={orbit} active={phase === "settled"} />
       </View>
+
+      {/* States list — ported from heritage-case.html's `.states` (bottom-left hairline list).
+          Lift-lid only; cards keep their own dot row above. Two design-source features
+          deliberately NOT ported here: the "collection" sidebar (browsing other pieces of the
+          same tier mid-reveal) and the "ident" panel — both assume a design-tool showcase
+          browsing between several pieces at once, which doesn't map onto this app's flow of
+          revealing the one specific item a pull just produced. A "Return to rest" reset action
+          was cut for the same reason: there's nothing to reset back to — once revealed, the item
+          is already the user's, not a case to re-close and re-open. */}
+      {!isTear && (
+        <View style={styles.statesList} pointerEvents="none">
+          {LID_STATES.map((label, i) => (
+            <View key={label} style={styles.stateRow}>
+              <View
+                style={[
+                  styles.stateHairline,
+                  i < liftStateIndex && styles.stateHairlineDone,
+                  i === liftStateIndex && styles.stateHairlineOn,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.stateLabel,
+                  i < liftStateIndex && styles.stateLabelDone,
+                  i === liftStateIndex && styles.stateLabelOn,
+                ]}
+              >
+                {label.toUpperCase()}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {phase === "idle" && (
         // pointerEvents="none": this absolutely-positioned footer floats on top of the
@@ -222,7 +345,14 @@ export function RevealEngine({
         // reaches the gesture recognizer at all, making the whole screen feel completely
         // unresponsive. Purely decorative, never needs to receive touches itself.
         <View style={styles.idleFooter} pointerEvents="none">
-          <Text style={styles.hint}>{hintLabel}</Text>
+          {isTear ? (
+            <Text style={styles.hint}>{hintLabel}</Text>
+          ) : (
+            <>
+              <Text style={styles.hintEm}>Drag upward to lift the lid</Text>
+              <Text style={styles.hint}>Slow and steady</Text>
+            </>
+          )}
           <View style={styles.dragHandle} />
         </View>
       )}
@@ -234,11 +364,23 @@ export function RevealEngine({
         // tap target rather than making the whole screen tappable, so tilting the device to
         // watch the case's own light sweep (TiltLights) never accidentally dismisses it.
         <View style={styles.idleFooter} pointerEvents="box-none">
-          <Text style={[styles.hint, { opacity: 0.6 }]}>DRAG TO ROTATE · PINCH TO ZOOM</Text>
+          {!isTear && <Text style={styles.hintEmSmall}>Drag to rotate · pinch to zoom</Text>}
+          <Text style={[styles.hint, { opacity: 0.6 }]}>{isTear ? "DRAG TO ROTATE · PINCH TO ZOOM" : "Inspect every detail"}</Text>
           <Pressable onPress={handleContinue} hitSlop={16}>
             <Text style={styles.hint}>TAP TO CONTINUE</Text>
           </Pressable>
         </View>
+      )}
+
+      {/* The "moment" — heritage-case.html's `.moment`: one word (here, the tier the pull actually
+          landed on, so it's a real payoff rather than a static brand word) with a brass hairline
+          underneath, fading in as the piece settles, then fading back out on its own. Never
+          blocks input (pointerEvents="none") and never gates phase advancement. */}
+      {!isTear && (
+        <Animated.View style={[styles.momentOverlay, { opacity: momentOpacity }]} pointerEvents="none">
+          <Text style={styles.momentWord}>{currentTier.name.toUpperCase()}</Text>
+          <View style={styles.momentHairline} />
+        </Animated.View>
       )}
     </View>
   );
@@ -371,11 +513,63 @@ const styles = StyleSheet.create({
     ...typography.body,
     letterSpacing: 1,
   },
+  hintEm: {
+    ...typography.title,
+    color: reveal.textPrimary,
+    textAlign: "center",
+  },
+  hintEmSmall: {
+    ...typography.body,
+    color: reveal.textPrimary,
+    textAlign: "center",
+  },
   dragHandle: {
     width: 44,
     height: 4,
     borderRadius: 3,
     backgroundColor: "rgba(255,255,255,0.4)",
+  },
+  statesList: {
+    position: "absolute",
+    left: spacing.xl,
+    bottom: spacing.xxl,
+    gap: 9,
+  },
+  stateRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stateHairline: {
+    width: 18,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  stateHairlineOn: { width: 34, backgroundColor: reveal.accent },
+  stateHairlineDone: { backgroundColor: "rgba(255,255,255,0.4)" },
+  stateLabel: {
+    ...typography.caption,
+    letterSpacing: 2,
+    color: "rgba(255,255,255,0.32)",
+  },
+  stateLabelOn: { color: reveal.textPrimary },
+  stateLabelDone: { color: "rgba(255,255,255,0.5)" },
+  momentOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: "20%",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  momentWord: {
+    ...typography.eyebrow,
+    color: reveal.textPrimary,
+    letterSpacing: 6,
+    paddingBottom: 14,
+  },
+  momentHairline: {
+    width: 40,
+    height: 1,
+    backgroundColor: reveal.accent,
+    opacity: 0.8,
   },
   summary: {
     flex: 1,

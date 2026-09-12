@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -34,9 +35,11 @@ import {
 } from "../../viewmodels/usePortfolioViewModel";
 import { useRarityTiersByCategory } from "../../viewmodels/useRarityTiers";
 import { useCategoriesViewModel } from "../../viewmodels/useCategoriesViewModel";
+import { useWalletTopup } from "../../viewmodels/useWalletTopup";
 import { useHideTabBarOnScroll, useTabBarClearance } from "../../navigation/tabBarVisibility";
 import { SignInPrompt } from "../../components/SignInPrompt";
 import { GlossyButton } from "../../components/GlossyButton";
+import { AddFundsSheet } from "../../components/AddFundsSheet";
 import { CardFace } from "../../components/CardFace";
 import { WatchDial } from "../../components/WatchDial";
 import { PnlPill } from "../../components/PnlPill";
@@ -110,6 +113,17 @@ export function CollectionScreen() {
   const vm = usePortfolioViewModel();
   const scrollHandler = useHideTabBarOnScroll();
   const tabBarClearance = useTabBarClearance();
+  const { topUp, isToppingUp } = useWalletTopup();
+  const [showAddFunds, setShowAddFunds] = useState(false);
+
+  async function handleAddFunds(amountCents: number) {
+    const result = await topUp(amountCents);
+    if (result.ok) {
+      setShowAddFunds(false);
+    } else {
+      Alert.alert("Couldn't add funds", result.error);
+    }
+  }
 
   // Set only when this screen was landed on right off a reveal's "deal away" exit — see
   // CollectionStackParamList's own comment. Keyed off the params themselves (not computed once
@@ -209,12 +223,26 @@ export function CollectionScreen() {
           <Text style={styles.sub}>{copy.itemCount(vm.positions.length, categoryCount)}</Text>
         </View>
         {vm.summary && (
-          <View style={styles.balancePill}>
+          <Pressable
+            style={styles.balancePill}
+            onPress={() => setShowAddFunds(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add funds to your wallet"
+          >
             <LinearGradient colors={["#FFE27A", "#E0A016"]} style={styles.coin} />
             <Text style={styles.balanceText}>{Math.round(vm.live.walletCents / 100).toLocaleString()}</Text>
-          </View>
+            <Ionicons name="add-circle" size={16} color="rgba(255,255,255,0.5)" />
+          </Pressable>
         )}
       </View>
+
+      <AddFundsSheet
+        visible={showAddFunds}
+        balanceCents={vm.live.walletCents}
+        isToppingUp={isToppingUp}
+        onClose={() => setShowAddFunds(false)}
+        onConfirm={handleAddFunds}
+      />
 
       {justAddedIds.size > 0 && (
         <Animated.View style={[styles.justAddedBanner, bannerStyle]}>

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { SharedValue } from "react-native-reanimated";
-import type { Category, PulledItem } from "@grailhaus/shared";
+import type { Category, ItemDetail, PulledItem } from "@grailhaus/shared";
 
 export type RevealPhase = "idle" | "gesture" | "opening" | "settled" | "summary";
 
@@ -39,9 +39,17 @@ export interface CategoryRevealConfig {
    * updates every GPU frame without round-tripping through React state.
    * `tierColor` is resolved by the engine from the pack's admin-configurable
    * rarity_tiers data for this pull's tier level — never hardcoded here.
+   *
+   * `item` is typed `ItemDetail`, not the narrower `PulledItem` the reward engine itself deals
+   * in — every real call site (RevealEngine.tsx) actually has a `PulledOwnedItem`, which already
+   * extends `ItemDetail` (dialColor/caseMaterial/pokemonType/etc., all real catalog columns, not
+   * admin-configurable data). Watches used to render an identical dial/case for every single
+   * pull, differing only by rarity-tier color, because this field's type stopped an archetype
+   * from ever reading `item.dialColor` even though the value was already sitting on the object at
+   * runtime — see WatchMesh's own header for how it's used now.
    */
   buildMesh: (
-    item: PulledItem,
+    item: ItemDetail,
     opts: { openProgress: SharedValue<number>; tierColor: string }
   ) => ReactNode;
   gesture: {

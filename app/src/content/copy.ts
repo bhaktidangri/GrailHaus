@@ -135,6 +135,19 @@ export const confirmPurchase = {
   working: "WORKING…",
 } as const;
 
+export const addFunds = {
+  eyebrow: "ADD FUNDS",
+  title: "Top up your balance",
+  body: "Sandbox balance — added instantly, no real payment involved.",
+  balanceNow: "Balance now",
+  balanceAfter: "Balance after",
+  customLabel: "CUSTOM AMOUNT",
+  cancel: "CANCEL",
+  confirm: (amountCents: number) => `ADD $${(amountCents / 100).toFixed(0)}`,
+  working: "ADDING…",
+  invalidAmount: "Enter an amount between $1 and $1,000,000.",
+} as const;
+
 export const packDetail = {
   body: (sku: { itemCount: number }) =>
     `${sku.itemCount} cards, sealed until you tear it. Odds and expected value are published below — nobody rips without knowing the downside.`,
